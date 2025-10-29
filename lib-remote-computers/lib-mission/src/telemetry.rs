@@ -1,0 +1,687 @@
+use std::collections::HashSet;
+use std::time::Duration;
+
+use crate::Result;
+use crate::actuator_control;
+use crate::reactive::{IntoWatched, Repeatedly, Watched, WatchedExt as _};
+use crate::state_machine::{StateMachine, StateName};
+use crate::transition;
+use crate::util::time::MissionTime;
+
+use hermes_mavlink::{
+    COMMAND_MANUAL_ACTUATOR_DATA, COMMAND_MANUAL_TRANSITION_DATA, MavMessage, RemoteSystem,
+};
+use mavlink_core::MavConnection;
+use tokio::task::AbortHandle;
+use watchable::Watchable;
+
+pub use hermes_mavlink;
+
+/// Telemetry health statistics.
+#[derive(Default, Debug, Clone)]
+pub struct TelemetryHealth {
+    /// The timestamp of the last message received, including malformed ones.
+    pub time_of_last_msg: MissionTime,
+    /// The total number of the messages received, including malformed ones.
+    pub num_msg_received: u64,
+
+    /// The timestamp of the last message that has been understood and processed successfully.
+    pub time_of_last_processed_msg: MissionTime,
+    /// The number of the messages received that have been understood and processed successfully.
+    pub num_msg_processed: u64,
+}
+
+/// Blocks on the connection by reading message by message and handling it.
+///
+/// Whenever a transition command is received through `reader` for the target `this_system`,
+/// and the state name corresponds to one from `states`,
+/// then the value at `transition_command` is updated.
+///
+/// When a manual actuator input is received,
+/// the actuator name is parsed and written into `actuator_command`.
+///
+/// The value of `telemetry_health` is also updated, using `clock` as the current time.
+#[tracing::instrument(
+    level = "DEBUG",
+    name = "telemetry::uplink",
+    skip_all,
+    fields(this_system)
+)]
+pub fn read_uplink<ActuatorName>(
+    reader: &dyn MavConnection<MavMessage>,
+    transition_command: &Watchable<transition::Command>,
+    actuator_command: &Watchable<Option<actuator_control::Command<ActuatorName>>>,
+    telemetry_health: &Watchable<TelemetryHealth>,
+    clock: &impl Watched<MissionTime>,
+    states: &HashSet<StateName>,
+    this_system: RemoteSystem,
+) -> std::convert::Infallible
+where
+    ActuatorName: std::str::FromStr + std::fmt::Debug + PartialEq,
+{
+    loop {
+        read_uplink_once(
+            reader,
+            transition_command,
+            actuator_command,
+            telemetry_health,
+            clock,
+            states,
+            this_system,
+        );
+    }
+}
+
+#[tracing::instrument(level = "TRACE", skip_all)]
+fn read_uplink_once<ActuatorName>(
+    reader: &dyn MavConnection<MavMessage>,
+    transition_command: &Watchable<transition::Command>,
+    actuator_command: &Watchable<Option<actuator_control::Command<ActuatorName>>>,
+    telemetry_health: &Watchable<TelemetryHealth>,
+    clock: &impl Watched<MissionTime>,
+    states: &HashSet<StateName>,
+    this_system: RemoteSystem,
+) where
+    ActuatorName: std::str::FromStr + std::fmt::Debug + PartialEq,
+{
+    let received = reader.recv();
+    let time = clock.current();
+    {
+        // Critical Section
+        let mut health = telemetry_health.write();
+        health.time_of_last_msg = time;
+        health.num_msg_received += 1;
+    }
+
+    let (header, msg) = match received {
+        Ok((header, msg)) => (header, msg),
+        Err(e) => {
+            tracing::warn!(error = %e, "skipping bad frame, waiting 5ms");
+            // If the link is severed, then this causes a infinite loop, thus keep it under control. Shouldn't happen with UDP
+            std::thread::sleep(std::time::Duration::from_millis(5));
+            return;
+        }
+    };
+
+    tracing::debug!(?header, ?msg, "received MavLink message");
+
+    let good = match msg {
+        MavMessage::COMMAND_MANUAL_TRANSITION(COMMAND_MANUAL_TRANSITION_DATA {
+            target_system,
+            transition_index,
+            state,
+        }) => {
+            if target_system != this_system {
+                tracing::trace!("skipping transition command for other system");
+                return;
+            }
+
+            let Ok(target) = StateName::try_from_array(&state, states) else {
+                tracing::warn!(
+                    received = %String::from_utf8_lossy(&state),
+                    "skipping transition command to unknown state"
+                );
+                return;
+            };
+            let index = if transition_index == 0 {
+                None
+            } else {
+                Some(transition_index as usize)
+            };
+
+            let command: transition::Command = Some((index, target));
+            tracing::debug!(?command, "received command");
+            // we don't care about the old value or whether they were equal
+            let _ = transition_command.update(command);
+
+            true
+        }
+        MavMessage::COMMAND_MANUAL_ACTUATOR(COMMAND_MANUAL_ACTUATOR_DATA {
+            target_system,
+            path_index,
+            actuator_id,
+            value,
+        }) => {
+            if target_system != this_system {
+                tracing::trace!("skipping transition command for other system");
+                return;
+            }
+
+            // Decode the name from zero padded utf8
+            let Ok(Ok(actuator_name)) = std::str::from_utf8(&actuator_id)
+                .map(|s| ActuatorName::from_str(s.trim_end_matches('\0')))
+            else {
+                tracing::warn!(
+                    received = %String::from_utf8_lossy(&actuator_id),
+                    "skipping actuator command for bad actuator"
+                );
+                return;
+            };
+
+            let command = actuator_control::Command {
+                in_state_index: path_index as usize,
+                actuator: actuator_name,
+                value,
+            };
+            tracing::debug!(?command, "received actuator command");
+
+            // we don't care about the old value
+            let _ = actuator_command.replace(Some(command));
+
+            true
+        }
+        // ignore other signals
+        _ => false,
+    };
+
+    if good {
+        // Critical Section
+        let mut health = telemetry_health.write();
+        health.time_of_last_processed_msg = time;
+        health.num_msg_processed += 1;
+    }
+}
+
+/// Spawns a task which calls `watched_value` every `period` and sends it to `telemetry_sender`.
+pub fn spawn_periodic_telemetry_streamer(
+    mut watched_value: impl FnMut() -> MavMessage + Send + 'static,
+    period: Duration,
+    telemetry_sender: std::sync::mpsc::Sender<MavMessage>,
+) -> tokio::task::AbortHandle {
+    tokio::spawn(async move {
+        let mut interval = tokio::time::interval(period);
+        interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+        loop {
+            interval.tick().await;
+            let val = watched_value();
+            if telemetry_sender.send(val).is_err() {
+                tracing::warn!("Telemetry channel was closed. Shutting down!");
+                break;
+            }
+        }
+    })
+    .abort_handle()
+}
+
+/// Spawns a task which continuously reads the newest update from `watched_value` and writes it to `telemetry_sender`.
+pub fn spawn_telemetry_streamer(
+    mut watched_value: impl Watched<MavMessage> + Send + 'static,
+    telemetry_sender: std::sync::mpsc::Sender<MavMessage>,
+) -> tokio::task::AbortHandle {
+    tokio::spawn(async move {
+        loop {
+            let val = watched_value.next().await;
+            if telemetry_sender.send(val).is_err() {
+                tracing::warn!("Telemetry channel was closed. Shutting down!");
+                break;
+            }
+        }
+    })
+    .abort_handle()
+}
+
+/// Blocks on `receiver` reading message by message and sending them to MavLink.
+///
+/// This is needed, as only one thread can send at a time this actor arbitrates the accesses.
+/// Writing to the mpsc won't block.
+#[tracing::instrument(
+    level = "TRACE",
+    name = "telemetry::downlink",
+    skip_all,
+    fields(this_system)
+)]
+pub fn downlink_actor(
+    writer: &dyn MavConnection<MavMessage>,
+    receiver: std::sync::mpsc::Receiver<MavMessage>,
+    this_system: RemoteSystem,
+) {
+    // Blocking iterator
+    for msg in receiver {
+        tracing::trace!(?msg, "sending MAVLink message");
+        let res = writer.send(
+            &mavlink_core::MavHeader {
+                system_id: this_system as u8,
+                component_id: 1,
+                sequence: 0, // this is ignored by the library
+            },
+            &msg,
+        );
+        if let Err(err) = res {
+            tracing::error!(error = %err, "failed to send MAVLink message. Dropping it.");
+        }
+    }
+    tracing::warn!("Exiting downlink_actor, should only happen at shutdown");
+}
+
+impl<I, O, P> StateMachine<I, O, P> {
+    /// Spawn a thread to send the current state to the ground station at a rate of `rate_hz` Hz.
+    pub fn start_streaming_state(
+        &self,
+        telemetry_sender: std::sync::mpsc::Sender<MavMessage>,
+        clock: impl Watched<MissionTime> + Send + 'static,
+        rate_hz: f32,
+    ) -> AbortHandle {
+        let watched = self.watch_state_path();
+        spawn_telemetry_streamer(
+            Repeatedly::new(clock, Duration::from_secs_f32(1. / rate_hz)).map(move |t| {
+                let path = watched.current();
+                let current = path
+                    .last()
+                    .expect("state_path is initialized with one element and never shortened")
+                    .clone();
+                #[allow(clippy::cast_possible_truncation)] // We'll never have millions of states
+                MavMessage::CURRENT_STATE(hermes_mavlink::CURRENT_STATE_DATA {
+                    time_unix_ms: t.as_ms_timestamp(),
+                    path_index: path.len() as u32 - 1,
+                    state: current.to_array(),
+                })
+            }),
+            telemetry_sender,
+        )
+    }
+}
+
+/// Encoding of `StateName` into/from Mavlink
+impl StateName {
+    /// Create a `StateName` from a Mavlink `char[30]`.
+    ///
+    /// Fails if the bytes are not valid utf8 until the first null byte or this substring doesn't denote a valid state name.
+    /// Will not fail for a safely constructed `StateName` passed to [`StateName::to_array`].
+    fn try_from_array(
+        raw: &[u8; StateName::MAX_LEN],
+        states: &HashSet<StateName>,
+    ) -> Result<StateName> {
+        // Find the end of the string. No state name contains null bytes.
+        let len = raw
+            .iter()
+            .position(|&x| x == 0)
+            .unwrap_or(StateName::MAX_LEN);
+        let state = std::str::from_utf8(&raw[..len]).map_err(|_| {
+            crate::Error::StateNameInvalidUTF8(String::from_utf8_lossy(raw).into_owned())
+        })?;
+        StateName::try_new(state, states)
+    }
+
+    /// Returns a Mavlink `char[30]` for this state name.
+    ///
+    /// Encodes the state as uft8 and leaves the remaining bytes 0.
+    fn to_array(&self) -> [u8; StateName::MAX_LEN] {
+        let mut char_array = [0u8; StateName::MAX_LEN]; // Initialize the array with null bytes
+        let bytes = self.0.as_bytes(); // Convert the string to a byte slice
+
+        // Copy the bytes into the array, ensuring it doesn't exceed the array size.
+        // This should never cut off due to invariant.
+        let len = bytes.len().min(StateName::MAX_LEN);
+        char_array[..len].copy_from_slice(&bytes[..len]);
+
+        char_array
+    }
+}
+
+/// This function will return once the last received message has been longer than `timeout` ago.
+pub async fn await_telemetry_loss(
+    health: impl IntoWatched<TelemetryHealth>,
+    clock: impl IntoWatched<MissionTime>,
+    timeout: Duration,
+) {
+    use crate::reactive::WatchedExt as _;
+
+    let mut clock = clock.watched();
+    let health = health.watched();
+    clock
+        .next_satisfying(move |t| *t >= health.current().time_of_last_msg + timeout)
+        .await;
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::Error;
+    use crate::reactive::IntoWatched;
+
+    use super::*;
+    use mockall::predicate::*;
+    use mockall::*;
+    use std::collections::HashSet;
+    use std::str::FromStr;
+    use std::time::Duration;
+    use watchable::Watchable;
+
+    #[derive(Debug, Clone, PartialEq)]
+    enum ActuatorName {
+        A,
+        B,
+        C,
+        D,
+    }
+
+    impl FromStr for ActuatorName {
+        type Err = ();
+
+        fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
+            match s {
+                "A" => Ok(Self::A),
+                "B" => Ok(Self::B),
+                "C" => Ok(Self::C),
+                "D" => Ok(Self::D),
+                _ => Err(()),
+            }
+        }
+    }
+
+    mock! {
+        pub MavConnection {}
+
+        impl MavConnection<MavMessage> for MavConnection {
+            fn recv(&self) -> core::result::Result<(mavlink_core::MavHeader, MavMessage), mavlink_core::error::MessageReadError>;
+
+            // Unused
+            fn send(&self, header: &mavlink_core::MavHeader, data: &MavMessage) -> core::result::Result<usize, mavlink_core::error::MessageWriteError>;
+            fn set_protocol_version(&mut self, version: mavlink_core::MavlinkVersion);
+            fn get_protocol_version(&self) -> mavlink_core::MavlinkVersion;
+        }
+    }
+
+    // Helper function to create a set of valid state names
+    fn create_state_names() -> HashSet<StateName> {
+        let full_len = "A".repeat(StateName::MAX_LEN);
+        let names = vec!["", "Idle", "Armed", "Main Disarmed", &full_len];
+        names
+            .into_iter()
+            .map(|name| {
+                StateName::new_unchecked(name).expect("all are short and without null bytes")
+            })
+            .collect()
+    }
+
+    /// Will run [`read_uplink_once`] once with the provided mavlink message.
+    /// Gives back the updated transition command and health (was default beforehand).
+    fn helper_read_uplink_once_with(
+        msg: std::result::Result<
+            (mavlink_core::MavHeader, MavMessage),
+            mavlink_core::error::MessageReadError,
+        >,
+    ) -> (
+        transition::Command,
+        Option<actuator_control::Command<ActuatorName>>,
+        TelemetryHealth,
+    ) {
+        let mut mock_conn = MockMavConnection::new();
+        let transition_command = Watchable::new(None);
+        let actuator_command = Watchable::new(None);
+        let telemetry_health = Watchable::new(TelemetryHealth::default());
+        let clock = Watchable::new(Duration::from_millis(100).into());
+        let states = create_state_names();
+        let this_system = RemoteSystem::ROCKET;
+
+        mock_conn.expect_recv().return_once(move || msg);
+
+        read_uplink_once(
+            &mock_conn,
+            &transition_command,
+            &actuator_command,
+            &telemetry_health,
+            &clock.watched(),
+            &states,
+            this_system,
+        );
+        (
+            transition_command.get(),
+            actuator_command.get(),
+            telemetry_health.get(),
+        )
+    }
+
+    #[test]
+    fn test_read_uplink_once_successful_message() {
+        let (transition_command, _, health) = helper_read_uplink_once_with(Ok((
+            mavlink_core::MavHeader::default(),
+            MavMessage::COMMAND_MANUAL_TRANSITION(COMMAND_MANUAL_TRANSITION_DATA {
+                target_system: RemoteSystem::ROCKET,
+                transition_index: 0,
+                state: *b"Idle\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0",
+            }),
+        )));
+
+        assert_eq!(
+            transition_command,
+            Some((
+                None,
+                StateName::new_unchecked("Idle").expect("short enough")
+            ))
+        );
+        assert_eq!(health.num_msg_received, 1);
+        assert_eq!(health.num_msg_processed, 1);
+        assert_eq!(health.time_of_last_msg.as_ms_timestamp(), 100);
+        assert_eq!(health.time_of_last_processed_msg.as_ms_timestamp(), 100);
+    }
+
+    #[test]
+    fn test_read_uplink_once_valid_state_with_index() {
+        let (transition_command, _, health) = helper_read_uplink_once_with(Ok((
+            mavlink_core::MavHeader::default(),
+            MavMessage::COMMAND_MANUAL_TRANSITION(COMMAND_MANUAL_TRANSITION_DATA {
+                target_system: RemoteSystem::ROCKET,
+                transition_index: 1,
+                state: *b"Idle\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0",
+            }),
+        )));
+
+        assert_eq!(
+            transition_command,
+            Some((
+                Some(1),
+                StateName::new_unchecked("Idle").expect("short enough")
+            ))
+        );
+        assert_eq!(health.num_msg_received, 1);
+        assert_eq!(health.num_msg_processed, 1);
+        assert_eq!(health.time_of_last_msg.as_ms_timestamp(), 100);
+        assert_eq!(health.time_of_last_processed_msg.as_ms_timestamp(), 100);
+    }
+
+    #[test]
+    fn test_read_uplink_once_error_in_reception() {
+        let (transition_command, _, health) =
+            helper_read_uplink_once_with(Err(std::io::Error::other("Connection error").into()));
+
+        // Ensure that the transition command was not updated
+        assert_eq!(transition_command, None);
+        assert_eq!(health.num_msg_received, 1);
+        assert_eq!(health.num_msg_processed, 0);
+        assert_eq!(health.time_of_last_msg.as_ms_timestamp(), 100);
+        assert_eq!(health.time_of_last_processed_msg.as_ms_timestamp(), 0);
+    }
+
+    #[test]
+    fn test_read_uplink_once_transition_for_other_system() {
+        let (transition_command, _, health) = helper_read_uplink_once_with(Ok((
+            mavlink_core::MavHeader::default(),
+            MavMessage::COMMAND_MANUAL_TRANSITION(COMMAND_MANUAL_TRANSITION_DATA {
+                target_system: RemoteSystem::REMOTE_FILLING_STATION,
+                transition_index: 0,
+                state: *b"Idle\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0",
+            }),
+        )));
+
+        // Ensure that the transition command was not updated
+        assert_eq!(transition_command, None);
+        assert_eq!(health.num_msg_received, 1);
+        assert_eq!(health.num_msg_processed, 0);
+        assert_eq!(health.time_of_last_msg.as_ms_timestamp(), 100);
+        assert_eq!(health.time_of_last_processed_msg.as_ms_timestamp(), 0);
+    }
+
+    #[test]
+    fn test_read_uplink_once_unknown_state() {
+        let (transition_command, _, health) = helper_read_uplink_once_with(Ok((
+            mavlink_core::MavHeader {
+                system_id: 200,
+                component_id: 1,
+                sequence: 0,
+            },
+            MavMessage::COMMAND_MANUAL_TRANSITION(COMMAND_MANUAL_TRANSITION_DATA {
+                target_system: RemoteSystem::ROCKET,
+                transition_index: 0,
+                state: *b"Unknown\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0",
+            }),
+        )));
+
+        // Ensure that the transition command was not updated
+        assert_eq!(transition_command, None);
+        assert_eq!(health.num_msg_received, 1);
+        assert_eq!(health.num_msg_processed, 0);
+        assert_eq!(health.time_of_last_msg.as_ms_timestamp(), 100);
+        assert_eq!(health.time_of_last_processed_msg.as_ms_timestamp(), 0);
+    }
+
+    /// Test encoding and decoding a valid state name.
+    #[test]
+    fn test_valid_state_name() {
+        let states = create_state_names();
+        let state_name = StateName::try_new("Armed", &states).expect("one of above");
+
+        let encoded = state_name.to_array();
+        let decoded = StateName::try_from_array(&encoded, &states).expect("roundtrip should work");
+
+        assert_eq!(decoded, state_name);
+    }
+
+    /// Test encoding and decoding a state name that uses the full `MAX_LEN` bytes.
+    #[test]
+    fn test_max_length_state_name() {
+        let states = create_state_names();
+        let max_length_name = "A".repeat(StateName::MAX_LEN);
+        let state_name = StateName::try_new(&max_length_name, &states).expect("one of above");
+
+        let encoded = state_name.to_array();
+        let decoded = StateName::try_from_array(&encoded, &states).expect("roundtrip should work");
+
+        assert_eq!(decoded.0.as_ref(), max_length_name);
+    }
+
+    /// Test encoding and decoding a state name that has no bytes.
+    #[test]
+    fn test_empty_state_name() {
+        let states = create_state_names();
+        let state_name = StateName::try_new("", &states).expect("one of above");
+
+        let encoded = state_name.to_array();
+        let decoded = StateName::try_from_array(&encoded, &states).expect("roundtrip should work");
+
+        assert_eq!(decoded.0.as_ref(), "");
+    }
+
+    /// Test decoding an array with invalid UTF-8 bytes.
+    #[test]
+    fn test_invalid_utf8() {
+        let states = create_state_names();
+        let invalid_utf8 = [
+            0xC3, 0x28, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0,
+        ]; // Invalid UTF-8 sequence
+
+        let result = StateName::try_from_array(&invalid_utf8, &states);
+        assert!(matches!(result, Err(Error::StateNameInvalidUTF8(_))));
+    }
+
+    /// Test decoding a valid UTF-8 string that is not a known state name.
+    #[test]
+    fn test_unknown_state_name() {
+        let states = create_state_names();
+        let unknown_name = StateName::new_unchecked("UNKNOWN").expect("is valid name");
+
+        let encoded = unknown_name.to_array();
+        let result = StateName::try_from_array(&encoded, &states);
+        assert!(matches!(result, Err(Error::UnknownStateName(_))));
+    }
+
+    /// Test a valid actuator command
+    #[test]
+    fn test_read_uplink_once_valid_actuator_command() {
+        let (_, actuator_command, health) = helper_read_uplink_once_with(Ok((
+            mavlink_core::MavHeader::default(),
+            MavMessage::COMMAND_MANUAL_ACTUATOR(COMMAND_MANUAL_ACTUATOR_DATA {
+                target_system: RemoteSystem::ROCKET,
+                path_index: 1,
+                actuator_id: *b"A\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0",
+                value: 42.0,
+            }),
+        )));
+
+        assert_eq!(
+            actuator_command,
+            Some(actuator_control::Command {
+                in_state_index: 1,
+                actuator: ActuatorName::A,
+                value: 42.0
+            })
+        );
+        assert_eq!(health.num_msg_received, 1);
+        assert_eq!(health.num_msg_processed, 1);
+        assert_eq!(health.time_of_last_msg.as_ms_timestamp(), 100);
+        assert_eq!(health.time_of_last_processed_msg.as_ms_timestamp(), 100);
+    }
+
+    /// Test ignoring a command for another system
+    #[test]
+    fn test_read_uplink_once_actuator_for_other_system() {
+        let (_, actuator_command, health) = helper_read_uplink_once_with(Ok((
+            mavlink_core::MavHeader::default(),
+            MavMessage::COMMAND_MANUAL_ACTUATOR(COMMAND_MANUAL_ACTUATOR_DATA {
+                target_system: RemoteSystem::REMOTE_FILLING_STATION,
+                path_index: 1,
+                actuator_id: *b"A\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0",
+                value: 42.0,
+            }),
+        )));
+
+        assert_eq!(actuator_command, None);
+        assert_eq!(health.num_msg_received, 1);
+        assert_eq!(health.num_msg_processed, 0);
+        assert_eq!(health.time_of_last_msg.as_ms_timestamp(), 100);
+        assert_eq!(health.time_of_last_processed_msg.as_ms_timestamp(), 0);
+    }
+
+    /// Test ignoring a non-utf8 actuator name.
+    #[test]
+    fn test_read_uplink_once_invalid_actuator_id() {
+        let (_, actuator_command, health) = helper_read_uplink_once_with(Ok((
+            mavlink_core::MavHeader::default(),
+            MavMessage::COMMAND_MANUAL_ACTUATOR(COMMAND_MANUAL_ACTUATOR_DATA {
+                target_system: RemoteSystem::ROCKET,
+                path_index: 1,
+                // Not utf-8
+                actuator_id: [
+                    0xC3, 0x28, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                ],
+                value: 42.0,
+            }),
+        )));
+
+        assert_eq!(actuator_command, None);
+        assert_eq!(health.num_msg_received, 1);
+        assert_eq!(health.num_msg_processed, 0);
+        assert_eq!(health.time_of_last_msg.as_ms_timestamp(), 100);
+        assert_eq!(health.time_of_last_processed_msg.as_ms_timestamp(), 0);
+    }
+
+    /// Test ignoring a non parseable acutator name
+    #[test]
+    fn test_read_uplink_once_invalid_actuator_name() {
+        let (_, actuator_command, health) = helper_read_uplink_once_with(Ok((
+            mavlink_core::MavHeader::default(),
+            MavMessage::COMMAND_MANUAL_ACTUATOR(COMMAND_MANUAL_ACTUATOR_DATA {
+                target_system: RemoteSystem::ROCKET,
+                path_index: 1,
+                actuator_id: *b"E\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0",
+                value: 42.0,
+            }),
+        )));
+
+        assert_eq!(actuator_command, None);
+        assert_eq!(health.num_msg_received, 1);
+        assert_eq!(health.num_msg_processed, 0);
+        assert_eq!(health.time_of_last_msg.as_ms_timestamp(), 100);
+        assert_eq!(health.time_of_last_processed_msg.as_ms_timestamp(), 0);
+    }
+}

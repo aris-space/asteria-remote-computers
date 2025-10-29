@@ -1,0 +1,100 @@
+[telemetry]
+mavlink_address = "udpout:127.0.0.1:5760"
+
+[telemetry.downlink_rates]
+state_hz = 5
+kinematics_hz = 20
+
+[can]
+socket_address = "can0"
+
+[state_machine]
+name = "Nicollier Full Flight"
+initial_state = "Idle"
+
+# Nicollier config values:
+# https://github.com/aris-space/nicollier-core/blob/wichlen_1.3/fc/flight_computer/config_files/main/flight_config.toml
+
+[state_machine.states."Idle"]
+type = "Idle"
+manual_transitions = ["SelfDiagnostics"]
+
+[state_machine.states."SelfDiagnostics"]
+type = "SelfDiagnostics"
+on_tests_pass = "Waiting"
+on_tests_fail = "SoftFailure"
+
+[state_machine.states."SoftFailure"]
+type = "SoftFailure"
+manual_transitions = ["Idle"]
+hard_failure_timeout_sec = 600
+on_hard_failure = "HardFailure"
+
+[state_machine.states."HardFailure"]
+type = "HardFailure"
+
+[state_machine.states."Waiting"]
+type = "Waiting"
+diagnostics_interval_sec = 10
+on_diagnostics_fail = "SoftFailure"
+on_telemetry_fail = "SoftFailure"
+telemetry_timeout_sec = 120
+manual_transitions = ["Calibration", { target = "SoftFailure", abort = true }]
+
+[state_machine.states."Calibration"]
+type = "Calibration"
+on_calibration_fail = "SoftFailure"
+on_telemetry_fail = "SoftFailure"
+manual_transitions = ["RocketArmed"]
+telemetry_timeout_sec = 120
+
+[state_machine.states."RocketArmed"]
+type = "RocketArmed"
+on_liftoff = "Thrusting"
+on_disarm = "Waiting"
+disarm_after_timeout_sec = 180
+manual_transitions = ["Separation", "Waiting"]
+
+[state_machine.states."Thrusting"]
+type = "Thrusting"
+manual_transitions = ["Separation"]
+on_coasting = "Coasting"
+on_apogee = "Separation"
+
+[state_machine.states."Coasting"]
+type = "Coasting"
+on_apogee = "Separation"
+loop_period_ms = 50
+manual_transitions = ["Separation"]
+
+[state_machine.states."Separation"]
+type = "Separation"
+separation_time_sec = 5
+after_separation = "DrogueDescent"
+
+[state_machine.states."DrogueDescent"]
+type = "DrogueDescent"
+deploy_chute_altitude_m = 800
+deploy_chute_time_sec = 18
+on_deploy_chute = "MainChuteDeployment"
+manual_transitions = ["MainChuteDeployment"]
+
+[state_machine.states."MainChuteDeployment"]
+type = "MainChuteDeployment"
+deploy_time_sec = 4
+after_deployment = "ControlLoop"
+
+[state_machine.states."ControlLoop"]
+type = "ControlLoop"
+on_touchdown = "AwaitRecovery"
+loop_period_ms = 100
+manual_transitions = ["SafetySpiral"]
+
+[state_machine.states."SafetySpiral"]
+type = "SafetySpiral"
+loop_period_ms = 100
+on_touchdown = "AwaitRecovery"
+manual_transitions = ["AwaitRecovery"]
+
+[state_machine.states."AwaitRecovery"]
+type = "AwaitRecovery"

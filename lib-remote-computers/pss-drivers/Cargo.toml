@@ -1,0 +1,15 @@
+[package]
+name = "pss-drivers"
+version = "0.1.0"
+edition = "2024"
+
+[lints]
+workspace = true
+
+[dependencies]
+watchable = "1.1.2"
+lib-mission = { path = "../lib-mission" }
+hermes-can = { path = "../hermes-can", version = "0.3.0" }
+tracing = "0.1.41"
+serde = { version = "1.0.219", features = ["derive"] }
+tokio = { version = "1.45.1", features = ["time", "rt"] }

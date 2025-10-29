@@ -1,0 +1,7 @@
+[submodule "hermes-mavlink"]
+	path = hermes-mavlink
+	# Relative url such that both SSH and HTTPS works.
+	url = ../hermes-mavlink
+[submodule "hermes-can"]
+	path = hermes-can
+	url = ../hermes-can
