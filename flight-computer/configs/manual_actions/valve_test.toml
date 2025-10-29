@@ -1,0 +1,45 @@
+# This state machine config can alternate between a safe state and fully controllable manual state.
+
+system_time_rate_hz = 10
+
+[state_machine]
+name = "PSS Valve Testing state machine"
+initial_state = "Idle"
+
+[telemetry]
+mavlink_address = "udpout:127.0.0.1:5760"
+
+[telemetry.downlink_rates]
+# slowened telemetry.
+state_hz = 0.5
+kinematics_hz = 1
+av_stack_data_hz = 0.5
+steering_data_hz = 1
+actuator_feedback_hz = 2
+temperature_sensors_hz = 3
+pressure_sensors_hz = 15
+fill_levels_hz = 0.5
+[can]
+socket_address = "can0"
+ecu_thrust_curve = []
+
+[state_machine.states."Idle"]
+type = "Waiting"
+manual_transitions = [
+    { target = "Control", display = "Activate", abort = false },
+]
+
+[state_machine.states."Control"]
+type = "ManualControl"
+allowed_actuators = [
+    "prz_vnt_vlv", # Pressurization Vent Valve, 0 (closed) or 1 (open)
+    "fss_prz_vlv", # Fuel Pressurization Valve (DPR), NaN (disabled) or 0-60 barg
+    "fss_vnt_vlv", # Fuel Vent Valve, 0 (closed) or 1 (open)
+    "oss_prz_vlv", # Oxidizer Pressurization Valve (DPR), NaN (disabled) or 0-60 barg
+    "oss_vnt_vlv", # Oxidizer Vent Valve, 0 (closed) or 1 (open)
+    "fss_mnl_vlv", # Fuel Main Valve, 0 (closed) to 1 (open)
+    "oss_mnl_vlv", # Oxidizer Main Valve, 0 (closed) to 1 (open)
+]
+manual_transitions = [
+    { target = "Idle", display = "Deactivate", abort = false },
+]

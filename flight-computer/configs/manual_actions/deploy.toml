@@ -1,0 +1,49 @@
+# This config just instantly arms the recovery board and does a deployment.
+
+system_time_rate_hz = 10
+
+[telemetry]
+mavlink_address = "udpout:127.0.0.1:5760"
+
+[telemetry.downlink_rates]
+# slowened telemetry.
+state_hz = 0.5
+kinematics_hz = 5
+av_stack_data_hz = 0.5
+steering_data_hz = 5
+actuator_feedback_hz = 2
+temperature_sensors_hz = 3
+pressure_sensors_hz = 15
+fill_levels_hz = 0.5
+[can]
+socket_address = "can0"
+ecu_thrust_curve = []
+
+[state_machine]
+name = "Testing the deployment"
+initial_state = "Arm"
+
+[state_machine.states."Arm"]
+type = "ArmRecovery"
+arming_state = "Armed"
+on_state_set = "Wait for Armed"
+
+[state_machine.states."Wait for Armed"]
+type = "HeightOrTimeTrigger"
+on_time_limit_reached = "Deployment"
+on_height_limit_reached = "Deployment"
+time_limit_sec = 0.5
+height_limit_m = -10.0
+
+[state_machine.states."Deployment"]
+type = "MainChuteDeployment"
+deploy_time_sec = 10
+on_after_deployment = "Disarm"
+
+[state_machine.states."Disarm"]
+type = "ArmRecovery"
+arming_state = "Unarmed"
+on_state_set = "Shutdown"
+
+[state_machine.states."Shutdown"]
+type = "Shutdown"

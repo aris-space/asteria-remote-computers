@@ -1,0 +1,528 @@
+use std::path::Path;
+
+use lib_mission::reactive::{IntoWatched as _, WatchedExt as _};
+use lib_mission::util::log::{make_timeseries_writer, spawn_watchable_logger};
+use lib_mission::util::time::MissionTime;
+use watchable::Watchable;
+
+use super::input::{InputTree, RawUnprocessedData};
+use super::output::OutputTree;
+
+impl InputTree {
+    /// Starts logging input tree timeseries to csv files in `folder`.
+    /// Used for both database import and simulation replays.
+    ///
+    /// This spawns tokio tasks and returns immediately after all setup as been completed.
+    #[allow(clippy::too_many_lines)] // This is ugly, but acceptable here.
+    pub async fn start_logging(&self, folder: &Path) -> Result<(), Box<dyn std::error::Error>> {
+        use lib_mission::reactive::IntoWatched as _;
+
+        // This destructure is used so that we don't forget later additions.
+        let InputTree {
+            time,
+            transition_command,
+            actuator_command,
+            telemetry_health,
+            boards_health,
+            rfs_computer_status,
+            recovery_armed,
+            ecu_armed,
+            motors_position,
+            cats_separation,
+            cats_deployment,
+            location,
+            velocity,
+            acceleration,
+            orientation,
+            raw_unprocessed_data,
+            pss_valves,
+            pss_sensors,
+            ecu_firing_state,
+            fuel_pressurization_state,
+            oxidizer_pressurization_state,
+        } = self;
+        let RawUnprocessedData {
+            environmental_data,
+            rail_status_24v,
+            rail_status_5v,
+        } = raw_unprocessed_data;
+
+        /// A macro which captures `time` and `folder` to spawn a logger for the board health.
+        /// Probably could also be a closure.
+        macro_rules! spawn_board_health_logger {
+            ($name:literal, $e:expr, $header:expr,) => {
+                lib_mission::util::log::spawn_watchable_logger(
+                    lib_mission::util::log::make_timeseries_writer(folder, $name, &[$header])
+                        .await?,
+                    $e.watched().map(|h| h.map(|t| t.as_ms_timestamp())),
+                    time.watched(),
+                )
+            };
+        }
+
+        // Log real time to "timeseries-realtime.csv" with headers "timestamp [unix ms]", "real time [unix ms]".
+        // Disabled for now, since we use realtime to set the mission time.
+
+        // spawn_watchable_logger(
+        //     make_timeseries_writer(folder, "realtime", &["real time [unix ms]"]).await?,
+        //     // trigger based on updated mission time
+        //     time.watched().map(|_t| {
+        //         std::time::SystemTime::now()
+        //             .duration_since(std::time::SystemTime::UNIX_EPOCH)
+        //             .expect("travelled to past 1970")
+        //             .as_millis()
+        //     }),
+        //     time.watched(),
+        // );
+
+        //////////////////////// DATA STANDARDS ///////////////////////
+        // Log location data to "timeseries-location.csv" with headers "timestamp [unix ms]", "location latitude [°]", "location longitude [°]", "location altitude [m above sea level]".
+        // And additional columns for accuracy.
+        spawn_watchable_logger(
+            make_timeseries_writer(
+                folder,
+                "location",
+                &[
+                    "location latitude [°]",
+                    "location longitude [°]",
+                    "location altitude [m above sea level]",
+                    "location horizontal accuracy [1-sigma]",
+                    "location vertical accuracy [1-sigma]",
+                ],
+            )
+            .await?,
+            location.watched().map(|l| {
+                (
+                    l.latitude,
+                    l.longitude,
+                    l.altitude,
+                    l.horizontal_accuracy,
+                    l.vertical_accuracy,
+                )
+            }),
+            time.watched(),
+        );
+        // Log acceleration data to "timeseries-acceleration.csv" with headers "timestamp [unix ms]", "acceleration north [m/s^2]",  "acceleration east [m/s^2]",  "acceleration down [m/s^2]".
+        // And additional columns for body-fixed frame.
+        spawn_watchable_logger(
+            make_timeseries_writer(
+                folder,
+                "acceleration",
+                &[
+                    "acceleration north [m/s^2]",
+                    "acceleration east [m/s^2]",
+                    "acceleration down [m/s^2]",
+                    "acceleration x-axis [m/s^2]",
+                    "acceleration y-axis [m/s^2]",
+                    "acceleration z-axis [m/s^2]",
+                ],
+            )
+            .await?,
+            acceleration
+                .watched()
+                .map(|a| (a.north, a.east, a.down, a.x, a.y, a.z)),
+            time.watched(),
+        );
+        // Log velocity data to "timeseries-velocity.csv" with headers "timestamp [unix ms]", "velocity north [m/s]", "velocity east [m/s]", "velocity down [m/s]".
+        // And additional columns for body-fixed frame.
+        spawn_watchable_logger(
+            make_timeseries_writer(
+                folder,
+                "velocity",
+                &[
+                    "velocity north [m/s]",
+                    "velocity east [m/s]",
+                    "velocity down [m/s]",
+                    "velocity x-axis [m/s]",
+                    "velocity y-axis [m/s]",
+                    "velocity z-axis [m/s]",
+                ],
+            )
+            .await?,
+            velocity
+                .watched()
+                .map(|v| (v.north, v.east, v.down, v.x, v.y, v.z)),
+            time.watched(),
+        );
+        // Log orientation data as NED quaternion to "timeseries-orientation.csv" with headers "timestamp [unix ms]", "orientation W", "orientation X", "orientation Y", "orientation Z".
+        spawn_watchable_logger(
+            make_timeseries_writer(
+                folder,
+                "orientation",
+                &[
+                    "orientation W",
+                    "orientation X",
+                    "orientation Y",
+                    "orientation Z",
+                ],
+            )
+            .await?,
+            orientation.watched().map(|o| {
+                (
+                    o.orientation_w,
+                    o.orientation_x,
+                    o.orientation_y,
+                    o.orientation_z,
+                )
+            }),
+            time.watched(),
+        );
+
+        ///////////////////// INTERNALS (for replaying) ///////////////////////
+        // Log the timestamp of the last received telemetry message
+        spawn_watchable_logger(
+            make_timeseries_writer(
+                folder,
+                "telemetry_health",
+                &[
+                    "time_of_last_msg [unix ms]",
+                    "num_msg_received",
+                    "time_of_last_processed_msg [unix ms]",
+                    "num_msg_processed",
+                ],
+            )
+            .await?,
+            telemetry_health.watched().map(|h| {
+                (
+                    h.time_of_last_msg.as_ms_timestamp(),
+                    h.num_msg_received,
+                    h.time_of_last_processed_msg.as_ms_timestamp(),
+                    h.num_msg_processed,
+                )
+            }),
+            time.watched(),
+        );
+        // Log transition commands to two columns (or leave them empty)
+        spawn_watchable_logger(
+            make_timeseries_writer(
+                folder,
+                "transition_command",
+                &["index [int?]", "state [string?]"],
+            )
+            .await?,
+            transition_command.watched().map(|r| {
+                // Propagate the Noneness to each field
+                r.map_or((None, None), |(i, s)| (i, Some(s.to_string())))
+            }),
+            time.watched(),
+        );
+        // Log actuator commands to three columns (or leave them empty)
+        spawn_watchable_logger(
+            make_timeseries_writer(
+                folder,
+                "actuator_command",
+                &["index [int?]", "actuator [string?], value [float?]"],
+            )
+            .await?,
+            actuator_command.watched().map(|r| {
+                // Propagate the Noneness to each field
+                r.map_or((None, None, None), |c| {
+                    (Some(c.in_state_index), Some(c.actuator), Some(c.value))
+                })
+            }),
+            time.watched(),
+        );
+        // Log board last healths to a single columns, or empty if unhealthy
+        spawn_board_health_logger!(
+            "boards_health_sensor_carrier",
+            boards_health.sensor_carrier,
+            "sensor carrier last healthy [unix ms?]",
+        );
+        spawn_board_health_logger!(
+            "boards_health_power_board",
+            boards_health.power_board,
+            "power board last healthy [unix ms?]",
+        );
+        spawn_board_health_logger!(
+            "boards_health_recovery_board",
+            boards_health.recovery_board,
+            "recovery board last healthy [unix ms?]",
+        );
+        spawn_board_health_logger!(
+            "boards_health_fuel_control_board",
+            boards_health.fuel_control_board,
+            "fuel control board last healthy [unix ms?]",
+        );
+        spawn_board_health_logger!(
+            "boards_health_oxidizer_control_board",
+            boards_health.oxidizer_control_board,
+            "oxidizer control board last healthy [unix ms?]",
+        );
+        spawn_board_health_logger!(
+            "boards_health_engine_control_board",
+            boards_health.engine_control_board,
+            "engine control board last healthy [unix ms?]",
+        );
+        // Log RFS computer status
+        spawn_watchable_logger(
+            make_timeseries_writer(
+                folder,
+                "rfs_computer_status",
+                &[
+                    "errors [#]",
+                    "micros_since_restart [us]",
+                    "has_pss_control [bool]",
+                    "is_ignition_armed [bool]",
+                ],
+            )
+            .await?,
+            rfs_computer_status.watched().map(|(s, _)| s),
+            time.watched(),
+        );
+        // Log arming states
+        spawn_watchable_logger(
+            make_timeseries_writer(
+                folder,
+                "recovery_hardware_arming",
+                &["recovery arming state [Safe|Armed]"],
+            )
+            .await?,
+            recovery_armed.watched(),
+            time.watched(),
+        );
+        spawn_watchable_logger(
+            make_timeseries_writer(
+                folder,
+                "ecu_hardware_arming",
+                &["ecu arming state [Safe|Armed]"],
+            )
+            .await?,
+            ecu_armed.watched(),
+            time.watched(),
+        );
+
+        // Log actual steering motor positions
+        spawn_watchable_logger(
+            make_timeseries_writer(
+                folder,
+                "steering_motor_actual_positions",
+                &["actual left [steps]", "actual right [steps]"],
+            )
+            .await?,
+            motors_position
+                .watched()
+                .map(|r| (r.left_motor_steps, r.right_motor_steps)),
+            time.watched(),
+        );
+
+        // Log CATS drogue separation status
+        spawn_watchable_logger(
+            make_timeseries_writer(folder, "cats_separation", &["cats separation"]).await?,
+            cats_separation.watched(),
+            time.watched(),
+        );
+        // Log CATS main deployment status
+        spawn_watchable_logger(
+            make_timeseries_writer(folder, "cats_deployment", &["cats deployment"]).await?,
+            cats_deployment.watched(),
+            time.watched(),
+        );
+
+        // Log power data
+        spawn_watchable_logger(
+            make_timeseries_writer(
+                folder,
+                "rail_status_5v",
+                &["voltage [V]", "current [A]", "power [W]"],
+            )
+            .await?,
+            rail_status_5v
+                .watched()
+                .map(|v| (v.data.voltage, v.data.current, v.data.power)),
+            time.watched(),
+        );
+        spawn_watchable_logger(
+            make_timeseries_writer(
+                folder,
+                "rail_status_24v",
+                &["voltage [V]", "current [A]", "power [W]"],
+            )
+            .await?,
+            rail_status_24v
+                .watched()
+                .map(|v| (v.data.voltage, v.data.current, v.data.power)),
+            time.watched(),
+        );
+        // Log environmental data
+        spawn_watchable_logger(
+            make_timeseries_writer(
+                folder,
+                "environment",
+                &["temperature [°C]", "humidity [%]", "pressure [hPa]"],
+            )
+            .await?,
+            environmental_data
+                .watched()
+                .map(|v| (v.temperature, v.humidity, v.pressure)),
+            time.watched(),
+        );
+        // Log ecu firing status
+        spawn_watchable_logger(
+            make_timeseries_writer(
+                folder,
+                "ecu_firing_state",
+                &["last ECU State [NotYetInitiated|Initiated|Completed|Aborted]"],
+            )
+            .await?,
+            ecu_firing_state.watched(),
+            time.watched(),
+        );
+        // Log fuel pressurization status
+        spawn_watchable_logger(
+            make_timeseries_writer(
+                folder,
+                "fuel_pressurization_state",
+                &["last Fuel Pressurization State [NotYetPressurized|Pressurized]"],
+            )
+            .await?,
+            fuel_pressurization_state.watched(),
+            time.watched(),
+        );
+        // Log oxidizer pressurization status
+        spawn_watchable_logger(
+            make_timeseries_writer(
+                folder,
+                "oxidizer_pressurization_state",
+                &["last Oxidizer Pressurization State [NotYetPressurized|Pressurized]"],
+            )
+            .await?,
+            oxidizer_pressurization_state.watched(),
+            time.watched(),
+        );
+        pss_valves.start_logging(folder, time).await?;
+        pss_sensors.start_logging(folder, time).await?;
+
+        Ok(())
+    }
+}
+
+impl OutputTree {
+    /// Starts logging output tree timeseries to csv files in `folder`.
+    /// Used for data analysis.
+    ///
+    /// This spawns tokio tasks and returns immediately after all setup as been completed.
+    #[allow(clippy::too_many_lines)] // agreed, but oh well
+    pub async fn start_logging(
+        &self,
+        folder: &Path,
+        time: Watchable<MissionTime>,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        // This destructure is used so that we don't forget later additions.
+        let OutputTree {
+            separate_drogue,
+            deploy_main_chute,
+            steering_motor_target_deflections,
+            recovery_actuators_armed,
+            ignite,
+            abort_ignition,
+            camera_powered_on,
+            pressurize_fuel,
+            pressurize_oxidizer,
+            abort_fuel_pressurization,
+            abort_oxidizer_pressurization,
+            valves,
+        } = self;
+
+        // Log target steering motor positions
+        spawn_watchable_logger(
+            make_timeseries_writer(
+                folder,
+                "steering_motor_target_positions",
+                &["target left [steps]", "target right [steps]"],
+            )
+            .await?,
+            steering_motor_target_deflections.watched().map(|r| {
+                (
+                    r.as_ref().map(|r| r.left_motor_steps),
+                    r.as_ref().map(|r| r.right_motor_steps),
+                )
+            }),
+            time.watched(),
+        );
+        // Log drogue separation status
+        spawn_watchable_logger(
+            make_timeseries_writer(folder, "drogue_separation", &["target drogue separation"])
+                .await?,
+            separate_drogue.watched(),
+            time.watched(),
+        );
+        // Log deployment status
+        spawn_watchable_logger(
+            make_timeseries_writer(folder, "deployment", &["target deployment"]).await?,
+            deploy_main_chute.watched(),
+            time.watched(),
+        );
+        // Log recovery board arming status
+        spawn_watchable_logger(
+            make_timeseries_writer(folder, "recovery_arming", &["Recovery Armed State"]).await?,
+            recovery_actuators_armed.watched(),
+            time.watched(),
+        );
+        // Log ignition status
+        spawn_watchable_logger(
+            make_timeseries_writer(folder, "ignition", &["target ignition"]).await?,
+            ignite.watched(),
+            time.watched(),
+        );
+        // Log abort ignition status
+        spawn_watchable_logger(
+            make_timeseries_writer(folder, "abort_ignition", &["target abort ignition"]).await?,
+            abort_ignition.watched(),
+            time.watched(),
+        );
+        // Log camera power status
+        spawn_watchable_logger(
+            make_timeseries_writer(folder, "cameras", &["target camera power"]).await?,
+            camera_powered_on.watched(),
+            time.watched(),
+        );
+        // Log fuel pressurization status
+        spawn_watchable_logger(
+            make_timeseries_writer(
+                folder,
+                "fuel_pressurization",
+                &["target fuel pressurization"],
+            )
+            .await?,
+            pressurize_fuel.watched(),
+            time.watched(),
+        );
+        // Log oxidizer pressurization status
+        spawn_watchable_logger(
+            make_timeseries_writer(
+                folder,
+                "oxidizer_pressurization",
+                &["target oxidizer pressurization"],
+            )
+            .await?,
+            pressurize_oxidizer.watched(),
+            time.watched(),
+        );
+        // Log abort fuel pressurization status
+        spawn_watchable_logger(
+            make_timeseries_writer(
+                folder,
+                "abort_fuel_pressurization",
+                &["target abort fuel pressurization"],
+            )
+            .await?,
+            abort_fuel_pressurization.watched(),
+            time.watched(),
+        );
+        // Log abort oxidizer pressurization status
+        spawn_watchable_logger(
+            make_timeseries_writer(
+                folder,
+                "abort_oxidizer_pressurization",
+                &["target abort oxidizer pressurization"],
+            )
+            .await?,
+            abort_oxidizer_pressurization.watched(),
+            time.watched(),
+        );
+        // Log valve target states
+        valves.start_logging(folder, time).await?;
+
+        Ok(())
+    }
+}

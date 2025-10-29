@@ -1,0 +1,51 @@
+# This state machine arms the recovery board and wiggles the steering motors.
+
+system_time_rate_hz = 10
+
+[telemetry]
+mavlink_address = "udpout:127.0.0.1:5760"
+
+[telemetry.downlink_rates]
+# slowened telemetry.
+state_hz = 0.5
+kinematics_hz = 5
+av_stack_data_hz = 0.5
+steering_data_hz = 5
+actuator_feedback_hz = 2
+temperature_sensors_hz = 3
+pressure_sensors_hz = 15
+fill_levels_hz = 0.5
+[can]
+socket_address = "can0"
+ecu_thrust_curve = []
+
+[state_machine]
+name = "Testing the steering motor"
+initial_state = "Arm"
+
+[state_machine.states."Arm"]
+type = "ArmRecovery"
+arming_state = "Armed"
+on_state_set = "Wait for Armed"
+
+[state_machine.states."Wait for Armed"]
+type = "HeightOrTimeTrigger"
+on_time_limit_reached = "Oscilate"
+on_height_limit_reached = "Oscilate"
+time_limit_sec = 0.5
+height_limit_m = -10.0
+
+[state_machine.states."Oscilate"]
+manual_transitions = ["Idle", "Oscilate"]
+gnc_config = { controller_type = "SelfTest" }
+type = "ControlLoop"
+loop_frequency_hz = 1.0
+revolution_interval_mapping_left = [-3.36, 1.59]
+revolution_interval_mapping_right = [-2.273, 2.677]
+on_failure = "Idle"
+time_limit_sec = 600
+on_touchdown = "Idle"
+
+[state_machine.states."Idle"]
+type = "Waiting"
+manual_transitions = ["Idle", "Oscilate"]

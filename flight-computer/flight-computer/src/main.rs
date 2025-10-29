@@ -1,0 +1,108 @@
+//! The main entry point for the flight computer.
+//!
+//! Currently lacks a bunch of parts, and will need to also spawn input drivers etc.
+
+use flight_computer::build_info;
+use flight_computer::config::{Config, MissionProfile};
+use flight_computer::io::can::init_can_drivers;
+use flight_computer::io::gpio::start_cats_driver;
+use flight_computer::io::input::InputTree;
+use flight_computer::io::output::OutputTree;
+use flight_computer::io::telemetry::init_telemetry;
+use flight_computer::state_logic::control_loop::AnyGncController;
+use lib_mission::reactive::IntoWatched;
+use lib_mission::state_machine::StateMachine;
+use lib_mission::util::init::init_binary;
+
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let config_path = std::env::args()
+        .nth(1)
+        .ok_or("Not enought arguments. Usage: ./flight_computer <CONFIG>")?;
+    println!("loading config from {config_path}");
+
+    let (config_file, log_folder, _run_info) = init_binary::<
+        Config<MissionProfile<AnyGncController>>,
+    >(build_info::THIS_BUILD, config_path)
+    .await?;
+
+    let input_tree = InputTree::default();
+
+    let output_tree = OutputTree::default();
+    let state_machine = StateMachine::new(config_file.state_machine)?;
+
+    flight_computer::io::spawn_system_time_driver(
+        input_tree.time.clone(),
+        std::time::Duration::from_secs_f32(1. / config_file.system_time_rate_hz),
+    );
+
+    input_tree.start_logging(&log_folder).await?;
+    output_tree
+        .start_logging(&log_folder, input_tree.time.clone())
+        .await?;
+    state_machine
+        .start_logging_state(&log_folder, input_tree.time.watched())
+        .await?;
+
+    init_telemetry(
+        &config_file.telemetry,
+        &input_tree,
+        &output_tree,
+        &state_machine,
+    )?;
+
+    init_can_drivers(&config_file.can, &input_tree, &output_tree)?;
+    start_cats_driver(
+        input_tree.cats_separation.clone(),
+        input_tree.cats_deployment.clone(),
+    );
+
+    tokio::select! {
+        _ = tokio::signal::ctrl_c() => {
+            tracing::info!(shutdown = true, "Interrupt received, shutting down");
+        }
+        end = state_machine.run(&input_tree, &output_tree, ()) => {
+            tracing::error!("Exited with error: {end:?}");
+        }
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use std::path::Path;
+
+    use super::*;
+
+    fn assert_config(path: &Path) {
+        println!("asserting {path:?} is valid");
+        let config_file: Config<MissionProfile<AnyGncController>> =
+            toml::from_str(&std::fs::read_to_string(path).expect("path must be correct"))
+                .expect("file must be parseable");
+        let _sm = StateMachine::new(config_file.state_machine)
+            .expect("State machine must be buildable from config");
+    }
+
+    #[cfg(feature = "gnc")]
+    #[test]
+    fn all_configs_valid() {
+        use glob::glob;
+
+        for entry in glob(concat!(env!("CARGO_MANIFEST_DIR"), "/../configs/**/*.toml"))
+            .expect("Failed to read glob pattern")
+        {
+            match entry {
+                Ok(path) => assert_config(&path),
+                Err(e) => panic!("glob error {e}"),
+            }
+        }
+    }
+
+    #[cfg(feature = "gnc")]
+    #[test]
+    fn print_gnc_test_data() {
+        let cfg = hermes_gnc::guidance_controller::improved_o_approach_pconttroler::OApproachPControllerConfig::gadmen_data();
+        let ser = toml::to_string(&cfg).expect("has to serialize");
+        println!("{ser}");
+    }
+}

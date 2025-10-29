@@ -1,0 +1,38 @@
+# This state machine config does nothing and just idles.
+
+system_time_rate_hz = 10
+
+[telemetry]
+mavlink_address = "udpout:127.0.0.1:5760"
+
+[telemetry.downlink_rates]
+# slowened telemetry.
+state_hz = 0.5
+kinematics_hz = 5
+av_stack_data_hz = 0.5
+steering_data_hz = 5
+actuator_feedback_hz = 2
+temperature_sensors_hz = 3
+pressure_sensors_hz = 15
+fill_levels_hz = 0.5
+[can]
+socket_address = "can0"
+# FIXME: define an actual thrust curve
+ecu_thrust_curve = [
+    { "time" = 0, "thrust" = 0 },
+    { "time" = 1, "thrust" = 10 },
+    { "time" = 2, "thrust" = 20 },
+    { "time" = 3, "thrust" = 30 },
+    { "time" = 4, "thrust" = 40 },
+    { "time" = 5, "thrust" = 50 },
+    { "time" = 6, "thrust" = 60 },
+    { "time" = 7, "thrust" = 70 },
+]
+
+[state_machine]
+name = "Idle State machine"
+initial_state = "Idle"
+
+[state_machine.states."Idle"]
+type = "Waiting"
+manual_transitions = []
