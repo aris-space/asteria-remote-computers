@@ -1,0 +1,214 @@
+# This state machine config is the first part of the RFSC flight state machine, for testing the system
+
+system_time_rate_hz = 200
+
+[telemetry]
+mavlink_address = "udpout:127.0.0.1:5761"
+always_allowed_actuators = [
+    "rocket_power",
+    "maxon_board_power",
+    "fss_heating",
+    "pres_sensor_heat",
+    "eth_pump_power",
+    "custom1",
+    "custom2",
+    "custom3",
+]
+[telemetry.downlink_rates]
+state_hz = 4
+actuator_feedback_hz = 2
+temperature_sensors_hz = 3
+pressure_sensors_hz = 15
+fill_levels_hz = 0.5
+
+[uremote]
+address = "192.168.0.222:502"
+min_read_frequency_hz = 20
+[serial]
+serial_port = "/dev/ttyAMA2"
+baud_rate = "Baud115200"
+timeout_ms = 105
+pressure_polling_hz = 20     # double for igniter sensor
+valve_state_polling_hz = 5
+
+[can]
+socket_address = "can0"
+
+################################### State Machine #######################################
+[state_machine]
+name = "System Test"
+initial_state = "Idle"
+
+# Initial state which does nothing
+[state_machine.states."Idle"]
+type = "Waiting"
+manual_transitions = [
+    { target = "Diagnostics", display = "Startup" },
+    { target = "System Normal", display = "Skip Diagnostics" },
+]
+
+# This state exists for acknowledging diagnostic failures
+[state_machine.states."Soft Failure"]
+type = "Waiting"
+manual_transitions = [{ target = "Idle", display = "Restart" }]
+
+# This state only lets the SM pass on if all sensors are reading good values
+[state_machine.states."Diagnostics"]
+type = "DiagnosticsGate"
+on_tests_pass = "System Normal"
+on_tests_fail = "Soft Failure"
+
+# Abort state during system testing, which sets all (but the lox bleed) valves in a normal state, designed to depressurize the system.
+[state_machine.states."Safe Abort"]
+type = "DepressurizeRFS"
+on_done = "Safe Abort 2"
+[state_machine.states."Safe Abort 2"]
+type = "Waiting"
+manual_transitions = [{ target = "System Normal", display = "Reset" }]
+
+# This state is compose of 3 substates and sets the system in a known state before waiting
+[state_machine.states."System Normal"]
+type = "SetPSSMode"
+mode = "RFSPassive"         # the default
+on_done = "System Normal 2"
+[state_machine.states."System Normal 2"]
+type = "SetNormalState"
+on_done = "System Normal 3"
+[state_machine.states."System Normal 3"]
+type = "Waiting"
+manual_transitions = [
+    { target = "System Idle", display = "Idle" },
+    { target = "Safe Abort", display = "Depressurize", abort = true },
+]
+
+# This state allows no valve control during human interactions.
+[state_machine.states."System Idle"]
+type = "Waiting"
+manual_transitions = [
+    { target = "System Normal", display = "Normal" },
+    { target = "System Controllable", display = "Unlock" },
+    { target = "Safe Abort", display = "Depressurize", abort = true },
+]
+
+# This state allows full valve control of all RFS actuators for testing procedures.
+[state_machine.states."System Controllable"]
+type = "ManualControl"
+allowed_actuators = [
+    "lox_fll_vlv",    # LOx fill valve
+    "gox_prg_vlv",    # GOx purge valve
+    "h2_prg_vlv",     # H2 purge valve
+    "n2_bld_vlv",     # N2 bleed valve
+    "lox_prg_vlv",    # LOx purge valve
+    "gox_bld_vlv",    # GOx bleed valve
+    "n2_prg_vlv",     # N2 purge valve
+    "n2_fll_vlv",     # N2 fill valve
+    "h2_bld_vlv",     # H2 bleed valve
+    "lox_bld_vlv",    # LOx bleed valve
+    "pnm_bstr_vlv",   # Booster valve
+    "pnm_loxdec_ext", # LOX decoupler
+    "pnm_loxdec_ret", # LOX decoupler
+    "pnm_n2dec_ext",  # N2 decoupler
+    "pnm_n2dec_ret",  # N2 decoupler
+    "pnm_n2rls_vlv",  # N2 release valve
+    "h2_ign_vlv",     # H2 igniter valve
+    "gox_ign_vlv",    # GOx igniter valve
+    "ign_spk_plg",    # Igniter spark
+]
+manual_transitions = [
+    { target = "System Idle", display = "Lock" },
+    { target = "Igniter Test", display = "Start Igniter Test" },
+    { target = "Safe Abort", display = "Depressurize", abort = true },
+]
+
+# This state runs the igniter test sequence to test ignition.
+[state_machine.states."Igniter Test"]
+type = "RunSequence"
+on_completed = "System Controllable"
+on_cancelled = "Abort Ign Test"
+manual_transitions = [
+    { target = "Abort Ign Test", display = "Abort", abort = true },
+]
+[state_machine.states."Igniter Test".thresholds.upper_thresholds_barg]
+gox = 15
+h2 = 15
+igniter = 10
+[state_machine.states."Igniter Test".thresholds.upper_thresholds_celsius]
+igniter = 200
+# Start purging
+[[state_machine.states."Igniter Test".sequence]]
+action = "SetActuators"
+targets = { "gox_prg_vlv" = "Open", "h2_prg_vlv" = "Open" }
+# Purge
+[[state_machine.states."Igniter Test".sequence]]
+action = "Wait"
+duration_sec = 5
+# Stop purging and start spark plug
+[[state_machine.states."Igniter Test".sequence]]
+action = "SetActuators"
+targets = { "gox_prg_vlv" = "Close", "h2_prg_vlv" = "Close", "ign_spk_plg" = "On" }
+[[state_machine.states."Igniter Test".sequence]]
+action = "Wait"
+duration_sec = 0.5
+# First open GOX then H2 valve
+[[state_machine.states."Igniter Test".sequence]]
+action = "SetActuators"
+targets = { "gox_ign_vlv" = "Open" }
+[[state_machine.states."Igniter Test".sequence]]
+action = "Wait"
+duration_sec = 0.5
+[[state_machine.states."Igniter Test".sequence]]
+action = "SetActuators"
+targets = { "h2_ign_vlv" = "Open" }
+# Detect firing, analogous to `igniter_pres.detect(value=6, rising=true, abort=ign_abort, patience=1s);`
+[[state_machine.states."Igniter Test".sequence]]
+action = "IgnitionDetection"
+pressure_lower_thresh_barg = 6.0
+patience_sec = 1.0
+# Sustain firing, abort if pressure becomes too low
+[[state_machine.states."Igniter Test".sequence]]
+action = "SustainedIgnition"
+min_pressure_barg = 5.0
+duration_sec = 4.0
+# After ignition purge sequence:
+[[state_machine.states."Igniter Test".sequence]]
+action = "SetActuators"
+targets = { "gox_ign_vlv" = "Close", "h2_ign_vlv" = "Close", "gox_prg_vlv" = "Open", "h2_prg_vlv" = "Open" }
+[[state_machine.states."Igniter Test".sequence]]
+action = "Wait"
+duration_sec = 0.5
+[[state_machine.states."Igniter Test".sequence]]
+action = "SetActuators"
+targets = { "ign_spk_plg" = "Off" }
+[[state_machine.states."Igniter Test".sequence]]
+action = "Wait"
+duration_sec = 5
+[[state_machine.states."Igniter Test".sequence]]
+action = "SetActuators"
+targets = { "gox_prg_vlv" = "Close", "h2_prg_vlv" = "Close" }
+
+# This runs the ignition abort sequence in case a manual or automatic abort was triggered
+[state_machine.states."Abort Ign Test"]
+type = "RunSequence"
+on_completed = "Safe Abort"
+on_cancelled = "Safe Abort"
+manual_transitions = [
+    { target = "Safe Abort", display = "Abort Abort Seq", abort = true },
+]
+# Open purge valves and close fuel valve
+[[state_machine.states."Abort Ign Test".sequence]]
+action = "SetActuators"
+targets = { "h2_ign_vlv" = "Close", "gox_ign_vlv" = "Close", "gox_prg_vlv" = "Open", "h2_prg_vlv" = "Open" }
+[[state_machine.states."Abort Ign Test".sequence]]
+action = "Wait"
+duration_sec = 0.5
+# 0.5s later turn off spark plug
+[[state_machine.states."Abort Ign Test".sequence]]
+action = "SetActuators"
+targets = { "ign_spk_plg" = "Off" }
+# Now purge for 5 sec and then closed the purge valves again
+[[state_machine.states."Abort Ign Test".sequence]]
+action = "Wait"
+duration_sec = 5
+[[state_machine.states."Abort Ign Test".sequence]]
+action = "SetActuators"
+targets = { "gox_prg_vlv" = "Close", "h2_prg_vlv" = "Close" }

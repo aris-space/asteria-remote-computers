@@ -1,0 +1,42 @@
+[package]
+name = "rfs-computer"
+version = "0.1.0"
+edition = "2024"
+
+[lints]
+workspace = true
+
+[dependencies]
+lib-mission = { path = "../lib-remote-computers/lib-mission" }
+uremote-electronics = { path = "../uremote-electronics" }
+keller23sx = { path = "../keller23sx" }
+lox-fill-valve = { path = "../lox-fill-valve" }
+tokio-modbus-shared = { path = "../tokio-modbus-shared" }
+hermes-can = { path = "../lib-remote-computers/hermes-can", features = [
+    "all",
+    "serde",
+], version = "0.3.0" }
+pss-drivers = { path = "../lib-remote-computers/pss-drivers" }
+
+mavlink-core = { version = "0.13.1" }
+tokio = { version = "1.37.0", features = ["full"] }
+tokio-modbus = { version = "0.16.1", default-features = false, features = [
+    "rtu",
+] }
+watchable = "1.1.2"
+serde = { version = "1.0", features = ["derive"] }
+toml = "0.8.19"
+thiserror = "1.0.64"
+async-trait = "0.1.83"
+tracing = "0.1.41"
+tokio-serial = "5.4.5"
+tokio_serial_pacing = "0.1.1"
+
+[target.'cfg(target_os = "linux")'.dependencies]
+socketcan = "3.5.0"
+
+[build-dependencies]
+built = { version = "0.7.7", features = ["git2"] }
+
+[dev-dependencies]
+glob = "0.3.2"

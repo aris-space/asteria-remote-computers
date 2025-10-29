@@ -1,0 +1,35 @@
+# This state machine config does nothing and just idles.
+
+system_time_rate_hz = 200
+
+[telemetry]
+mavlink_address = "udpout:127.0.0.1:5761"
+
+[telemetry.downlink_rates]
+# slowened telemetry.
+state_hz = 0.5
+actuator_feedback_hz = 1
+temperature_sensors_hz = 3
+pressure_sensors_hz = 15
+fill_levels_hz = 0.5
+
+[uremote]
+address = "192.168.0.222:502"
+min_read_frequency_hz = 20
+[serial]
+serial_port = "/dev/ttyAMA2"
+baud_rate = "Baud115200"
+timeout_ms = 105
+pressure_polling_hz = 20     # double for igniter sensor
+valve_state_polling_hz = 5
+
+[can]
+socket_address = "can0"
+
+[state_machine]
+name = "Idle State machine"
+initial_state = "Idle"
+
+[state_machine.states."Idle"]
+type = "Waiting"
+manual_transitions = []

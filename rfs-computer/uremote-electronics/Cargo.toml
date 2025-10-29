@@ -1,0 +1,22 @@
+[package]
+name = "uremote-electronics"
+version = "0.1.0"
+edition = "2024"
+
+[lints]
+workspace = true
+
+[dependencies]
+ur20 = "0.6.0"                                                 # Patched with path dependency
+ur20-modbus = "0.5.0"
+lib-mission = { path = "../lib-remote-computers/lib-mission" }
+watchable = "1.1.2"
+tracing = "0.1.41"
+thiserror = "2.0.12"
+serde = { version = "1.0.219", features = ["derive"] }
+futures-util = "0.3.31"
+tokio = { version = "1.45.0", features = ["time"] }
+
+[dev-dependencies]
+serde_json = "1.0.140"
+tokio = { version = "1.45.0", features = ["rt-multi-thread", "macros", "time"] }

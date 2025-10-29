@@ -1,0 +1,13 @@
+[package]
+name = "tokio-modbus-shared"
+version = "0.1.0"
+edition = "2024"
+authors = ["Louis Schell <louis.schell1@gmx.de>"]
+
+[dependencies]
+tokio-modbus = { version = "0.16.1", default-features = false }
+tokio = { version = "1", default-features = false, features = ["sync"] }
+async-trait = "0.1.88"
+
+[lints]
+workspace = true

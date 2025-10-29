@@ -1,0 +1,22 @@
+[package]
+name = "keller23sx"
+version = "0.1.0"
+edition = "2024"
+authors = ["Louis Schell <louis.schell1@gmx.de>"]
+
+[dependencies]
+bitflags = "2.9.1"
+thiserror = "2.0.12"
+tokio-modbus = { version = "0.16.1", default-features = false, features = [
+    "rtu",
+] }
+serde = { version = "1.0", features = ["derive"] }
+
+[dev-dependencies]
+tokio = { version = "1", features = ["macros", "rt", "time"] }
+tokio-serial = "5.4.5"
+tokio-modbus-shared = { path = "../tokio-modbus-shared" }
+tokio_serial_pacing = "0.1.1"
+
+[lints]
+workspace = true
