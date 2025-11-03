@@ -2413,7 +2413,7 @@ checksum = "6d49784317cd0d1ee7ec5c716dd598ec5b4483ea832a2dced265471cc0f690ae"
 [[package]]
 name = "ur20"
 version = "0.6.0"
-source = "git+https://github.com/slowtec/ur20.git#592771d18d547e100aacd7204e65bf7d989910ac"
+source = "git+https://github.com/slowtec/ur20.git?rev=592771d18d547e100aacd7204e65bf7d989910ac#592771d18d547e100aacd7204e65bf7d989910ac"
 dependencies = [
  "byteorder",
  "lazy_static",
