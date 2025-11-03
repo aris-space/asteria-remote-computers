@@ -1,6 +1,0 @@
-[submodule "lib-remote-computers"]
-	path = lib-remote-computers
-	url = ../hermes-lib-remote-computers
-[submodule "dep-ur20"]
-	path = dep-ur20
-	url = ../hermes-fork-ur20

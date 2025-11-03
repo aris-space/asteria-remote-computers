@@ -1,6 +1,0 @@
-[submodule "hermes-lib-remote-computers"]
-	path = hermes-lib-remote-computers
-	url = ../hermes-lib-remote-computers
-[submodule "hermes-recovery-gnc"]
-	path = hermes-recovery-gnc
-	url = ../hermes-recovery-gnc
