@@ -1,3 +1,6 @@
 [submodule "data-definitions"]
 	path = data-definitions
 	url = ../asteria-data-definitions
+[submodule "flight-computer/hermes-recovery-gnc"]
+	path = flight-computer/hermes-recovery-gnc
+	url = ../hermes-recovery-gnc
