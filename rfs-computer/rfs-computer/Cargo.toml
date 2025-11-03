@@ -7,16 +7,16 @@ edition = "2024"
 workspace = true
 
 [dependencies]
-lib-mission = { path = "../lib-remote-computers/lib-mission" }
+lib-mission = { path = "../../lib-remote-computers/lib-mission" }
 uremote-electronics = { path = "../uremote-electronics" }
 keller23sx = { path = "../keller23sx" }
 lox-fill-valve = { path = "../lox-fill-valve" }
 tokio-modbus-shared = { path = "../tokio-modbus-shared" }
-hermes-can = { path = "../lib-remote-computers/hermes-can", features = [
+hermes-can = { path = "../../data-definitions/can", features = [
     "all",
     "serde",
 ], version = "0.3.0" }
-pss-drivers = { path = "../lib-remote-computers/pss-drivers" }
+pss-drivers = { path = "../../lib-remote-computers/pss-drivers" }
 
 mavlink-core = { version = "0.13.1" }
 tokio = { version = "1.37.0", features = ["full"] }

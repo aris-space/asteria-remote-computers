@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-hermes-mavlink = { path = "../hermes-mavlink" }
+hermes-mavlink = { path = "../../data-definitions/mavlink" }
 mavlink-core = { version = "0.13.1" }
 
 [lints]

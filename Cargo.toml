@@ -3,19 +3,18 @@ resolver = "3"
 
 members = [
     "lib-remote-computers/lib-mission",
-    "lib-remote-computers/hermes-mavlink",
-    "lib-remote-computers/hermes-can",
     "lib-remote-computers/dummy-controller",
     "lib-remote-computers/pss-drivers",
     "rfs-computer/rfs-computer",
     "rfs-computer/uremote-electronics",
-    "rfs-computer/dep-ur20",
     "rfs-computer/keller23sx",
     "rfs-computer/tokio-modbus-shared",
     "rfs-computer/lox-fill-valve",
     "flight-computer/flight-computer",
     "flight-computer/hermes-recovery-gnc/gnc_interface",
     "flight-computer/hermes-recovery-gnc/hermes_gnc",
+    "data-definitions/mavlink",
+    "data-definitions/can",
 ]
 
 [workspace.lints.clippy]
@@ -29,4 +28,4 @@ implicit_hasher = "allow"            # We'll only ever use the default hasher
 doc_markdown = "allow"               # Too many false positives for acronymes I can't bother to whitelist
 
 [patch.crates-io]
-ur20 = { path = "./dep-ur20" }
+ur20 = { git = "https://github.com/slowtec/ur20.git", commit = "592771d18d547e100aacd7204e65bf7d989910ac" }
