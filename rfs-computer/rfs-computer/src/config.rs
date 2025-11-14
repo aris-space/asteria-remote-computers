@@ -171,13 +171,6 @@ pub enum StateLogicConfig {
         /// If the diagnostics fail, we will transition to the state with the name of `on_tests_fail`.
         on_tests_fail: String,
     },
-    /// Describes a [`state_logic::SetPSSMode`].
-    SetPSSMode {
-        /// How the mode should be set
-        mode: state_logic::set_pss_mode::PSSMode,
-        /// The name of the state which to proceed to after setting the mode.
-        on_done: String,
-    },
     /// Describes a [`state_logic::DepressurizeRFS`].
     DepressurizeRFS {
         /// The name of the state which to proceed to after completing setting all valves but lox bleed normal.
@@ -187,11 +180,6 @@ pub enum StateLogicConfig {
     SetNormalState {
         /// The name of the state which to proceed to after completing setting all valves.
         on_done: String,
-    },
-    /// Describes a [`state_logic::AwaitFCPassive`].
-    AwaitFCPassive {
-        /// The [name][StateName] of the state where to transition to once the flight computer is passive.
-        on_fc_passive: String,
     },
     /// Describes a [`state_logic::RunSequence`].
     RunSequence {
@@ -311,22 +299,12 @@ impl MakeState for StateLogicConfig {
                 on_tests_fail: StateName::try_new(&on_tests_fail, names)?,
             }
             .into_box(),
-            StateLogicConfig::SetPSSMode { mode, on_done } => state_logic::SetPSSMode {
-                mode,
-                on_done: StateName::try_new(&on_done, names)?,
-            }
-            .into_box(),
             StateLogicConfig::DepressurizeRFS { on_done } => state_logic::DepressurizeRFS {
                 on_done: StateName::try_new(&on_done, names)?,
             }
             .into_box(),
             StateLogicConfig::SetNormalState { on_done } => state_logic::SetNormalState {
                 on_done: StateName::try_new(&on_done, names)?,
-            }
-            .into_box(),
-            StateLogicConfig::AwaitFCPassive { on_fc_passive } => state_logic::AwaitFCPassive {
-                manual_transitions: transitions,
-                on_fc_passive: StateName::try_new(&on_fc_passive, names)?,
             }
             .into_box(),
             StateLogicConfig::RunSequence {
