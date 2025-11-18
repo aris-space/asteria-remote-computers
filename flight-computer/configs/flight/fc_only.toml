@@ -74,7 +74,7 @@ on_state_set = "Waiting for Handsoff 3"
 [state_machine.states."Waiting for Handsoff 3"]
 type = "Waiting"
 manual_transitions = [
-    { target = "Ready for Handsoff", display = "Handsoff" },
+    { target = "Passive for Filling", display = "Passive for Filling" },
     { target = "Takeover", display = "Skip Filling (Takeover)" },         # FIXME: this is used for PSS only tests
     { target = "Sofft Failure", display = "Manual Reset", abort = true },
 ]
@@ -107,28 +107,11 @@ manual_transitions = [{ target = "Force Abort", display = "Done" }]
 # This will set all valves inactive, essentially venting any pressure.
 # Used as the abort during filling, if connection is lost.
 [state_machine.states."Vent"]
-type = "SetPSSMode"
-mode = "FCPassive"
+type = "SetNormalState"
 on_done = "Vent 2"
 [state_machine.states."Vent 2"]
-type = "SetNormalState"
-on_done = "Vent 3"
-[state_machine.states."Vent 3"]
 type = "Waiting"
 manual_transitions = [{ target = "Force Abort", display = "Acknowledge" }]
-
-# In this state we wait for the RFS to take control of the PSS system
-[state_machine.states."Ready for Handsoff"]
-type = "SetPSSMode"
-mode = "FCPassive"
-on_done = "Ready for Handsoff 2"
-[state_machine.states."Ready for Handsoff 2"]
-type = "AwaitRFSMode"
-mode = "RFSActive"
-on_detected = "Passive for Filling"
-manual_transitions = [
-    { target = "Force Abort", display = "Force Abort", abort = true },
-]
 
 # The state in which the FC is passive while the RFSC coordinates filling the rocket
 [state_machine.states."Passive for Filling"]
@@ -137,14 +120,13 @@ rfs_can_timeout_sec = 900.0
 on_timeout = "Vent"
 manual_transitions = [
     { target = "Force Abort", display = "Force Abort", abort = true },
-    { target = "Ready for Takeover", display = "Skip Diagnostics" },   # TODO remove this transition
-    { target = "Gate", display = "Ready for Takeover" },
+    { target = "Gate", display = "Gate" }, # TODO: correct display
 ]
 
 # This state continues only when all boards have sent healthy reports
 [state_machine.states."Gate"]
 type = "Diagnostics"
-on_tests_pass = "Ready for Takeover"
+on_tests_pass = "Takeover"
 on_tests_fail = "Boards Unhealthy"
 outdated_threshold_sec = 5
 check_pss_boards = true
@@ -157,18 +139,6 @@ on_timeout = "Vent"
 manual_transitions = [
     { target = "Force Abort", display = "Force Abort", abort = true },
     { target = "Passive for Filling", display = "Acknowledge" },
-]
-
-# In this state we wait for the RFS to be passive, but also abort if the connection is lost.
-[state_machine.states."Ready for Takeover"]
-type = "AwaitRFSModeWhileConnected"
-mode = "RFSPassive"
-on_detected = "Takeover"
-rfs_can_timeout_sec = 900.0
-on_timeout = "Vent"
-manual_transitions = [
-    { target = "Force Abort", display = "Force Abort", abort = true },
-    { target = "Passive for Filling", display = "Redo Diagnostics" },
 ]
 
 # ======================================= Pressurization =======================================
@@ -225,10 +195,6 @@ manual_transitions = [{ target = "Manual Safeing", display = "Safeing" }]
 
 # This state marks the transition to pressurization section, where the rocket is in its own control again
 [state_machine.states."Takeover"]
-type = "SetPSSMode"
-mode = "FCActive"
-on_done = "Takeover 2"
-[state_machine.states."Takeover 2"]
 type = "MonitoredWaiting"
 on_violation = "Depressure"
 telemetry_loss_threshold_sec = 60 # 1min
