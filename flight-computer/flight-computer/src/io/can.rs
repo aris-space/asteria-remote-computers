@@ -10,6 +10,15 @@ use crate::config::CANConfig;
 use super::input::InputTree;
 use super::output::OutputTree;
 
+use lib_mission::util::init::init_binary;
+
+#[cfg(feature = "benchmark")]
+use std::sync::atomic::{AtomicU64, Ordering};
+#[cfg(feature = "benchmark")]
+pub static CAN_MESSAGES_SENT: AtomicU64 = AtomicU64::new(0);
+#[cfg(feature = "benchmark")]
+pub static CAN_TOTAL_LATENCY_NS: AtomicU64 = AtomicU64::new(0);
+
 mod input_drivers;
 mod output_drivers;
 
@@ -60,6 +69,7 @@ pub fn init_can_drivers(
     let (tx, rx) = std::sync::mpsc::channel();
     let output_handles = init_output_drivers(&input_tree.time, output_tree, &tx, thrust_curve);
 
+    // TODO: MODIFY FOR BENCHMARKING! 0_03
     // Spawn the receiving thread
     std::thread::spawn(move || {
         let mut receiver = receiver;
@@ -236,4 +246,45 @@ where
     ];
     handles.extend(valves.spawn_output_drivers_fc(tx));
     handles
+}
+
+
+#[cfg(test)]
+mod benchmark {
+    use std::path::Path;
+
+    use std::time::{Duration, Instant};
+
+    use lib_mission::util::init::init_binary;
+    use serde::de::Error;
+
+    use crate::config::CANConfig;
+    use crate::io::can::init_can_drivers;
+    use crate::io::input::InputTree;
+    use crate::io::output::OutputTree;
+
+    #[test]
+    // CAN config
+    fn benchmark_test() {
+        let config = CANConfig {
+            // virtual CAN?
+            socket_address: "vcan0".to_string(),
+            // init empty vector: to have it filled?
+            ecu_thrust_curve: vec![],
+        };
+
+        // init output tree and input tree
+        let output_tree = OutputTree::default();
+        let input_tree = InputTree::default();
+
+        let _handles = init_can_drivers(&config, &input_tree, &output_tree)
+        .expect("Failed to init CAN drivers");
+
+        // init time
+        let _start = Instant::now();
+
+        // init ouput tree with some transition
+
+    }
+
 }
