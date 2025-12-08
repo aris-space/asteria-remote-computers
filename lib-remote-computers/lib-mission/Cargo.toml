@@ -41,3 +41,4 @@ toml = "0.8.20"
 [features]
 default = ["can"]
 can = ["dep:hermes-can", "dep:embedded-can"]
+benchmark = []

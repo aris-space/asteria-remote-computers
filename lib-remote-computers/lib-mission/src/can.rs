@@ -4,7 +4,11 @@
 //! Additionally, the structured messages will be logged in debug representation to debug-level.
 
 use std::collections::BTreeMap;
-
+use std::time::Instant;
+#[cfg(feature = "benchmark")]
+use std::time::Instant;
+#[cfg(feature = "benchmark")]
+use chrono::Duration;
 use embedded_can::{Frame, StandardId};
 use hermes_can::messages::Message as CanMessage;
 use hermes_can::next_valid_length;
@@ -72,7 +76,10 @@ impl std::fmt::Debug for ConsumerRegistry {
 ///
 /// Note that this uses the [`embedded_can::Frame`] trait, which technically is meant for CAN 2.0. We abuse this to also carry CAN FD frames.
 #[tracing::instrument(level = "TRACE", name = "can::receiver", skip_all, fields(?consumers))]
-pub fn read_can<S: embedded_can::blocking::Can>(receiver: &mut S, consumers: &ConsumerRegistry) {
+pub fn read_can<S: embedded_can::blocking::Can>(
+    receiver: &mut S, 
+    consumers: &ConsumerRegistry
+) -> Option<BenchStats> {
     let mut n = 0;
     loop {
         read_can_once(receiver, consumers, n);
@@ -86,14 +93,24 @@ fn read_can_once<S: embedded_can::blocking::Can>(
     receiver: &mut S,
     consumers: &ConsumerRegistry,
     n: usize,
-) {
+) -> Option<RecStats> {
+    #[cfg(feature = "benchmark")] {
+        let mut rec_stats = BenchStats {
+            message_time: 0,
+            total_errors: 0,
+            stat_name: "can_receive"
+        };
+        let init_rec = Instant::now();
+    }
+
     let frame = match receiver.receive() {
         Ok(f) => f,
         Err(e) => {
             tracing::warn!(error = ?e, "skipping bad frame, waiting 1ms");
             // If the link is severed, then this causes a infinite loop, thus keep it under control.
             std::thread::sleep(std::time::Duration::from_millis(1));
-            return;
+            #[cfg(feature = "benchmark")] {rec_stats.total_errors += 1;}
+            return None;
         }
     };
     let id = match frame.id() {
@@ -111,13 +128,22 @@ fn read_can_once<S: embedded_can::blocking::Can>(
         Ok(m) => m,
         Err(e) => {
             tracing::warn!(error = %e, "failed to decode frame");
-            return;
+            #[cfg(feature = "benchmark")] {rec_stats.total_errors += 1;}
+            return None;
         }
     };
+    #[cfg(feature = "benchmark")] {
+        rec_stats.message_time = init_rec.elapsed();
+    }
+
     tracing::debug!(msg = ?message, "received CAN message");
 
     if consumers.forward(message).is_err() {
         tracing::trace!("skipping frame without consumer");
+    }
+
+    #[cfg(not(feature = "benchmark"))] {
+        None
     }
 }
 
@@ -131,9 +157,29 @@ fn read_can_once<S: embedded_can::blocking::Can>(
 pub fn run_can_transmit_actor<S: embedded_can::blocking::Can>(
     transmitter: &mut S,
     receiver: std::sync::mpsc::Receiver<CanMessage>,
-) {
+)-> Option<BenchStats> {
+
+    #[cfg(feature = "benchmark")] {
+        let init_send = Instant::now();
+        let mut msg_send_init = Instant::now();
+        let mut msg_time = Instant::now();
+        let mut send_stats = BenchStats {
+            total_time: 0,
+            last_mess_time: 0,
+            single_messages_time: Vec::new(),
+            total_messages: 0,
+            total_errors: 0,
+            stat_name: "can_transmit"
+        };
+    }
+
     // Blocking iterator
     for msg in receiver {
+        
+        #[cfg(feature = "benchmark")] {
+            msg_send_init = Instant::now();
+        }
+        
         tracing::debug!(?msg, "transmitting CAN message");
 
         let mut buf = [0; 64];
@@ -141,6 +187,7 @@ pub fn run_can_transmit_actor<S: embedded_can::blocking::Can>(
             Ok(x) => x,
             Err(e) => {
                 tracing::error!(error = %e, "cannot encode message!");
+                #[cfg(feature = "benchmark")] {send_stats.total_errors += 1;}
                 continue;
             }
         };
@@ -148,11 +195,13 @@ pub fn run_can_transmit_actor<S: embedded_can::blocking::Can>(
         let Some(len) = next_valid_length(raw_len) else {
             // should always already fail above, since the buf is at most 64 bytes.
             tracing::error!(len = raw_len, "unreachable: message too large!");
+            #[cfg(feature = "benchmark")] {send_stats.total_errors += 1;}
             continue;
         };
         let Some(frame) = S::Frame::new(id, &buf[0..len]) else {
             // should always already fail above, since the buf is at most 64 bytes.
             tracing::error!(len = raw_len, "unreachable: message too large!");
+            #[cfg(feature = "benchmark")] {send_stats.total_errors += 1;}
             continue;
         };
         tracing::trace!(
@@ -164,10 +213,51 @@ pub fn run_can_transmit_actor<S: embedded_can::blocking::Can>(
         let res = transmitter.transmit(&frame);
         if let Err(err) = res {
             tracing::error!(error = ?err, "failed to send CAN message. Dropping it.");
+            #[cfg(feature = "benchmark")] {send_stats.total_errors += 1;}
+        }
+
+        #[cfg(feature = "benchmark")] {
+            msg_time = msg_init.elapsed();
+            send_stats.single_messages_time.push(msg_time);
+            send_stats.last_mess_time = msg_time;
         }
     }
+
+    #[cfg(feature = "benchmark")] {
+        send_stats.total_time = init_send.elapsed();
+    }
+
     tracing::warn!("Exiting run_can_transmit_actor, should only happen at shutdown");
+
+    #[cfg(not(feature = "benchmark"))] {
+        None
+    }
+
 }
+
+pub struct BenchStats {
+    total_time: std::time::Duration,
+    last_mess_time: std::time::Duration,
+    single_messages_time: Vec<std::time::Duration>,
+    total_messages: i32,
+    total_errors: i32,
+    stat_name: &'static str,
+}
+
+struct RecStats {
+    message_time: std::time::Duration,
+
+    total_errors: i32,
+    stat_name: &'static str,
+}
+
+pub struct BenchAggregator {
+    stats_array: Vec<BenchStats>,
+}
+
+#[cfg(feature = "benchmark")]
+impl BenchStats {}
+
 
 /// A receive/transmit implementor which is utterly unusable execpt for disabling CAN.
 pub struct DummyCan;

@@ -1,5 +1,5 @@
 use hermes_can::messages::event_messages::{ThrustCurveConfig, ThrustPoint};
-use lib_mission::can::{read_can, run_can_transmit_actor, ConsumerRegistry};
+use lib_mission::can::{BenchAggregator, BenchStats, ConsumerRegistry, read_can, run_can_transmit_actor};
 use lib_mission::reactive::IntoWatched;
 use lib_mission::util::time::MissionTime;
 use lib_mission::Error;
@@ -69,17 +69,31 @@ pub fn init_can_drivers(
     let (tx, rx) = std::sync::mpsc::channel();
     let output_handles = init_output_drivers(&input_tree.time, output_tree, &tx, thrust_curve);
 
-    // TODO: MODIFY FOR BENCHMARKING! 0_03
+    // init bench aggregator
+    #[cfg(feature = "benchmark")]
+    let bench_aggr = BenchAggregator {
+        stats_array: Vec::new(),
+    };
+
     // Spawn the receiving thread
     std::thread::spawn(move || {
         let mut receiver = receiver;
+        #[cfg(feature = "benchmark")]
+        let rec_stat = read_can(&mut receiver, &consumers);
+        #[cfg(not(feature = "benchmark"))]
         read_can(&mut receiver, &consumers);
     });
     // Spawn the transmitting thread
     std::thread::spawn(move || {
         let mut transmitter = transmitter;
+        #[cfg(feature = "benchmark")]
+        let send_stat = run_can_transmit_actor(&mut transmitter, rx);
+        #[cfg(not(feature = "benchmark"))]
         run_can_transmit_actor(&mut transmitter, rx);
     });
+
+    #[cfg(feature = "benchmark")]
+    bench_aggr.stats_array.push(send_stat);
 
     Ok([input_handles, output_handles].concat())
 }
@@ -253,10 +267,7 @@ where
 mod benchmark {
     use std::path::Path;
 
-    use std::time::{Duration, Instant};
-
-    use lib_mission::util::init::init_binary;
-    use serde::de::Error;
+    use std::time::Instant;
 
     use crate::config::CANConfig;
     use crate::io::can::init_can_drivers;
@@ -279,9 +290,6 @@ mod benchmark {
 
         let _handles = init_can_drivers(&config, &input_tree, &output_tree)
         .expect("Failed to init CAN drivers");
-
-        // init time
-        let _start = Instant::now();
 
         // init ouput tree with some transition
 
