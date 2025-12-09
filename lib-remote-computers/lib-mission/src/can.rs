@@ -7,6 +7,7 @@ use std::collections::BTreeMap;
 use std::time::Instant;
 #[cfg(feature = "benchmark")]
 use std::time::Instant;
+use chrono::Duration;
 #[cfg(feature = "benchmark")]
 use chrono::Duration;
 use embedded_can::{Frame, StandardId};
@@ -80,8 +81,29 @@ pub fn read_can<S: embedded_can::blocking::Can>(
     receiver: &mut S, 
     consumers: &ConsumerRegistry
 ) -> Option<BenchStats> {
+    #[cfg(feature = "benchmark")] {
+        let init_send = Instant::now;
+        let mut send_stats = BenchStats {
+            total_time: 0,
+            last_mess_time: 0,
+            single_messages_time: Vec::new(),
+            total_messages: 0,
+            total_errors: 0,
+            stat_name: "can_transmit"
+        };
+    }
+
     let mut n = 0;
     loop {
+        #[cfg(feature = "benchmark")] {
+            send_stats.single_messages_time.push(read_can_once(receiver, consumers, n));
+            send_stats.total_messages += 1;
+            if n > 50 { // read can 50 times for testing then return
+                send_stats.total_time = init_send.elapsed();
+                Some(send_stats)
+            }
+        }
+        #[cfg(not(feature = "benchmark"))]
         read_can_once(receiver, consumers, n);
         n += 1;
     }
@@ -93,13 +115,8 @@ fn read_can_once<S: embedded_can::blocking::Can>(
     receiver: &mut S,
     consumers: &ConsumerRegistry,
     n: usize,
-) -> Option<RecStats> {
+) -> Option<Duration> {
     #[cfg(feature = "benchmark")] {
-        let mut rec_stats = BenchStats {
-            message_time: 0,
-            total_errors: 0,
-            stat_name: "can_receive"
-        };
         let init_rec = Instant::now();
     }
 
@@ -109,7 +126,6 @@ fn read_can_once<S: embedded_can::blocking::Can>(
             tracing::warn!(error = ?e, "skipping bad frame, waiting 1ms");
             // If the link is severed, then this causes a infinite loop, thus keep it under control.
             std::thread::sleep(std::time::Duration::from_millis(1));
-            #[cfg(feature = "benchmark")] {rec_stats.total_errors += 1;}
             return None;
         }
     };
@@ -128,12 +144,11 @@ fn read_can_once<S: embedded_can::blocking::Can>(
         Ok(m) => m,
         Err(e) => {
             tracing::warn!(error = %e, "failed to decode frame");
-            #[cfg(feature = "benchmark")] {rec_stats.total_errors += 1;}
             return None;
         }
     };
     #[cfg(feature = "benchmark")] {
-        rec_stats.message_time = init_rec.elapsed();
+        let message_time = init_rec.elapsed();
     }
 
     tracing::debug!(msg = ?message, "received CAN message");
@@ -142,9 +157,11 @@ fn read_can_once<S: embedded_can::blocking::Can>(
         tracing::trace!("skipping frame without consumer");
     }
 
-    #[cfg(not(feature = "benchmark"))] {
-        None
+    #[cfg(feature = "benchmark")] {
+        message_time
     }
+
+    None
 }
 
 /// Blocks on `receiver` reading message by message, encoding and sending them via the `transmitter`.
@@ -178,6 +195,7 @@ pub fn run_can_transmit_actor<S: embedded_can::blocking::Can>(
         
         #[cfg(feature = "benchmark")] {
             msg_send_init = Instant::now();
+            send_stats.total_messages += 1;
         }
         
         tracing::debug!(?msg, "transmitting CAN message");
@@ -229,35 +247,27 @@ pub fn run_can_transmit_actor<S: embedded_can::blocking::Can>(
 
     tracing::warn!("Exiting run_can_transmit_actor, should only happen at shutdown");
 
-    #[cfg(not(feature = "benchmark"))] {
-        None
+    #[cfg(feature = "benchmark")] {
+        send_stats
     }
 
+    None
 }
 
+#[cfg_attr(not(feature = "benchmark"), allow(dead_code))]
 pub struct BenchStats {
-    total_time: std::time::Duration,
-    last_mess_time: std::time::Duration,
-    single_messages_time: Vec<std::time::Duration>,
+    total_time: Duration,
+    last_mess_time: Duration,
+    single_messages_time: Vec<Duration>,
     total_messages: i32,
     total_errors: i32,
     stat_name: &'static str,
 }
 
-struct RecStats {
-    message_time: std::time::Duration,
-
-    total_errors: i32,
-    stat_name: &'static str,
-}
-
+#[cfg_attr(not(feature = "benchmark"), allow(dead_code))]
 pub struct BenchAggregator {
     stats_array: Vec<BenchStats>,
 }
-
-#[cfg(feature = "benchmark")]
-impl BenchStats {}
-
 
 /// A receive/transmit implementor which is utterly unusable execpt for disabling CAN.
 pub struct DummyCan;

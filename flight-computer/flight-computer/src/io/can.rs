@@ -1,16 +1,16 @@
 use hermes_can::messages::event_messages::{ThrustCurveConfig, ThrustPoint};
-use lib_mission::can::{BenchAggregator, BenchStats, ConsumerRegistry, read_can, run_can_transmit_actor};
+use lib_mission::can::{ConsumerRegistry, read_can, run_can_transmit_actor};
 use lib_mission::reactive::IntoWatched;
 use lib_mission::util::time::MissionTime;
 use lib_mission::Error;
 use tokio::task::AbortHandle;
+#[cfg(feature = "benchmark")]
+use lib_mission::can::{BenchAggregator, BenchStats};
 
 use crate::config::CANConfig;
 
 use super::input::InputTree;
 use super::output::OutputTree;
-
-use lib_mission::util::init::init_binary;
 
 #[cfg(feature = "benchmark")]
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -69,8 +69,68 @@ pub fn init_can_drivers(
     let (tx, rx) = std::sync::mpsc::channel();
     let output_handles = init_output_drivers(&input_tree.time, output_tree, &tx, thrust_curve);
 
-    // init bench aggregator
-    #[cfg(feature = "benchmark")]
+    // Spawn the receiving thread
+    std::thread::spawn(move || {
+        let mut receiver = receiver;
+        read_can(&mut receiver, &consumers);
+    });
+    // Spawn the transmitting thread
+    std::thread::spawn(move || {
+        let mut transmitter = transmitter;
+        run_can_transmit_actor(&mut transmitter, rx);
+    });
+
+    Ok([input_handles, output_handles].concat())
+}
+
+// init can drivers for bench
+#[cfg(feature = "benchmark")]
+fn init_can_drivers_bench(
+    config: &CANConfig,
+    input_tree: &InputTree,
+    output_tree: &OutputTree,
+) -> Result<(Vec<AbortHandle>, BenchAggregator), Box<dyn std::error::Error>> {
+    // Setup actual receiver on linux
+    #[cfg(target_os = "linux")]
+    let (receiver, transmitter) = {
+        use socketcan::Socket;
+        use std::os::fd::AsFd;
+
+        let sock_adr = &config.socket_address;
+        // Duplicating the can socket descriptor, one used for receiving, one for transmitting.
+        // Pretty certain this is fine, even for properly automatically closing the socket on shutdown.
+        let sock_rx = socketcan::CanFdSocket::open(sock_adr)?;
+        let sock_tx = socketcan::CanFdSocket::from(sock_rx.as_fd().try_clone_to_owned()?);
+        tracing::info!("Opened CAN socket {sock_adr}");
+        (sock_rx, sock_tx)
+    };
+    // And a dummy receiver which never returns on other platforms
+    #[cfg(not(target_os = "linux"))]
+    #[allow(unreachable_code)] // intentional
+    let (receiver, transmitter) = {
+        let _ = config;
+        tracing::warn!("Will not attempt connect to CAN on non-linux!");
+        (lib_mission::can::DummyCan, lib_mission::can::DummyCan)
+    };
+
+    // Prepare the ECU
+    let mut thrust_curve = <[ThrustPoint; 25]>::default();
+    if config.ecu_thrust_curve.len() > 25 {
+        return Err(Error::malformed_config("thurst curve with too many points").into());
+    }
+    thrust_curve[..config.ecu_thrust_curve.len()].copy_from_slice(&config.ecu_thrust_curve);
+    let thrust_curve = ThrustCurveConfig {
+        thrust_curve,
+        thrust_curve_length: u8::try_from(config.ecu_thrust_curve.len())
+            .expect("no truncate since we checked size above <= 25"),
+    };
+
+    // Initialize the driver tasks
+    let mut consumers = ConsumerRegistry::new();
+    let input_handles = init_input_drivers(input_tree, &mut consumers);
+    let (tx, rx) = std::sync::mpsc::channel();
+    let output_handles = init_output_drivers(&input_tree.time, output_tree, &tx, thrust_curve);
+
     let bench_aggr = BenchAggregator {
         stats_array: Vec::new(),
     };
@@ -78,24 +138,17 @@ pub fn init_can_drivers(
     // Spawn the receiving thread
     std::thread::spawn(move || {
         let mut receiver = receiver;
-        #[cfg(feature = "benchmark")]
-        let rec_stat = read_can(&mut receiver, &consumers);
-        #[cfg(not(feature = "benchmark"))]
-        read_can(&mut receiver, &consumers);
+        bench_aggr.stats_array.push(read_can(&mut receiver, &consumers));   
     });
     // Spawn the transmitting thread
     std::thread::spawn(move || {
         let mut transmitter = transmitter;
-        #[cfg(feature = "benchmark")]
-        let send_stat = run_can_transmit_actor(&mut transmitter, rx);
-        #[cfg(not(feature = "benchmark"))]
-        run_can_transmit_actor(&mut transmitter, rx);
+        bench_aggr.stats_array.push(run_can_transmit_actor(&mut transmitter, rx));
     });
 
-    #[cfg(feature = "benchmark")]
-    bench_aggr.stats_array.push(send_stat);
 
-    Ok([input_handles, output_handles].concat())
+
+    Ok([input_handles, output_handles].concat(), bench_aggr)
 }
 
 /// Initializes all the drivers writing to the input tree by spawning tasks to consume CAN messages.
@@ -265,9 +318,6 @@ where
 
 #[cfg(test)]
 mod benchmark {
-    use std::path::Path;
-
-    use std::time::Instant;
 
     use crate::config::CANConfig;
     use crate::io::can::init_can_drivers;
