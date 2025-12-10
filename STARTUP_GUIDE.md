@@ -1,67 +1,52 @@
 # RFS Computer Startup Guide
 
-## Development Environment Setup
+## Pre-Assembly 
 
-### Network Setup
-
-1. **Connect laptop to access point**
+1. **Connect your laptop to the hotspot network**  
+   Turn on the hotspot (with a working internet connection) and connect your laptop to it.
    - SSID: `asd`
    - Password: `123456u8`
 
-2. **Connect to RC via SSH**
+2. **Connect to the RFS via SSH**
    ```bash
    ssh pi@rfsc.local
    ```
    - Password: `123456u8`
 
-3. **Connect RC to WiFi network**
+3. **Clone the repository with submodules**
    ```bash
-   sudo nmcli device wifi connect "[SSID]" password "[PASSWORD]"
-   ```
-   Replace `[SSID]` and `[PASSWORD]` with your actual WiFi credentials.
-
-4. **Connect your laptop to the same WiFi network**
-   - Disconnect from `asd` access point
-   - Connect to the same WiFi network as the RC
-
-### Remote Development Setup
-
-5. **Connect via VS Code Remote**
-   - Open VS Code
-   - Use the Remote - SSH extension to connect to `pi@rfsc.local`
-
-### Repository Setup
-
-6. **Clone the repository with submodules**
-   ```bash
-   git clone --recursive -j8 https://github.com/aris-space/asteria-remote-computers
+   git clone --recursive https://github.com/aris-space/asteria-remote-computers
    ```
    The `--recursive` flag ensures all necessary submodules are downloaded.
 
-7. **Navigate to repository directory**
+4. **Navigate to the project directory**
    ```bash
-   cd rfs-computer
+   cd asteria-remote-computers/rfs-computer
    ```
 
-### Build and Run
-
-8. **Build and run the RFS computer software**
+5. **Build the RFS computer binary**
    ```bash
-   BUILDER_INITIALS="[YOUR_INITIALS]" cargo run --release --locked --package rfs-computer configs/[YOUR_TEST_CONFIG].toml
+   BUILDER_INITIALS="[XX]" cargo build --release --locked --package rfs-computer
    ```
-   Replace `[YOUR_TEST_CONFIG]` with your actual configuration file name.
-   Replace `[YOUR_INITIALS]` with your initials (only 2 letters).
-   
+   Replace `[XX]` with your initials (2 letters).
 
-## Troubleshooting
+## Assembly
 
-### Internet Connection Issues
-- Verify the SSID and check signal strength: `nmcli device wifi list`
-- Check Internet connectivity: `ping -c 4 8.8.8.8`
+1. **Connect your laptop to the hotspot network**  
+   Turn on the hotspot (no internet connection is required) and connect your laptop to it.
+   - SSID: `asd`
+   - Password: `123456u8`
 
-### SSH Connection Issues
-- Ensure RC and laptop are on the same network
-- Verify hostname resolution: `ping rfsc.local`
+2. **Connect to the RFS via SSH**
+   ```bash
+   ssh pi@rfsc.local
+   ```
+   - Password: `123456u8`
 
-## Notes
-
+3. **Run the RFS computer binary**
+   The binary must already be built on the RFS.
+   ```bash
+   cd asteria-remote-computers/rfs-computer
+   target/release/rfs-computer configs/[CONFIG_FILE].toml
+   ```
+   Replace `[CONFIG_FILE]` with the appropriate configuration file name.
