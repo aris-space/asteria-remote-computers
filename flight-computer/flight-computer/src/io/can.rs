@@ -319,6 +319,7 @@ where
 #[cfg(test)]
 mod benchmark {
 
+    use std::time::Instant;
     use crate::config::CANConfig;
     use crate::io::can::init_can_drivers;
     use crate::io::input::InputTree;
@@ -342,6 +343,12 @@ mod benchmark {
         .expect("Failed to init CAN drivers");
 
         // init ouput tree with some transition
+        let start = Instant::now();
+        
+        // Test some different message types
+
+        println!("{:?}", start.elapsed());
+        
 
     }
 
