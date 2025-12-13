@@ -16,6 +16,8 @@ fn main() {
 
     writeln!(file, "// BELOW ARE CUSTOM ADDITIONS").expect("must be able to write");
 
+    println!("cargo:rerun-if-env-changed=BUILDER_INITIALS");
+
     // Add BUILT_TIME_UNIX
     writeln!(
         file,
