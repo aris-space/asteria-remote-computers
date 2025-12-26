@@ -4,8 +4,24 @@ use watchable::Watchable;
 
 use crate::types::DPRValve;
 
+enum DummyMessage {
+    A(NormallyClosedValve),
+    B(u32),
+}
+
+// trait to set fields from an enum
+trait Collector<T> {
+    fn update_from(&self, msg: T) -> Result<(), T>;
+}
+
 /// The feedback for the valves in the propellant supply system.
 #[derive(Debug, Default, Clone)]
+// derive the collector trait to set fields from an enum
+#[derive(Collector)]
+#[collector(
+    message_type = "DummyMessage",
+    update_expr = "let _ = #field.update(#value);"
+)]
 pub struct PSSValves {
     /// The current state for the Pressurization Vent Valve (`PRZ_VNT_VLV`).
     pub pressurization_vent_valve: Watchable<NormallyOpenValve>,
@@ -17,11 +33,27 @@ pub struct PSSValves {
     pub oxidizer_pressurization_valve: Watchable<DPRValve>,
     /// The current state for the Oxidizer Vent Valve (`OSS_VNT_VLV`).
     /// Note that this should be opened in an abort, despite being normally closed.
+    #[collector(pattern = "DummyMessage::A(#value)")]
     pub oxidizer_vent_valve: Watchable<NormallyClosedValve>,
     /// The current state for the Fuel Main Valve (`FSS_MNL_VLV`).
     pub fuel_main_valve: Watchable<NormallyClosedValve>,
     /// The current state for the Oxidizer Main Valve (`OSS_MNL_VLV`).
     pub oxidizer_main_valve: Watchable<NormallyClosedValve>,
+}
+
+// generated
+impl Collector<DummyMessage> for PSSValves {
+    fn update_from(&self, msg: DummyMessage) -> Result<(), DummyMessage> {
+        match msg {
+            DummyMessage::A(__value) => {
+                {
+                    let _ = self.oxidizer_vent_valve.update(__value);
+                }
+                Ok(())
+            }
+            _ => Err(msg),
+        }
+    }
 }
 
 #[derive(Debug, Default, Clone)]
