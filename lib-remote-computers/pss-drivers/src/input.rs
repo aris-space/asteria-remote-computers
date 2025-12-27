@@ -14,6 +14,24 @@ trait Collector<T> {
     fn update_from(&self, msg: T) -> Result<(), T>;
 }
 
+/// Spawns a task which continuously reads the newest update from `watched_value` and writes it to `telemetry_sender`.
+pub async fn broadcast_loop<T: Send + Sync + 'static + Clone>(
+    field: Watchable<T>,
+    mut map: impl FnMut(T) -> DummyMessage,
+    telemetry_sender: std::sync::mpsc::Sender<DummyMessage>,
+) -> ! {
+    use lib_mission::reactive::IntoWatched as _;
+    use lib_mission::reactive::Watched as _;
+    let mut watcher = field.watched();
+    loop {
+        let val = watcher.next().await;
+        let msg = map(val);
+        if telemetry_sender.send(msg).is_err() {
+            tracing::error!("buhu :(");
+        }
+    }
+}
+
 /// The feedback for the valves in the propellant supply system.
 #[derive(Debug, Default, Clone)]
 // derive the collector trait to set fields from an enum
@@ -22,6 +40,11 @@ trait Collector<T> {
     message_type = "DummyMessage",
     update_expr = "let _ = #field.update(#value);"
 )]
+// derivation to spawn a `broadcast_loop` for every field.
+// used in: FC: input tree telemetry. FW: state can messages. RFSC: state Can messages + input tree telemetry
+// also CSV is similar
+#[derive(Broadcast)]
+#[broadcast(...)] // select between the templates probably
 pub struct PSSValves {
     /// The current state for the Pressurization Vent Valve (`PRZ_VNT_VLV`).
     pub pressurization_vent_valve: Watchable<NormallyOpenValve>,
@@ -34,11 +57,23 @@ pub struct PSSValves {
     /// The current state for the Oxidizer Vent Valve (`OSS_VNT_VLV`).
     /// Note that this should be opened in an abort, despite being normally closed.
     #[collector(pattern = "DummyMessage::A(#value)")]
+    #[broadcast(args(map = "DummyMessage::A", min_freq = "10Hz", max_freq = "20Hz"))]
     pub oxidizer_vent_valve: Watchable<NormallyClosedValve>,
     /// The current state for the Fuel Main Valve (`FSS_MNL_VLV`).
     pub fuel_main_valve: Watchable<NormallyClosedValve>,
     /// The current state for the Oxidizer Main Valve (`OSS_MNL_VLV`).
     pub oxidizer_main_valve: Watchable<NormallyClosedValve>,
+}
+
+// generated
+impl PSSValves {
+    pub fn start_broadcasting(&self, telemetry_sender: &std::sync::mpsc::Sender<DummyMessage>) {
+        tokio::spawn(broadcast_loop(
+            self.oxidizer_vent_valve.clone(),
+            DummyMessage::A,
+            telemetry_sender.clone(),
+        ));
+    }
 }
 
 // generated
