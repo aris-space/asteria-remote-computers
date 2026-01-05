@@ -146,8 +146,6 @@ fn init_can_drivers_bench(
         bench_aggr.stats_array.push(run_can_transmit_actor(&mut transmitter, rx));
     });
 
-
-
     Ok([input_handles, output_handles].concat(), bench_aggr)
 }
 
@@ -317,6 +315,7 @@ where
 
 
 #[cfg(test)]
+#[cfg(feature = "benchmark")]
 mod benchmark {
 
     use std::time::Instant;
@@ -339,17 +338,16 @@ mod benchmark {
         let output_tree = OutputTree::default();
         let input_tree = InputTree::default();
 
-        let _handles = init_can_drivers(&config, &input_tree, &output_tree)
+        let _handles = init_can_drivers_bench(&config, &input_tree, &output_tree)
         .expect("Failed to init CAN drivers");
 
         // init ouput tree with some transition
         let start = Instant::now();
         
         // Test some different message types
-
+        // 
         println!("{:?}", start.elapsed());
         
-
     }
 
 }

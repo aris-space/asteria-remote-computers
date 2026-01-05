@@ -4,12 +4,8 @@
 //! Additionally, the structured messages will be logged in debug representation to debug-level.
 
 use std::collections::BTreeMap;
-use std::time::Instant;
 #[cfg(feature = "benchmark")]
-use std::time::Instant;
-use chrono::Duration;
-#[cfg(feature = "benchmark")]
-use chrono::Duration;
+use std::time::{Instant, Duration};
 use embedded_can::{Frame, StandardId};
 use hermes_can::messages::Message as CanMessage;
 use hermes_can::next_valid_length;
@@ -81,17 +77,17 @@ pub fn read_can<S: embedded_can::blocking::Can>(
     receiver: &mut S, 
     consumers: &ConsumerRegistry
 ) -> Option<BenchStats> {
-    #[cfg(feature = "benchmark")] {
-        let init_send = Instant::now;
-        let mut send_stats = BenchStats {
-            total_time: 0,
-            last_mess_time: 0,
-            single_messages_time: Vec::new(),
-            total_messages: 0,
-            total_errors: 0,
-            stat_name: "can_transmit"
-        };
-    }
+    #[cfg(feature = "benchmark")]
+    let init_send = Instant::now();
+    #[cfg(feature = "benchmark")]
+    let mut send_stats = BenchStats {
+        total_time: 0,
+        last_mess_time: 0,
+        single_messages_time: Vec::new(),
+        total_messages: 0,
+        total_errors: 0,
+        stat_name: "can_transmit"
+    };
 
     let mut n = 0;
     loop {
@@ -100,7 +96,7 @@ pub fn read_can<S: embedded_can::blocking::Can>(
             send_stats.total_messages += 1;
             if n > 50 { // read can 50 times for testing then return
                 send_stats.total_time = init_send.elapsed();
-                Some(send_stats)
+                return Some(send_stats);
             }
         }
         #[cfg(not(feature = "benchmark"))]
@@ -115,10 +111,10 @@ fn read_can_once<S: embedded_can::blocking::Can>(
     receiver: &mut S,
     consumers: &ConsumerRegistry,
     n: usize,
-) -> Option<Duration> {
-    #[cfg(feature = "benchmark")] {
-        let init_rec = Instant::now();
-    }
+) -> Option<std::time::Duration> {
+    #[cfg(feature = "benchmark")]
+    let init_rec = Instant::now();
+    
 
     let frame = match receiver.receive() {
         Ok(f) => f,
@@ -147,9 +143,9 @@ fn read_can_once<S: embedded_can::blocking::Can>(
             return None;
         }
     };
-    #[cfg(feature = "benchmark")] {
-        let message_time = init_rec.elapsed();
-    }
+    #[cfg(feature = "benchmark")]
+    let message_time = init_rec.elapsed();
+    
 
     tracing::debug!(msg = ?message, "received CAN message");
 
@@ -157,9 +153,9 @@ fn read_can_once<S: embedded_can::blocking::Can>(
         tracing::trace!("skipping frame without consumer");
     }
 
-    #[cfg(feature = "benchmark")] {
-        message_time
-    }
+    #[cfg(feature = "benchmark")]
+    return Some(message_time);
+    
 
     None
 }
@@ -176,19 +172,22 @@ pub fn run_can_transmit_actor<S: embedded_can::blocking::Can>(
     receiver: std::sync::mpsc::Receiver<CanMessage>,
 )-> Option<BenchStats> {
 
-    #[cfg(feature = "benchmark")] {
-        let init_send = Instant::now();
-        let mut msg_send_init = Instant::now();
-        let mut msg_time = Instant::now();
-        let mut send_stats = BenchStats {
-            total_time: 0,
-            last_mess_time: 0,
-            single_messages_time: Vec::new(),
-            total_messages: 0,
-            total_errors: 0,
-            stat_name: "can_transmit"
-        };
-    }
+    #[cfg(feature = "benchmark")]
+    let init_send = Instant::now();
+    #[cfg(feature = "benchmark")]
+    let mut msg_send_init = Instant::now();
+    #[cfg(feature = "benchmark")]
+    let mut msg_time = Instant::now();
+    #[cfg(feature = "benchmark")]
+    let mut send_stats = BenchStats {
+        total_time: Duration::zero(),
+        last_mess_time: Duration::zero(),
+        single_messages_time: Vec::new(),
+        total_messages: 0,
+        total_errors: 0,
+        stat_name: "can_transmit"
+    };
+    
 
     // Blocking iterator
     for msg in receiver {
@@ -235,7 +234,7 @@ pub fn run_can_transmit_actor<S: embedded_can::blocking::Can>(
         }
 
         #[cfg(feature = "benchmark")] {
-            msg_time = msg_init.elapsed();
+            msg_time = msg_send_init.elapsed();
             send_stats.single_messages_time.push(msg_time);
             send_stats.last_mess_time = msg_time;
         }
@@ -248,7 +247,7 @@ pub fn run_can_transmit_actor<S: embedded_can::blocking::Can>(
     tracing::warn!("Exiting run_can_transmit_actor, should only happen at shutdown");
 
     #[cfg(feature = "benchmark")] {
-        send_stats
+        return Some(send_stats);
     }
 
     None
@@ -256,9 +255,9 @@ pub fn run_can_transmit_actor<S: embedded_can::blocking::Can>(
 
 #[cfg_attr(not(feature = "benchmark"), allow(dead_code))]
 pub struct BenchStats {
-    total_time: Duration,
-    last_mess_time: Duration,
-    single_messages_time: Vec<Duration>,
+    total_time: std::time::Duration,
+    last_mess_time: std::time::Duration,
+    single_messages_time: Vec<std::time::Duration>,
     total_messages: i32,
     total_errors: i32,
     stat_name: &'static str,
