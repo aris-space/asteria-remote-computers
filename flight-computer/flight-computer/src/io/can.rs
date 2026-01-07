@@ -133,20 +133,20 @@ pub fn init_can_drivers_bench(
 
     let (stats_tx, stats_rx) = std::sync::mpsc::channel::<BenchStats>();
     // Spawn the receiving thread
-    
     let stats_tx_rx = stats_tx.clone();
     std::thread::spawn(move || {
         let mut receiver = receiver;
-        // not the best but we testing
-        if let Some(stats) = read_can(&mut receiver, &consumers) {
+        if let Some(mut stats) = read_can(&mut receiver, &consumers) {
+            stats.stat_name = "rx";
             stats_tx_rx.send(stats).ok();
         }
     });
+    
     // Spawn the transmitting thread
     std::thread::spawn(move || {
         let mut transmitter = transmitter;
-        // same as above
-        if let Some(stats) = run_can_transmit_actor(&mut transmitter, rx) {
+        if let Some(mut stats) = run_can_transmit_actor(&mut transmitter, rx) {
+            stats.stat_name = "tx";
             stats_tx.send(stats).ok();
         }
     });
@@ -325,12 +325,13 @@ mod benchmark {
     use std::time::Instant;
 
     use crate::config::CANConfig;
-    use crate::io::can::init_can_drivers;
+    use crate::io::can::init_can_drivers_bench;
     use std::time::Duration;
     use crate::io::input::InputTree;
     use crate::io::output::OutputTree;
 
     // CAN config
+    #[test]
     fn benchmark_test() {
         let config = CANConfig {
             socket_address: "can0".to_string(),
