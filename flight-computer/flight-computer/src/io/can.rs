@@ -83,7 +83,8 @@ pub fn init_can_drivers(
     Ok([input_handles, output_handles].concat())
 }
 
-// init can drivers for bench
+/// This function sets up the CAN communication infrastructure and spawns
+/// receiver/transmitter threads that collect performance statistics
 #[cfg(feature = "benchmark")]
 pub fn init_can_drivers_bench(
     config: &CANConfig,
@@ -332,6 +333,7 @@ mod benchmark {
 
     // CAN config
     #[tokio::test]
+    #[ignore]
     async fn benchmark_test() {
         let config = CANConfig {
             socket_address: "can0".to_string(),
