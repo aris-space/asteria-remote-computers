@@ -1,8 +1,7 @@
 //! This module provides abstractions to work with CAN an in particular with the Hermes CAN messages.
 //!
 //! All valid frames will be logged to a tracing trace-level event with the decimal id and [`hex`] encoded frames.
-//! Additionally, the structured messages will be logged in debug representation to debug-level.
-
+//! Additionally, the structured messages will be logged in debug representation to debug-level. 
 use embedded_can::{Frame, StandardId};
 use hermes_can::messages::Message as CanMessage;
 use hermes_can::next_valid_length;
@@ -81,8 +80,8 @@ pub fn read_can<S: embedded_can::blocking::Can>(
     let init_send = Instant::now();
     #[cfg(feature = "benchmark")]
     let mut send_stats = BenchStats {
-        total_time: 0,
-        last_mess_time: 0,
+        total_time: Duration::ZERO,
+        last_mess_time: Duration::ZERO,
         single_messages_time: Vec::new(),
         total_messages: 0,
         total_errors: 0,
@@ -95,7 +94,7 @@ pub fn read_can<S: embedded_can::blocking::Can>(
         {
             send_stats
                 .single_messages_time
-                .push(read_can_once(receiver, consumers, n));
+                .push(read_can_once(receiver, consumers, n)?);
             send_stats.total_messages += 1;
             if n > 50 {
                 // read can 50 times for testing then return
@@ -157,7 +156,8 @@ fn read_can_once<S: embedded_can::blocking::Can>(
 
     #[cfg(feature = "benchmark")]
     return Some(message_time);
-
+    
+    #[cfg(not(feature = "benchmark"))]
     None
 }
 
@@ -177,11 +177,11 @@ pub fn run_can_transmit_actor<S: embedded_can::blocking::Can>(
     #[cfg(feature = "benchmark")]
     let mut msg_send_init = Instant::now();
     #[cfg(feature = "benchmark")]
-    let mut msg_time = Instant::now();
+    let mut msg_time = Duration::ZERO;
     #[cfg(feature = "benchmark")]
     let mut send_stats = BenchStats {
-        total_time: Duration::zero(),
-        last_mess_time: Duration::zero(),
+        total_time: Duration::ZERO,
+        last_mess_time: Duration::ZERO,
         single_messages_time: Vec::new(),
         total_messages: 0,
         total_errors: 0,
@@ -260,10 +260,9 @@ pub fn run_can_transmit_actor<S: embedded_can::blocking::Can>(
     tracing::warn!("Exiting run_can_transmit_actor, should only happen at shutdown");
 
     #[cfg(feature = "benchmark")]
-    {
-        return Some(send_stats);
-    }
+    return Some(send_stats);
 
+    #[cfg(not(feature = "benchmark"))]
     None
 }
 

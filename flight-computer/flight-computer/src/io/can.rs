@@ -331,8 +331,8 @@ mod benchmark {
     use crate::io::output::OutputTree;
 
     // CAN config
-    #[test]
-    fn benchmark_test() {
+    #[tokio::test]
+    async fn benchmark_test() {
         let config = CANConfig {
             socket_address: "can0".to_string(),
             ecu_thrust_curve: vec![],
