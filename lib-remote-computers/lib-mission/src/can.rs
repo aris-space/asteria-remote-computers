@@ -85,7 +85,7 @@ pub fn read_can<S: embedded_can::blocking::Can>(
         single_messages_time: Vec::new(),
         total_messages: 0,
         total_errors: 0,
-        stat_name: "can_transmit",
+        stat_name: "can_receive",
     };
 
     let mut n = 0;
