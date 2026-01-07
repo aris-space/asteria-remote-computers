@@ -5,7 +5,7 @@ use lib_mission::util::time::MissionTime;
 use lib_mission::Error;
 use tokio::task::AbortHandle;
 #[cfg(feature = "benchmark")]
-use lib_mission::can::{BenchAggregator, BenchStats};
+use lib_mission::can::{BenchStats};
 
 use crate::config::CANConfig;
 
@@ -85,11 +85,11 @@ pub fn init_can_drivers(
 
 // init can drivers for bench
 #[cfg(feature = "benchmark")]
-fn init_can_drivers_bench(
+pub fn init_can_drivers_bench(
     config: &CANConfig,
     input_tree: &InputTree,
     output_tree: &OutputTree,
-) -> Result<(Vec<AbortHandle>, BenchAggregator), Box<dyn std::error::Error>> {
+) -> Result<(Vec<AbortHandle>, std::sync::mpsc::Receiver<BenchStats>), Box<dyn std::error::Error>> {
     // Setup actual receiver on linux
     #[cfg(target_os = "linux")]
     let (receiver, transmitter) = {
@@ -131,22 +131,27 @@ fn init_can_drivers_bench(
     let (tx, rx) = std::sync::mpsc::channel();
     let output_handles = init_output_drivers(&input_tree.time, output_tree, &tx, thrust_curve);
 
-    let bench_aggr = BenchAggregator {
-        stats_array: Vec::new(),
-    };
-
+    let (stats_tx, stats_rx) = std::sync::mpsc::channel::<BenchStats>();
     // Spawn the receiving thread
+    
+    let stats_tx_rx = stats_tx.clone();
     std::thread::spawn(move || {
         let mut receiver = receiver;
-        bench_aggr.stats_array.push(read_can(&mut receiver, &consumers));   
+        // not the best but we testing
+        if let Some(stats) = read_can(&mut receiver, &consumers) {
+            stats_tx_rx.send(stats).ok();
+        }
     });
     // Spawn the transmitting thread
     std::thread::spawn(move || {
         let mut transmitter = transmitter;
-        bench_aggr.stats_array.push(run_can_transmit_actor(&mut transmitter, rx));
+        // same as above
+        if let Some(stats) = run_can_transmit_actor(&mut transmitter, rx) {
+            stats_tx.send(stats).ok();
+        }
     });
 
-    Ok([input_handles, output_handles].concat(), bench_aggr)
+    Ok(([input_handles, output_handles].concat(), stats_rx))
 }
 
 /// Initializes all the drivers writing to the input tree by spawning tasks to consume CAN messages.
@@ -313,41 +318,45 @@ where
     handles
 }
 
-
 #[cfg(test)]
 #[cfg(feature = "benchmark")]
 mod benchmark {
 
     use std::time::Instant;
+
     use crate::config::CANConfig;
     use crate::io::can::init_can_drivers;
+    use std::time::Duration;
     use crate::io::input::InputTree;
     use crate::io::output::OutputTree;
 
-    #[test]
     // CAN config
     fn benchmark_test() {
         let config = CANConfig {
-            // virtual CAN?
-            socket_address: "vcan0".to_string(),
-            // init empty vector: to have it filled?
+            socket_address: "can0".to_string(),
             ecu_thrust_curve: vec![],
         };
-
-        // init output tree and input tree
+        
         let output_tree = OutputTree::default();
         let input_tree = InputTree::default();
-
-        let _handles = init_can_drivers_bench(&config, &input_tree, &output_tree)
-        .expect("Failed to init CAN drivers");
-
-        // init ouput tree with some transition
-        let start = Instant::now();
         
-        // Test some different message types
-        // 
-        println!("{:?}", start.elapsed());
+        let (_handles, bench_stats) = init_can_drivers_bench(&config, &input_tree, &output_tree)
+        .expect("failed to init CAN drivers");
         
+        std::thread::sleep(Duration::from_secs(10));
+        
+        let mut all_stats = Vec::new();
+        while let Ok(stats) = bench_stats.try_recv() {
+            all_stats.push(stats);
+        }
+        
+        for stats in &all_stats {
+            println!("{}: {} messages, {:?} total time",
+                stats.stat_name,
+                stats.total_messages,
+                stats.total_time
+            );
+        }
     }
 
 }
