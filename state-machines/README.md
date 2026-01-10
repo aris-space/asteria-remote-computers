@@ -1,5 +1,5 @@
 # ASTERIA State Machines
-Documentation and reference for the state machines or Project Ateria.
+Documentation and reference for the state machine diagrams for Project ASTERIA.
 All versions are tracked and stored here.
 
 All diagrams can be opened and edited using [draw.io](https://draw.io). When creating a new diagram, please select `Editable Vector Image (.svg)` as the file type and use the naming convention `<config>-state-machine.drawio.svg`
