@@ -83,78 +83,6 @@ pub fn init_can_drivers(
     Ok([input_handles, output_handles].concat())
 }
 
-/// This function sets up the CAN communication infrastructure and spawns
-/// receiver/transmitter threads that collect performance statistics
-#[cfg(feature = "benchmark")]
-pub fn init_can_drivers_bench(
-    config: &CANConfig,
-    input_tree: &InputTree,
-    output_tree: &OutputTree,
-) -> Result<(Vec<AbortHandle>, std::sync::mpsc::Receiver<BenchStats>), Box<dyn std::error::Error>> {
-    // Setup actual receiver on linux
-    #[cfg(target_os = "linux")]
-    let (receiver, transmitter) = {
-        use socketcan::Socket;
-        use std::os::fd::AsFd;
-
-        let sock_adr = &config.socket_address;
-        // Duplicating the can socket descriptor, one used for receiving, one for transmitting.
-        // Pretty certain this is fine, even for properly automatically closing the socket on shutdown.
-        let sock_rx = socketcan::CanFdSocket::open(sock_adr)?;
-        let sock_tx = socketcan::CanFdSocket::from(sock_rx.as_fd().try_clone_to_owned()?);
-        tracing::info!("Opened CAN socket {sock_adr}");
-        (sock_rx, sock_tx)
-    };
-    // And a dummy receiver which never returns on other platforms
-    #[cfg(not(target_os = "linux"))]
-    #[allow(unreachable_code)] // intentional
-    let (receiver, transmitter) = {
-        let _ = config;
-        tracing::warn!("Will not attempt connect to CAN on non-linux!");
-        (lib_mission::can::DummyCan, lib_mission::can::DummyCan)
-    };
-
-    // Prepare the ECU
-    let mut thrust_curve = <[ThrustPoint; 25]>::default();
-    if config.ecu_thrust_curve.len() > 25 {
-        return Err(Error::malformed_config("thurst curve with too many points").into());
-    }
-    thrust_curve[..config.ecu_thrust_curve.len()].copy_from_slice(&config.ecu_thrust_curve);
-    let thrust_curve = ThrustCurveConfig {
-        thrust_curve,
-        thrust_curve_length: u8::try_from(config.ecu_thrust_curve.len())
-            .expect("no truncate since we checked size above <= 25"),
-    };
-
-    // Initialize the driver tasks
-    let mut consumers = ConsumerRegistry::new();
-    let input_handles = init_input_drivers(input_tree, &mut consumers);
-    let (tx, rx) = std::sync::mpsc::channel();
-    let output_handles = init_output_drivers(&input_tree.time, output_tree, &tx, thrust_curve);
-
-    let (stats_tx, stats_rx) = std::sync::mpsc::channel::<BenchStats>();
-    // Spawn the receiving thread
-    let stats_tx_rx = stats_tx.clone();
-    std::thread::spawn(move || {
-        let mut receiver = receiver;
-        if let Some(mut stats) = read_can(&mut receiver, &consumers) {
-            stats.stat_name = "rx";
-            stats_tx_rx.send(stats).ok();
-        }
-    });
-    
-    // Spawn the transmitting thread
-    std::thread::spawn(move || {
-        let mut transmitter = transmitter;
-        if let Some(mut stats) = run_can_transmit_actor(&mut transmitter, rx) {
-            stats.stat_name = "tx";
-            stats_tx.send(stats).ok();
-        }
-    });
-
-    Ok(([input_handles, output_handles].concat(), stats_rx))
-}
-
 /// Initializes all the drivers writing to the input tree by spawning tasks to consume CAN messages.
 fn init_input_drivers(
     input_tree: &InputTree,
@@ -322,9 +250,7 @@ where
 #[cfg(test)]
 #[cfg(feature = "benchmark")]
 mod benchmark {
-
     use std::time::Instant;
-
     use crate::config::CANConfig;
     use crate::io::can::init_can_drivers_bench;
     use std::time::Duration;
@@ -343,23 +269,13 @@ mod benchmark {
         let output_tree = OutputTree::default();
         let input_tree = InputTree::default();
         
-        let (_handles, bench_stats) = init_can_drivers_bench(&config, &input_tree, &output_tree)
+        let (_handles, bench_stats) = init_can_drivers(&config, &input_tree, &output_tree)
         .expect("failed to init CAN drivers");
+        
+        
         
         std::thread::sleep(Duration::from_secs(10));
         
-        let mut all_stats = Vec::new();
-        while let Ok(stats) = bench_stats.try_recv() {
-            all_stats.push(stats);
-        }
-        
-        for stats in &all_stats {
-            println!("{}: {} messages, {:?} total time",
-                stats.stat_name,
-                stats.total_messages,
-                stats.total_time
-            );
-        }
     }
 
 }
