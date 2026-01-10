@@ -250,9 +250,11 @@ where
 #[cfg(test)]
 #[cfg(feature = "benchmark")]
 mod benchmark {
-    use std::time::Instant;
+    use std::time::{Duration, Instant};
+    
     use crate::config::CANConfig;
-    use crate::io::can::init_can_drivers_bench;
+    use crate::io::can::{input_drivers, output_drivers};
+    use crate::io::types::{ECUFiringState, IgnitionState};
     use std::time::Duration;
     use crate::io::input::InputTree;
     use crate::io::output::OutputTree;
@@ -269,10 +271,19 @@ mod benchmark {
         let output_tree = OutputTree::default();
         let input_tree = InputTree::default();
         
-        let (_handles, bench_stats) = init_can_drivers(&config, &input_tree, &output_tree)
-        .expect("failed to init CAN drivers");
+        let (_handles, bench_stats) = init_can_drivers(&config, &input_tree, &output_tree)?;
         
+        // listen to changes in output tree
+        // start counting
+        if (IgnitionState::Ignited) {
+            let ignition_start = Instant::now();
+        }
         
+        // listen for changes in input tree
+        // end counting
+        if (ECUFiringState::IgnitionDetected) {
+            let ignition_duration = ignition_start.elapsed().as_millis();
+        }
         
         std::thread::sleep(Duration::from_secs(10));
         
