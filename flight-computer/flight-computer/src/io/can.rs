@@ -248,16 +248,17 @@ where
 }
 
 #[cfg(test)]
-#[cfg(feature = "benchmark")]
+//#[cfg(feature = "benchmark")]
 mod benchmark {
     use std::time::{Duration, Instant};
     
     use crate::config::CANConfig;
-    use crate::io::can::{input_drivers, output_drivers};
     use crate::io::types::{ECUFiringState, IgnitionState};
-    use std::time::Duration;
+    use crate::io::can::init_can_drivers;
     use crate::io::input::InputTree;
     use crate::io::output::OutputTree;
+    use lib_mission::reactive::{IntoWatched, Watched};
+    use std::sync::mpsc;
 
     // CAN config
     #[tokio::test]
@@ -271,22 +272,42 @@ mod benchmark {
         let output_tree = OutputTree::default();
         let input_tree = InputTree::default();
         
-        let (_handles, bench_stats) = init_can_drivers(&config, &input_tree, &output_tree)?;
+        init_can_drivers(&config, &input_tree, &output_tree)
+        .expect("Could not initialize CAN drivers");
         
-        // listen to changes in output tree
-        // start counting
-        if (IgnitionState::Ignited) {
-            let ignition_start = Instant::now();
-        }
+        // create channel for passing timer
+        let (tx_start, mut rx_start) = tokio::sync::mpsc::channel::<Instant>(1);
+        let (tx_end, mut rx_end) = tokio::sync::mpsc::channel::<Instant>(1);
         
         // listen for changes in input tree
         // end counting
-        if (ECUFiringState::IgnitionDetected) {
-            let ignition_duration = ignition_start.elapsed().as_millis();
-        }
+        tokio::spawn(async move {
+            let mut o_watcher = output_tree.ignite.watched();
+            loop {
+                let o_state = o_watcher.next().await;
+                if matches!(o_state, IgnitionState::Ignited) {
+                    tx_start.send(Instant::now()).await.ok();
+                    break;
+                }
+            }
+        });
         
-        std::thread::sleep(Duration::from_secs(10));
+        // check for changes in input tree
+        tokio::spawn(async move {
+            let mut i_watcher = input_tree.ecu_firing_state.watched();
+            loop {
+                let i_state = i_watcher.next().await;
+                if matches!(i_state, ECUFiringState::Initiated) {
+                    tx_end.send(Instant::now()).await.ok();
+                    break;
+                }
+            }  
+        });
+        
+        let t1 = rx_start.recv().await?;
+        let t2 = rx_end.recv().await?;
+          
+        println!("Latency: {:?}", t2 - t1);
         
     }
-
 }
