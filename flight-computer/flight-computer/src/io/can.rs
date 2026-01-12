@@ -258,7 +258,6 @@ mod benchmark {
     use crate::io::input::InputTree;
     use crate::io::output::OutputTree;
     use lib_mission::reactive::{IntoWatched, Watched};
-    use std::sync::mpsc;
 
     // CAN config
     #[tokio::test]
@@ -273,14 +272,13 @@ mod benchmark {
         let input_tree = InputTree::default();
         
         init_can_drivers(&config, &input_tree, &output_tree)
-        .expect("Could not initialize CAN drivers");
+            .expect("Cannot init can drivers");
         
         // create channel for passing timer
         let (tx_start, mut rx_start) = tokio::sync::mpsc::channel::<Instant>(1);
         let (tx_end, mut rx_end) = tokio::sync::mpsc::channel::<Instant>(1);
         
         // listen for changes in input tree
-        // end counting
         tokio::spawn(async move {
             let mut o_watcher = output_tree.ignite.watched();
             loop {
@@ -292,20 +290,20 @@ mod benchmark {
             }
         });
         
-        // check for changes in input tree
+        // listen for changes in input tree
         tokio::spawn(async move {
             let mut i_watcher = input_tree.ecu_firing_state.watched();
             loop {
                 let i_state = i_watcher.next().await;
-                if matches!(i_state, ECUFiringState::Initiated) {
+                if matches!(i_state, ECUFiringState::IgnitionDetected) {
                     tx_end.send(Instant::now()).await.ok();
                     break;
                 }
             }  
         });
         
-        let t1 = rx_start.recv().await?;
-        let t2 = rx_end.recv().await?;
+        let t1 = rx_start.recv().await.expect("cannot measure time");
+        let t2 = rx_end.recv().await.expect("cannot measure time");
           
         println!("Latency: {:?}", t2 - t1);
         
