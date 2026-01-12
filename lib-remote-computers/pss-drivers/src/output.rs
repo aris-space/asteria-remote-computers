@@ -1,3 +1,5 @@
+use std::marker::PhantomData;
+use std::sync::Arc;
 use std::{collections::BTreeMap, time::Duration};
 
 use lib_mission::actuator_control::Settable;
@@ -8,32 +10,86 @@ use watchable::Watchable;
 
 use crate::types::DPRValve;
 
-/// The valves in the propellant supply system.
-#[derive(Debug, Default, Clone)]
-pub struct PSSValves {
-    /// Whether this tree is the active controller of these valves,
-    /// thus the outputs should be propogated via CAN to the boards.
-    /// This switches twice beteen the RFS and FC during the filling phase.
-    ///
-    /// *Warning*: setting this to true without first setting all the valves will restore the last remembered state,
-    /// which is almost never desired.
-    pub(crate) is_active: Watchable<bool>,
+enum DummyMessage {
+    A(NormallyClosedValve),
+    C(NormallyOpenValve),
+    D(DPRValve),
+    Q(NormallyClosedValve),
+    B(u32),
+}
 
+type CanOutChannel<T> = OutChannel<T, DummyMessage>;
+
+struct OutChannel<T, M> {
+    ch: std::sync::mpsc::Sender<M>,
+    mapper: Arc<dyn Fn(T) -> M>,
+    _input: PhantomData<T>,
+}
+
+impl<T, M> Clone for OutChannel<T, M> {
+    fn clone(&self) -> Self {
+        Self {
+            ch: self.ch.clone(),
+            mapper: self.mapper.clone(),
+            _input: self._input.clone(),
+        }
+    }
+}
+
+impl<T, M> OutChannel<T, M> {
+    pub fn new(ch: std::sync::mpsc::Sender<M>, mapper: impl Fn(T) -> M + 'static) -> Self {
+        Self {
+            ch,
+            mapper: Arc::new(mapper),
+            _input: PhantomData,
+        }
+    }
+
+    pub fn send(&self, msg: T) {
+        self.ch.send((self.mapper)(msg)).expect("TODO");
+    }
+}
+
+#[test]
+fn foo() {
+    let (tx, rx) = std::sync::mpsc::channel::<DummyMessage>();
+    let x = OutChannel::new(tx, DummyMessage::A);
+    x.send(NormallyClosedValve::Closed);
+}
+
+/// The valves in the propellant supply system.
+#[derive(Clone)]
+pub struct PSSValves {
     /// The target state for the Pressurization Vent Valve (`PRZ_VNT_VLV`).
-    pub pressurization_vent_valve: Watchable<NormallyOpenValve>,
+    pub pressurization_vent_valve: CanOutChannel<NormallyOpenValve>,
     /// The target state for the Fuel Pressurization Valve (DPR) (`FSS_PRZ_VLV`).
-    pub fuel_pressurization_valve: Watchable<DPRValve>,
+    pub fuel_pressurization_valve: CanOutChannel<DPRValve>,
     /// The target state for the Fuel Vent Valve (`FSS_VNT_VLV`).
-    pub fuel_vent_valve: Watchable<NormallyOpenValve>,
+    pub fuel_vent_valve: CanOutChannel<NormallyOpenValve>,
     /// The target state for the Oxidizer Pressurization Valve (DPR) (`OSS_PRZ_VLV`).
-    pub oxidizer_pressurization_valve: Watchable<DPRValve>,
+    pub oxidizer_pressurization_valve: CanOutChannel<DPRValve>,
     /// The target state for the Oxidizer Vent Valve (`OSS_VNT_VLV`).
     /// Note that this should be opened in an abort, despite being normally closed.
-    pub oxidizer_vent_valve: Watchable<NormallyClosedValve>,
+    pub oxidizer_vent_valve: CanOutChannel<NormallyClosedValve>,
     /// The target state for the Fuel Main Valve (`FSS_MNL_VLV`).
-    pub fuel_main_valve: Watchable<NormallyClosedValve>,
+    pub fuel_main_valve: CanOutChannel<NormallyClosedValve>,
     /// The target state for the Oxidizer Main Valve (`OSS_MNL_VLV`).
-    pub oxidizer_main_valve: Watchable<NormallyClosedValve>,
+    pub oxidizer_main_valve: CanOutChannel<NormallyClosedValve>,
+}
+
+// generated
+impl PSSValves {
+    pub fn new(can_out: std::sync::mpsc::Sender<DummyMessage>) -> Self {
+        Self {
+            pressurization_vent_valve: CanOutChannel::new(can_out.clone(), DummyMessage::C),
+            fuel_pressurization_valve: CanOutChannel::new(can_out.clone(), DummyMessage::D),
+            fuel_vent_valve: CanOutChannel::new(can_out.clone(), DummyMessage::C),
+            oxidizer_pressurization_valve: CanOutChannel::new(can_out.clone(), DummyMessage::D),
+            oxidizer_vent_valve: CanOutChannel::new(can_out.clone(), DummyMessage::A),
+            fuel_main_valve: CanOutChannel::new(can_out.clone(), DummyMessage::A),
+            oxidizer_main_valve: CanOutChannel::new(can_out.clone(), DummyMessage::Q),
+        }
+    }
 }
 
 impl PSSValves {
