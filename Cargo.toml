@@ -15,6 +15,8 @@ members = [
     "flight-computer/hermes-recovery-gnc/hermes_gnc",
     "data-definitions/mavlink",
     "data-definitions/can",
+    "lib-remote-computers/io-utils",
+    "lib-remote-computers/io-utils/macros/*",
 ]
 
 [workspace.lints.clippy]
