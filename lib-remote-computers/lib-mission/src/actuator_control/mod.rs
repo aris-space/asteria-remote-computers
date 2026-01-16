@@ -22,6 +22,12 @@ impl<T: Settable> Settable for watchable::Watchable<T> {
     }
 }
 
+impl<T: Settable> Settable for OutChannel<T> {
+    fn set_value(&mut self, value: f32) -> Result<(), OutOfRange> {
+        self.send(T::from_value(value))
+    }
+}
+
 /// A trait for an actuator, which can be energized using a binary signal.
 pub trait Energizable {
     fn is_active(&self) -> bool;
