@@ -21,11 +21,11 @@
 //!     update_expr = "let _ = #field.update(#value);"
 //! )]
 //! struct Sensors {
-//!     #[datapoint("TelemetryMessage::Temperature(temp) => Celsius(temp)")]
-//!     temperature: Watchable<Celsius>,
+//!     #[datapoint("TelemetryMessage::Temperature(#value)")]
+//!     temperature: Watchable<f32>,
 //!
-//!     #[datapoint("TelemetryMessage::Pressure(p) => BarG(p)")]
-//!     pressure: Watchable<BarG>,
+//!     #[datapoint("TelemetryMessage::Pressure(#value)")]
+//!     pressure: Watchable<f32>,
 //! }
 //!
 //! // Usage:
@@ -39,13 +39,11 @@
 //! impl Collector<TelemetryMessage> for Sensors {
 //!     fn update_from(&mut self, msg: TelemetryMessage) -> Result<(), TelemetryMessage> {
 //!         match msg {
-//!             TelemetryMessage::Temperature(temp) => {
-//!                 let __value = Celsius(*temp);
+//!             TelemetryMessage::Temperature(__value) => {
 //!                 { let _ = self.temperature.update(__value); }
 //!                 Ok(())
 //!             }
-//!             TelemetryMessage::Pressure(p) => {
-//!                 let __value = BarG(*p);
+//!             TelemetryMessage::Pressure(__value) => {
 //!                 { let _ = self.pressure.update(__value); }
 //!                 Ok(())
 //!             }
@@ -55,12 +53,12 @@
 //! }
 //! ```
 //!
-//! ## Explaination
+//! ## Explanation
 //!
-//! Each field with a `datapoint` generates an match arm and create a value (bound to a generated identifier `__value`).
-//! This value is then fed into the `update_expr` along with the field, which can update in an arbitrary way.
+//! Each field with a `datapoint` generates a match arm. The `#value` placeholder in the pattern
+//! is replaced with `__value` which captures the matched value and makes it available in `update_expr`.
 //! Match arms are generated in the order fields are declared in the struct.
-//! The last arm is always includes `_ => Err(msg)` to return unmatched messages for composability.
+//! The last arm always includes `_ => Err(msg)` to return unmatched messages for composability.
 //!
 //! ## Struct Attributes
 //!
@@ -92,35 +90,28 @@
 //!
 //! ## Field Attributes
 //!
-//! `#[datapoint("pattern => expression")]`
+//! `#[datapoint("pattern")]`
 //!
 //! Maps an enum variant to a field update.
 //! At most one per field, but at least one field must have an attribute (otherwise the derive is useless).
 //!
-//! Format: `"<enum_pattern> => <value_expression>"`
-//!
-//! - `<enum_pattern>`: The match pattern for the enum variant (e.g., `Message::Temperature(t)`),
-//!   this must be unique in the struct
-//! - `<value_expression>`: Rust expression to extract/transform the value (e.g., `Celsius(t)`),
-//!   this becomes available as `#value` in `update_expr`
+//! The pattern must contain `#value` which will be replaced with `__value` to capture the matched value.
+//! This captured value becomes available in `update_expr`.
 //!
 //! ### Examples:
 //!
 //! ```rust,ignore
 //! // Simple extraction
-//! #[datapoint("Msg::Value(v) => v")]
-//!
-//! // Field access
-//! #[datapoint("Msg::Complex(data) => data.field.value")]
+//! #[datapoint("Msg::Value(#value)")]
 //!
 //! // Nested enum
-//! #[datapoint("Msg::SystemA(system_a::Msg::Foo(x)) => x")]
+//! #[datapoint("Msg::SystemA(system_a::Msg::Foo(#value))")]
 //! ```
 //!
 
 use proc_macro::TokenStream;
 use quote::quote;
-use syn::{parse_macro_input, Data, DeriveInput, Fields, Lit, Meta};
+use syn::{parse_macro_input, Data, DeriveInput, Fields, Lit, Meta, parse::Parser};
 
 /// Derive macro for implementing the `Collector` trait.
 ///
@@ -193,20 +184,13 @@ pub fn derive_collector(input: TokenStream) -> TokenStream {
                     if let Lit::Str(lit_str) = lit {
                         let datapoint_spec = lit_str.value();
 
-                        // Parse "pattern => expression"
-                        let parts: Vec<&str> = datapoint_spec.split("=>").collect();
-                        if parts.len() != 2 {
-                            panic!("datapoint must be in format: \"pattern => expression\"");
-                        }
+                        // Replace #value with __value in the pattern
+                        let pattern_str = datapoint_spec.replace("#value", "__value");
 
-                        let pattern_str = parts[0].trim();
-                        let value_expr_str = parts[1].trim();
-
-                        // Parse pattern and value expression
-                        let pattern: syn::Pat = syn::parse_str(pattern_str)
+                        // Parse pattern
+                        let pattern: syn::Pat = syn::Pat::parse_multi
+                            .parse_str(&pattern_str)
                             .expect("invalid pattern in datapoint");
-                        let value_expr: syn::Expr = syn::parse_str(value_expr_str)
-                            .expect("invalid expression in datapoint");
 
                         // Generate the update expression with substitutions
                         let update_code = update_expr
@@ -218,7 +202,6 @@ pub fn derive_collector(input: TokenStream) -> TokenStream {
 
                         match_arms.push(quote! {
                             #pattern => {
-                                let __value = #value_expr;
                                 #update_tokens
                                 Ok(())
                             }
