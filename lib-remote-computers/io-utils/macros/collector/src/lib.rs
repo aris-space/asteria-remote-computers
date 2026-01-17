@@ -111,7 +111,7 @@
 
 use proc_macro::TokenStream;
 use quote::quote;
-use syn::{parse_macro_input, Data, DeriveInput, Fields, Lit, Meta, parse::Parser};
+use syn::{Data, DeriveInput, Fields, Lit, Meta, parse::Parser, parse_macro_input};
 
 /// Derive macro for implementing the `Collector` trait.
 ///
@@ -127,37 +127,39 @@ pub fn derive_collector(input: TokenStream) -> TokenStream {
     let mut update_expr = None;
 
     for attr in &input.attrs {
-        if attr.path().is_ident("collector") {
-            if let Meta::List(meta_list) = &attr.meta {
-                let _ = meta_list.parse_nested_meta(|meta| {
-                    if meta.path.is_ident("message_type") {
-                        let value = meta.value()?;
-                        let s: Lit = value.parse()?;
-                        if let Lit::Str(lit_str) = s {
-                            message_type = Some(lit_str.value());
-                        }
-                        Ok(())
-                    } else if meta.path.is_ident("update_expr") {
-                        let value = meta.value()?;
-                        let s: Lit = value.parse()?;
-                        if let Lit::Str(lit_str) = s {
-                            update_expr = Some(lit_str.value());
-                        }
-                        Ok(())
-                    } else {
-                        Err(meta.error("unknown collector attribute"))
+        if attr.path().is_ident("collector")
+            && let Meta::List(meta_list) = &attr.meta
+        {
+            let _ = meta_list.parse_nested_meta(|meta| {
+                if meta.path.is_ident("message_type") {
+                    let value = meta.value()?;
+                    let s: Lit = value.parse()?;
+                    if let Lit::Str(lit_str) = s {
+                        message_type = Some(lit_str.value());
                     }
-                });
-            }
+                    Ok(())
+                } else if meta.path.is_ident("update_expr") {
+                    let value = meta.value()?;
+                    let s: Lit = value.parse()?;
+                    if let Lit::Str(lit_str) = s {
+                        update_expr = Some(lit_str.value());
+                    }
+                    Ok(())
+                } else {
+                    Err(meta.error("unknown collector attribute"))
+                }
+            });
         }
     }
 
-    let message_type = message_type.expect("missing required #[collector(message_type = \"...\")] attribute");
-    let update_expr = update_expr.expect("missing required #[collector(update_expr = \"...\")] attribute");
+    let message_type =
+        message_type.expect("missing required #[collector(message_type = \"...\")] attribute");
+    let update_expr =
+        update_expr.expect("missing required #[collector(update_expr = \"...\")] attribute");
 
     // Parse message_type as a type
-    let message_type: syn::Type = syn::parse_str(&message_type)
-        .expect("message_type must be a valid Rust type");
+    let message_type: syn::Type =
+        syn::parse_str(&message_type).expect("message_type must be a valid Rust type");
 
     // Extract field datapoints
     let fields = match &input.data {
@@ -175,46 +177,47 @@ pub fn derive_collector(input: TokenStream) -> TokenStream {
 
         // Look for #[datapoint("...")] attribute
         for attr in &field.attrs {
-            if attr.path().is_ident("datapoint") {
-                if let Meta::List(meta_list) = &attr.meta {
-                    let tokens = &meta_list.tokens;
-                    let lit: Lit = syn::parse2(tokens.clone())
-                        .expect("datapoint attribute must contain a string literal");
+            if attr.path().is_ident("datapoint")
+                && let Meta::List(meta_list) = &attr.meta
+            {
+                let tokens = &meta_list.tokens;
+                let lit: Lit = syn::parse2(tokens.clone())
+                    .expect("datapoint attribute must contain a string literal");
 
-                    if let Lit::Str(lit_str) = lit {
-                        let datapoint_spec = lit_str.value();
+                if let Lit::Str(lit_str) = lit {
+                    let datapoint_spec = lit_str.value();
 
-                        // Replace #value with __value in the pattern
-                        let pattern_str = datapoint_spec.replace("#value", "__value");
+                    // Replace #value with __value in the pattern
+                    let pattern_str = datapoint_spec.replace("#value", "__value");
 
-                        // Parse pattern
-                        let pattern: syn::Pat = syn::Pat::parse_multi
-                            .parse_str(&pattern_str)
-                            .expect("invalid pattern in datapoint");
+                    // Parse pattern
+                    let pattern: syn::Pat = syn::Pat::parse_multi
+                        .parse_str(&pattern_str)
+                        .expect("invalid pattern in datapoint");
 
-                        // Generate the update expression with substitutions
-                        let update_code = update_expr
-                            .replace("#field", &format!("self.{}", field_name))
-                            .replace("#value", "__value");
+                    // Generate the update expression with substitutions
+                    let update_code = update_expr
+                        .replace("#field", &format!("self.{field_name}"))
+                        .replace("#value", "__value");
 
-                        let update_tokens: proc_macro2::TokenStream = update_code.parse()
-                            .expect("invalid update_expr");
+                    let update_tokens: proc_macro2::TokenStream =
+                        update_code.parse().expect("invalid update_expr");
 
-                        match_arms.push(quote! {
-                            #pattern => {
-                                #update_tokens
-                                Ok(())
-                            }
-                        });
-                    }
+                    match_arms.push(quote! {
+                        #pattern => {
+                            #update_tokens
+                            Ok(())
+                        }
+                    });
                 }
             }
         }
     }
 
-    if match_arms.is_empty() {
-        panic!("at least one field must have a #[datapoint(...)] attribute");
-    }
+    assert!(
+        !match_arms.is_empty(),
+        "at least one field must have a #[datapoint(...)] attribute"
+    );
 
     let expanded = quote! {
         impl io_utils::Collector<#message_type> for #struct_name {
