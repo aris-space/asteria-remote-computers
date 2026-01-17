@@ -1,6 +1,6 @@
 /// Implementors of this trait can store messages of type `T`.
 ///
-/// This is best derived, see also that macro.
+/// This is best derived by [`Collector`][macro@Collector].
 ///
 /// ## Composable Message Handling
 ///
