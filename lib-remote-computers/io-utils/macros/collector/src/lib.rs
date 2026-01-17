@@ -108,6 +108,10 @@
 //! #[datapoint("Msg::SystemA(system_a::Msg::Foo(#value))")]
 //! ```
 //!
+//! ## Hygene
+//!
+//! The macro generates a single impl block for `io_utils::Collector<{message_type}>`.
+//!
 
 use proc_macro::TokenStream;
 use quote::quote;
