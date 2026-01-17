@@ -1,3 +1,4 @@
+use io_utils::Collector;
 use lib_mission::actuator_control::valves::{NormallyClosedValve, NormallyOpenValve};
 use lib_mission::util::types::{BarG, Celsius, Percent};
 use watchable::Watchable;
@@ -7,11 +8,6 @@ use crate::types::DPRValve;
 enum DummyMessage {
     A(NormallyClosedValve),
     B(u32),
-}
-
-// trait to set fields from an enum
-trait Collector<T> {
-    fn update_from(&self, msg: T) -> Result<(), T>;
 }
 
 /// Spawns a task which continuously reads the newest update from `watched_value` and writes it to `telemetry_sender`.
@@ -56,7 +52,7 @@ pub struct PSSValves {
     pub oxidizer_pressurization_valve: Watchable<DPRValve>,
     /// The current state for the Oxidizer Vent Valve (`OSS_VNT_VLV`).
     /// Note that this should be opened in an abort, despite being normally closed.
-    #[collector(pattern = "DummyMessage::A(#value)")]
+    #[datapoint("DummyMessage::A(#value)")]
     #[broadcast(args(map = "DummyMessage::A", min_freq = "10Hz", max_freq = "20Hz"))]
     pub oxidizer_vent_valve: Watchable<NormallyClosedValve>,
     /// The current state for the Fuel Main Valve (`FSS_MNL_VLV`).
@@ -73,21 +69,6 @@ impl PSSValves {
             DummyMessage::A,
             telemetry_sender.clone(),
         ));
-    }
-}
-
-// generated
-impl Collector<DummyMessage> for PSSValves {
-    fn update_from(&self, msg: DummyMessage) -> Result<(), DummyMessage> {
-        match msg {
-            DummyMessage::A(__value) => {
-                {
-                    let _ = self.oxidizer_vent_valve.update(__value);
-                }
-                Ok(())
-            }
-            _ => Err(msg),
-        }
     }
 }
 
