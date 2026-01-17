@@ -117,3 +117,132 @@
 //! #[datapoint("Msg::SystemA(system_a::Msg::Foo(x)) => x")]
 //! ```
 //!
+
+use proc_macro::TokenStream;
+use quote::quote;
+use syn::{parse_macro_input, Data, DeriveInput, Fields, Lit, Meta};
+
+/// Derive macro for implementing the `Collector` trait.
+///
+/// See the crate-level documentation for usage examples.
+#[proc_macro_derive(Collector, attributes(collector, datapoint))]
+pub fn derive_collector(input: TokenStream) -> TokenStream {
+    let input = parse_macro_input!(input as DeriveInput);
+
+    let struct_name = &input.ident;
+
+    // Parse the #[collector(...)] attributes
+    let mut message_type = None;
+    let mut update_expr = None;
+
+    for attr in &input.attrs {
+        if attr.path().is_ident("collector") {
+            if let Meta::List(meta_list) = &attr.meta {
+                let _ = meta_list.parse_nested_meta(|meta| {
+                    if meta.path.is_ident("message_type") {
+                        let value = meta.value()?;
+                        let s: Lit = value.parse()?;
+                        if let Lit::Str(lit_str) = s {
+                            message_type = Some(lit_str.value());
+                        }
+                        Ok(())
+                    } else if meta.path.is_ident("update_expr") {
+                        let value = meta.value()?;
+                        let s: Lit = value.parse()?;
+                        if let Lit::Str(lit_str) = s {
+                            update_expr = Some(lit_str.value());
+                        }
+                        Ok(())
+                    } else {
+                        Err(meta.error("unknown collector attribute"))
+                    }
+                });
+            }
+        }
+    }
+
+    let message_type = message_type.expect("missing required #[collector(message_type = \"...\")] attribute");
+    let update_expr = update_expr.expect("missing required #[collector(update_expr = \"...\")] attribute");
+
+    // Parse message_type as a type
+    let message_type: syn::Type = syn::parse_str(&message_type)
+        .expect("message_type must be a valid Rust type");
+
+    // Extract field datapoints
+    let fields = match &input.data {
+        Data::Struct(data_struct) => match &data_struct.fields {
+            Fields::Named(fields) => &fields.named,
+            _ => panic!("Collector can only be derived for structs with named fields"),
+        },
+        _ => panic!("Collector can only be derived for structs"),
+    };
+
+    let mut match_arms = Vec::new();
+
+    for field in fields {
+        let field_name = field.ident.as_ref().expect("named field");
+
+        // Look for #[datapoint("...")] attribute
+        for attr in &field.attrs {
+            if attr.path().is_ident("datapoint") {
+                if let Meta::List(meta_list) = &attr.meta {
+                    let tokens = &meta_list.tokens;
+                    let lit: Lit = syn::parse2(tokens.clone())
+                        .expect("datapoint attribute must contain a string literal");
+
+                    if let Lit::Str(lit_str) = lit {
+                        let datapoint_spec = lit_str.value();
+
+                        // Parse "pattern => expression"
+                        let parts: Vec<&str> = datapoint_spec.split("=>").collect();
+                        if parts.len() != 2 {
+                            panic!("datapoint must be in format: \"pattern => expression\"");
+                        }
+
+                        let pattern_str = parts[0].trim();
+                        let value_expr_str = parts[1].trim();
+
+                        // Parse pattern and value expression
+                        let pattern: syn::Pat = syn::parse_str(pattern_str)
+                            .expect("invalid pattern in datapoint");
+                        let value_expr: syn::Expr = syn::parse_str(value_expr_str)
+                            .expect("invalid expression in datapoint");
+
+                        // Generate the update expression with substitutions
+                        let update_code = update_expr
+                            .replace("#field", &format!("self.{}", field_name))
+                            .replace("#value", "__value");
+
+                        let update_tokens: proc_macro2::TokenStream = update_code.parse()
+                            .expect("invalid update_expr");
+
+                        match_arms.push(quote! {
+                            #pattern => {
+                                let __value = #value_expr;
+                                #update_tokens
+                                Ok(())
+                            }
+                        });
+                    }
+                }
+            }
+        }
+    }
+
+    if match_arms.is_empty() {
+        panic!("at least one field must have a #[datapoint(...)] attribute");
+    }
+
+    let expanded = quote! {
+        impl io_utils::Collector<#message_type> for #struct_name {
+            fn update_from(&mut self, msg: #message_type) -> Result<(), #message_type> {
+                match msg {
+                    #(#match_arms)*
+                    _ => Err(msg),
+                }
+            }
+        }
+    };
+
+    TokenStream::from(expanded)
+}
