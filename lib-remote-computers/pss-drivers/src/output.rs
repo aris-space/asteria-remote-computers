@@ -22,7 +22,7 @@ type CanOutChannel<T> = OutChannel<T, DummyMessage>;
 
 struct OutChannel<T, M> {
     ch: std::sync::mpsc::Sender<M>,
-    mapper: Arc<dyn Fn(T) -> M>,
+    mapper: Arc<dyn Fn(T) -> M + Send + Sync>,
     _input: PhantomData<T>,
 }
 
@@ -37,7 +37,10 @@ impl<T, M> Clone for OutChannel<T, M> {
 }
 
 impl<T, M> OutChannel<T, M> {
-    pub fn new(ch: std::sync::mpsc::Sender<M>, mapper: impl Fn(T) -> M + 'static) -> Self {
+    pub fn new(
+        ch: std::sync::mpsc::Sender<M>,
+        mapper: impl Fn(T) -> M + Send + Sync + 'static,
+    ) -> Self {
         Self {
             ch,
             mapper: Arc::new(mapper),
@@ -47,6 +50,14 @@ impl<T, M> OutChannel<T, M> {
 
     pub fn send(&self, msg: T) {
         self.ch.send((self.mapper)(msg)).expect("TODO");
+    }
+}
+
+impl<T: Settable + Default, M> Settable for OutChannel<T, M> {
+    fn set_value(&mut self, value: f32) -> Result<(), lib_mission::actuator_control::OutOfRange> {
+        let mut x = T::default();
+        x.set_value(value)?;
+        Ok(self.send(x))
     }
 }
 
@@ -89,53 +100,6 @@ impl PSSValves {
             fuel_main_valve: CanOutChannel::new(can_out.clone(), DummyMessage::A),
             oxidizer_main_valve: CanOutChannel::new(can_out.clone(), DummyMessage::Q),
         }
-    }
-}
-
-impl PSSValves {
-    /// Sets this output to passive, all drivers for the actuators will stop sending data until it is activated again.
-    ///
-    /// Returns the active state before this call.
-    pub fn set_passive(&self) -> bool {
-        self.is_active.update(false).unwrap_or_else(|b| b)
-    }
-
-    /// This function will reactivate the outputs by setting all target to the current state as observed.
-    /// It will then wait `50ms` to fully propagate the activation.
-    /// The resets will most likely not be sent, but any successive changes should be sent again.
-    pub async fn set_active(&self, current_state: &crate::input::PSSValves) {
-        let _ = self
-            .pressurization_vent_valve
-            .update(current_state.pressurization_vent_valve.get());
-        let _ = self
-            .fuel_pressurization_valve
-            .update(current_state.fuel_pressurization_valve.get());
-        let _ = self
-            .fuel_vent_valve
-            .update(current_state.fuel_vent_valve.get());
-        let _ = self
-            .oxidizer_pressurization_valve
-            .update(current_state.oxidizer_pressurization_valve.get());
-        let _ = self
-            .oxidizer_vent_valve
-            .update(current_state.oxidizer_vent_valve.get());
-        let _ = self
-            .fuel_main_valve
-            .update(current_state.fuel_main_valve.get());
-        let _ = self
-            .oxidizer_main_valve
-            .update(current_state.oxidizer_main_valve.get());
-
-        // Make sure to not send old values (shouldn't happen anyway).
-        tokio::time::sleep(Duration::from_millis(25)).await;
-        let _ = self.is_active.update(true);
-        // And make sure that successive changes will be sent.
-        tokio::time::sleep(Duration::from_millis(25)).await;
-    }
-
-    /// Returns a [`Watched`] to see the active state of this struct.
-    pub fn watch_active(&self) -> impl Watched<bool> + Send + 'static {
-        self.is_active.watched()
     }
 }
 
