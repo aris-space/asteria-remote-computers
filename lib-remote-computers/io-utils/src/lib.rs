@@ -10,14 +10,14 @@
 /// #[derive(Collector, Default)]
 /// #[collector(message_type = "CanMessage", update_expr = "let _ = #field.update(#value);")]
 /// struct FuelSensors {
-///     #[datapoint("CanMessage::FuelPressure(p) => p")]
+///     #[datapoint(pattern = "CanMessage::FuelPressure(#value)")]
 ///     fuel_tank_pressure: Watchable<BarG>,
 /// }
 ///
 /// #[derive(Collector, Default)]
 /// #[collector(message_type = "CanMessage", update_expr = "let _ = #field.update(#value);")]
 /// struct OxidizerSensors {
-///     #[datapoint("CanMessage::OxidizerPressure(p) => p")]
+///     #[datapoint(pattern = "CanMessage::OxidizerPressure(#value)")]
 ///     oxidizer_tank_pressure: Watchable<BarG>,
 /// }
 ///
