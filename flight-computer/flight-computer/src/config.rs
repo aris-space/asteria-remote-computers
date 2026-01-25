@@ -571,7 +571,7 @@ impl<Gnc: GuidanceController> MakeState for StateLogicConfig<Gnc> {
                 acceleration_limit: acceleration_limit_ms2,
                 required_duration: Duration::from_secs_f32(required_duration_s),
                 on_liftoff_detected: StateName::try_new(&on_liftoff_detected, names)?,
-                on_ecu_aborted: StateName::try_new(&on_ecu_aborted, names)?,
+                on_aborted: StateName::try_new(&on_ecu_aborted, names)?,
                 manual_transitions,
             }
             .into_box(),

@@ -1,4 +1,3 @@
-use crate::io::types::ECUFiringState;
 use lib_mission::reactive::{IntoWatched, WatchedExt};
 use lib_mission::state_machine::{AdditionalState, StateLogic, StateName};
 use lib_mission::transition::ManualTransitions;
@@ -9,6 +8,7 @@ use lib_mission::transition::ManualTransitions;
 pub struct Thrust {
     pub(crate) abort_downward_velocity_m_s: f32,
     pub(crate) on_apogee_reached: StateName,
+    #[allow(dead_code)] // todo
     pub(crate) on_firing_finished: StateName,
     pub(crate) manual_transitions: ManualTransitions,
 }
@@ -27,7 +27,6 @@ impl StateLogic for Thrust {
         _p: &AdditionalState<Self::Parameter>,
     ) -> StateName {
         let mut velocity_watcher = input.velocity.watched();
-        let mut firing_watcher = input.ecu_firing_state.watched();
 
         tokio::select! {
             next = self.manual_transitions.next(input, _p) => {
@@ -38,10 +37,7 @@ impl StateLogic for Thrust {
                 tracing::info!(cause = "fc apogee trigger", "transitioning");
                 return self.on_apogee_reached.clone();
             },
-            _ = firing_watcher.next_satisfying(|s| matches!(*s, ECUFiringState::Completed | ECUFiringState::Aborted)) => {
-                tracing::info!(cause = "firing completed or aborted", "transitioning");
-                return self.on_firing_finished.clone();
-            }
+            // TODO: monitor firing sequence and move to on_firing_finished if done
         }
     }
 }
