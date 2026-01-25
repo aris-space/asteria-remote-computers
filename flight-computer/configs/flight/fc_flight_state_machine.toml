@@ -16,7 +16,6 @@ pressure_sensors_hz = 15.03
 fill_levels_hz = 0.6
 [can]
 socket_address = "can0"
-ecu_thrust_curve = [[0, 0], [0, 10], [255, 20], [255, 30], [0, 40], [0, 50]]
 [state_machine]
 name = "Launch State Machine"
 initial_state = "Idle"
@@ -175,9 +174,6 @@ manual_transitions = [
 
 # Abort state which just stops any ongoing pressurization, but doesnt vent yet
 [state_machine.states."Stop Pressurization"]
-type = "AbortPressurization"      # Sends the fuel and lox pressurization abort sigbnal to the ECU
-on_done = "Stop Pressurization 2"
-[state_machine.states."Stop Pressurization 2"]
 type = "ArmRecovery"                   # Also propagated to RFS
 arming_state = "SteeringMotorsLocked"
 on_state_set = "Stop Pressurization 3"
@@ -248,8 +244,6 @@ allowed_actuators = [
 telemetry_loss_threshold_sec = 900 # 15min
 on_violation = "Depressure"
 manual_transitions = [
-    { target = "Pressurize Fuel", display = "Pressurize Fuel" },
-    { target = "Pressurize LOX", display = "Pressurize LOX" },
     { target = "Pressurized", display = "Pressurization Completed" },
     { target = "Stop Pressurization", display = "Stop Pressurization", abort = true },
 ]
@@ -257,33 +251,6 @@ manual_transitions = [
 fuel_tank_pressure = 50
 oxitizer_tank_pressure = 50
 
-# This state tells the ECU to staret the fuel pressuriaztion sequence
-[state_machine.states."Pressurize Fuel"]
-type = "Pressurization"
-selected_tank = "Fuel"
-target_pressure = 17.01       # barg
-on_done = "Pressurize Fuel 2"
-[state_machine.states."Pressurize Fuel 2"]
-type = "AwaitPressurization"
-selected_tank = "Fuel"
-on_pressurization_completed = "Pressurization"
-manual_transitions = [
-    { target = "Stop Pressurization", display = "Stop Pressurization", abort = true },
-]
-
-# This state tells the ECU to staret the oxidizer pressuriaztion sequence
-[state_machine.states."Pressurize LOX"]
-type = "Pressurization"
-selected_tank = "Oxidizer"
-target_pressure = 19.27      # barg
-on_done = "Pressurize LOX 2"
-[state_machine.states."Pressurize LOX 2"]
-type = "AwaitPressurization"
-selected_tank = "Oxidizer"
-on_pressurization_completed = "Pressurization"
-manual_transitions = [
-    { target = "Stop Pressurization", display = "Stop Pressurization", abort = true },
-]
 
 # This state is reached when the tanks have reached the required pressures and is one step away from arming.
 [state_machine.states."Pressurized"]

@@ -76,15 +76,6 @@ pub use liftoff_detection::LiftoffDetection;
 pub mod apogee_trigger;
 pub use apogee_trigger::ApogeeTrigger;
 
-pub mod pressurization;
-pub use pressurization::Pressurization;
-
-pub mod await_pressurization;
-pub use await_pressurization::AwaitPressurization;
-
-pub mod abort_pressurization;
-pub use abort_pressurization::AbortPressurization;
-
 pub mod thrust;
 pub use thrust::Thrust;
 

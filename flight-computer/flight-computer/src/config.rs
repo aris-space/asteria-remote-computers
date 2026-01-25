@@ -255,27 +255,6 @@ pub enum StateLogicConfig<Gnc: GuidanceController> {
         /// The name of the state which to proceed to after a timeout.
         on_timeout: String,
     },
-    /// Describes a [`state_logic::Pressurization`].
-    Pressurization {
-        /// The tank that should be pressurized
-        selected_tank: Tank,
-        /// The target pressure that should be reached for pressurization
-        target_pressure: f32,
-        /// The name of the state which to proceed to after sending the pressurisation command
-        on_done: String,
-    },
-    /// Describes a [`state_logic::AwaitPressurization`].
-    AwaitPressurization {
-        /// The tank that should be observed
-        selected_tank: Tank,
-        /// The name of the state which to proceed to after receiving the pressurization completed signal
-        on_pressurization_completed: String,
-    },
-    /// Describes a [`state_logic::AbortPressurization`].
-    AbortPressurization {
-        /// The name of the state which to proceed to after sending the abort signal.
-        on_done: String,
-    },
     /// Describes a [`state_logic::Ignition`].
     Ignition {
         /// The name of the state which to proceed to after sending the ignition signal.
@@ -573,32 +552,6 @@ impl<Gnc: GuidanceController> MakeState for StateLogicConfig<Gnc> {
                 manual_transitions,
                 rfs_can_timeout: Duration::from_secs_f32(rfs_can_timeout_sec),
                 on_timeout: StateName::try_new(&on_timeout, names)?,
-            }
-            .into_box(),
-            StateLogicConfig::Pressurization {
-                selected_tank,
-                target_pressure,
-                on_done,
-            } => state_logic::Pressurization {
-                selected_tank,
-                target_pressure,
-                on_done: StateName::try_new(&on_done, names)?,
-            }
-            .into_box(),
-            StateLogicConfig::AwaitPressurization {
-                selected_tank,
-                on_pressurization_completed,
-            } => state_logic::AwaitPressurization {
-                manual_transitions,
-                selected_tank,
-                on_pressurization_completed: StateName::try_new(
-                    &on_pressurization_completed,
-                    names,
-                )?,
-            }
-            .into_box(),
-            StateLogicConfig::AbortPressurization { on_done } => state_logic::AbortPressurization {
-                on_done: StateName::try_new(&on_done, names)?,
             }
             .into_box(),
             StateLogicConfig::Ignition { on_done } => state_logic::Ignition {
