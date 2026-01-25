@@ -118,9 +118,6 @@ fn start_telemetry_streaming(
         orientation,
         pss_valves,
         pss_sensors,
-        ecu_firing_state: _, // not streamed down, part of the state machine
-        fuel_pressurization_state: _, // not streamed down, part of the state machine
-        oxidizer_pressurization_state: _, // not streamed down, part of the state machine
     } = input_tree.clone();
     let OutputTree {
         recovery_actuators_armed,

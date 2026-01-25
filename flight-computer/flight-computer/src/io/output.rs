@@ -4,9 +4,8 @@ use pss_drivers::output::PSSValves;
 use watchable::Watchable;
 
 use super::types::{
-    AbortFuelPressurizationState, AbortIgnitionState, AbortOxidizerPressurizationState,
-    CameraPowerState, FuelPressurizationState, IgnitionState, MainDeploymentState,
-    OxidizerPressurizationState, RecoveryArmingState, SeparationState, SteeringMotorRevolutions,
+    CameraPowerState, MainDeploymentState, RecoveryArmingState, SeparationState,
+    SteeringMotorRevolutions,
 };
 
 /// Holds the things we want to set
@@ -24,22 +23,9 @@ pub struct OutputTree {
     pub steering_motor_target_deflections: Watchable<Option<SteeringMotorRevolutions>>,
     /// Whether to give power for the steering motor, deployment and separation actuators.
     pub recovery_actuators_armed: Watchable<RecoveryArmingState>,
-    /// When turning [`IgnitionState::Ignited`], the ECU should start the ignition sequence.
-    pub ignite: Watchable<IgnitionState>,
-    /// When turning [`AbortIgnitionState::Aborted`], the ECU should abort the ignition sequence.
-    pub abort_ignition: Watchable<AbortIgnitionState>,
-
     /// Whether to give power to the camera
     pub camera_powered_on: Watchable<CameraPowerState>,
 
-    /// When turning [`FuelPressurizationState::Pressurized`], the ECU should start the fuel pressurization sequence.
-    pub pressurize_fuel: Watchable<FuelPressurizationState>,
-    /// When turning [`OxidizerPressurizationState::Pressurized`], the ECU should start the oxidizer pressurization sequence.
-    pub pressurize_oxidizer: Watchable<OxidizerPressurizationState>,
-    /// When turning [`AbortFuelPressurizationState::Aborted`], the ECU should abort the fuel pressurization sequence.
-    pub abort_fuel_pressurization: Watchable<AbortFuelPressurizationState>,
-    /// When turning [`AbortOxidizerPressurizationState::Aborted`], the ECU should abort the oxidizer pressurization sequence.
-    pub abort_oxidizer_pressurization: Watchable<AbortOxidizerPressurizationState>,
     /// The target states of the tank and engine valves.
     pub valves: PSSValves,
 }

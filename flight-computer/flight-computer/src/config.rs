@@ -3,7 +3,6 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use gnc_interface::GuidanceController;
-use hermes_can::messages::event_messages::ThrustPoint;
 use lib_mission::actuator_control::command::ActuatorControl;
 use lib_mission::common_states;
 use lib_mission::config::{BoxableState, MakeState};
@@ -13,7 +12,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::io::input::InputTree;
 use crate::io::output::OutputTree;
-use crate::io::types::{CameraPowerState, RecoveryArmingState, SteeringMotorRevolutions, Tank};
+use crate::io::types::{CameraPowerState, RecoveryArmingState, SteeringMotorRevolutions};
 use crate::state_logic;
 use crate::state_logic::helpers::ThresholdWatcher;
 
@@ -68,9 +67,6 @@ pub struct DownLinkRateConfig {
 pub struct CANConfig {
     /// The address used in `socketcan::Socket::open`.
     pub socket_address: String,
-    /// The thrust curve which is sent to the the engine control board.
-    /// Must at most 25 elements long.
-    pub ecu_thrust_curve: Vec<ThrustPoint>,
 }
 
 /// The main config file specification.

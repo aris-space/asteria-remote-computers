@@ -1,8 +1,6 @@
-use hermes_can::messages::event_messages::{ThrustCurveConfig, ThrustPoint};
 use lib_mission::can::{read_can, run_can_transmit_actor, ConsumerRegistry};
 use lib_mission::reactive::IntoWatched;
 use lib_mission::util::time::MissionTime;
-use lib_mission::Error;
 use tokio::task::AbortHandle;
 
 use crate::config::CANConfig;
@@ -42,23 +40,11 @@ pub fn init_can_drivers(
         (lib_mission::can::DummyCan, lib_mission::can::DummyCan)
     };
 
-    // Prepare the ECU
-    let mut thrust_curve = <[ThrustPoint; 25]>::default();
-    if config.ecu_thrust_curve.len() > 25 {
-        return Err(Error::malformed_config("thurst curve with too many points").into());
-    }
-    thrust_curve[..config.ecu_thrust_curve.len()].copy_from_slice(&config.ecu_thrust_curve);
-    let thrust_curve = ThrustCurveConfig {
-        thrust_curve,
-        thrust_curve_length: u8::try_from(config.ecu_thrust_curve.len())
-            .expect("no truncate since we checked size above <= 25"),
-    };
-
     // Initialize the driver tasks
     let mut consumers = ConsumerRegistry::new();
     let input_handles = init_input_drivers(input_tree, &mut consumers);
     let (tx, rx) = std::sync::mpsc::channel();
-    let output_handles = init_output_drivers(&input_tree.time, output_tree, &tx, thrust_curve);
+    let output_handles = init_output_drivers(&input_tree.time, output_tree, &tx);
 
     // Spawn the receiving thread
     std::thread::spawn(move || {
@@ -99,9 +85,6 @@ fn init_input_drivers(
         orientation,
         pss_valves,
         pss_sensors,
-        ecu_firing_state,
-        fuel_pressurization_state,
-        oxidizer_pressurization_state,
     } = input_tree;
 
     let mut handles = vec![
@@ -130,12 +113,6 @@ fn init_input_drivers(
             consumers,
             motors_position.clone(),
         ),
-        input_drivers::spawn_and_register_ecu_firing_messages(consumers, ecu_firing_state.clone()),
-        input_drivers::spawn_and_register_pressurization_messages(
-            consumers,
-            fuel_pressurization_state.clone(),
-            oxidizer_pressurization_state.clone(),
-        ),
     ];
     handles.extend(
         pss_drivers::can_input_drivers::register_and_spawn_input_drivers(
@@ -154,7 +131,6 @@ fn init_output_drivers<C>(
     clock: C,
     output_tree: &OutputTree,
     tx: &std::sync::mpsc::Sender<hermes_can::messages::Message>,
-    thrust_curve: ThrustCurveConfig,
 ) -> Vec<AbortHandle>
 where
     C: IntoWatched<MissionTime> + Copy,
@@ -165,13 +141,7 @@ where
         deploy_main_chute,
         steering_motor_target_deflections,
         recovery_actuators_armed,
-        ignite,
-        abort_ignition,
         camera_powered_on,
-        pressurize_fuel,
-        pressurize_oxidizer,
-        abort_fuel_pressurization,
-        abort_oxidizer_pressurization,
         valves,
     } = output_tree;
     // Register the emitters
@@ -206,33 +176,6 @@ where
             clock.watched(),
             tx.clone(),
         ),
-        output_drivers::spawn_ignition_driver(ignite.watched(), clock.watched(), tx.clone()),
-        output_drivers::spawn_abort_ignition_driver(
-            abort_ignition.watched(),
-            clock.watched(),
-            tx.clone(),
-        ),
-        output_drivers::spawn_fuel_pressurization_driver(
-            pressurize_fuel.watched(),
-            clock.watched(),
-            tx.clone(),
-        ),
-        output_drivers::spawn_oxidizer_pressurization_driver(
-            pressurize_oxidizer.watched(),
-            clock.watched(),
-            tx.clone(),
-        ),
-        output_drivers::spawn_abort_fuel_pressurization_driver(
-            abort_fuel_pressurization.watched(),
-            clock.watched(),
-            tx.clone(),
-        ),
-        output_drivers::spawn_abort_oxidizer_pressurization_driver(
-            abort_oxidizer_pressurization.watched(),
-            clock.watched(),
-            tx.clone(),
-        ),
-        output_drivers::spawn_thrust_curve_driver(thrust_curve, tx.clone()),
     ];
     handles.extend(valves.spawn_output_drivers_fc(tx));
     handles
