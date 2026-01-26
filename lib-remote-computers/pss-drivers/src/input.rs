@@ -1,8 +1,6 @@
-use lib_mission::actuator_control::valves::{NormallyClosedValve, NormallyOpenValve};
+use datatypes::actuator::{DPRValve, NormallyClosedValve, NormallyOpenValve};
 use lib_mission::util::types::{BarG, Celsius, Percent};
 use watchable::Watchable;
-
-use crate::types::DPRValve;
 
 /// The feedback for the valves in the propellant supply system.
 #[derive(Debug, Default, Clone)]

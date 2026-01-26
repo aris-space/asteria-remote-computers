@@ -5,4 +5,3 @@ pub mod can_output_drivers;
 pub mod input;
 pub mod output;
 pub mod telemetry;
-pub mod types;

@@ -1,12 +1,10 @@
 use std::{collections::BTreeMap, time::Duration};
 
-use lib_mission::actuator_control::Settable;
-use lib_mission::actuator_control::valves::{NormallyClosedValve, NormallyOpenValve};
+use datatypes::actuator::Settable;
+use datatypes::actuator::{DPRValve, NormallyClosedValve, NormallyOpenValve};
 use lib_mission::reactive::{IntoWatched as _, Watched};
 use tokio::task::AbortHandle;
 use watchable::Watchable;
-
-use crate::types::DPRValve;
 
 /// The valves in the propellant supply system.
 #[derive(Debug, Default, Clone)]
