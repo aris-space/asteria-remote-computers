@@ -5,6 +5,8 @@ members = [
     "lib-remote-computers/lib-mission",
     "lib-remote-computers/dummy-controller",
     "lib-remote-computers/pss-drivers",
+    "lib-remote-computers/io-utils",
+    "lib-remote-computers/io-utils/macros/*",
     "rfs-computer/rfs-computer",
     "rfs-computer/uremote-electronics",
     "rfs-computer/keller23sx",
@@ -15,8 +17,10 @@ members = [
     "flight-computer/hermes-recovery-gnc/hermes_gnc",
     "data-definitions/mavlink",
     "data-definitions/can",
-    "lib-remote-computers/io-utils",
-    "lib-remote-computers/io-utils/macros/*",
+    "data-definitions/can-hal",
+    "data-definitions/datatypes",
+    "data-definitions/messages",
+    "data-definitions/datapoints/*",
 ]
 
 [workspace.lints.clippy]

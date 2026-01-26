@@ -5,9 +5,9 @@
 
 use std::collections::BTreeMap;
 
+use can_hal::{CanDecode as _, CanEncode as _};
 use embedded_can::{Frame, StandardId};
-use hermes_can::messages::Message as CanMessage;
-use hermes_can::next_valid_length;
+use messages::Message as CanMessage;
 use tokio::sync::mpsc;
 
 /// This collects the consumers of specific can messages.
@@ -48,8 +48,8 @@ impl ConsumerRegistry {
     /// Forwards a message to all registered consumers.
     ///
     /// Returns the message back if there is no subscriber or the channel has closed.
-    fn forward(&self, msg: CanMessage) -> Result<(), CanMessage> {
-        let Some(consumer) = self.consumers.get(&msg.id()) else {
+    fn forward(&self, id: StandardId, msg: CanMessage) -> Result<(), CanMessage> {
+        let Some(consumer) = self.consumers.get(&id) else {
             return Err(msg);
         };
         if let Err(e) = consumer.send(msg) {
@@ -107,7 +107,7 @@ fn read_can_once<S: embedded_can::blocking::Can>(
         "received CAN frame"
     );
 
-    let message = match CanMessage::try_from_parts(id, frame.data()) {
+    let message = match CanMessage::from_parts(id, frame.data()) {
         Ok(m) => m,
         Err(e) => {
             tracing::warn!(error = %e, "failed to decode frame");
@@ -116,7 +116,7 @@ fn read_can_once<S: embedded_can::blocking::Can>(
     };
     tracing::debug!(msg = ?message, "received CAN message");
 
-    if consumers.forward(message).is_err() {
+    if consumers.forward(id, message).is_err() {
         tracing::trace!("skipping frame without consumer");
     }
 }
@@ -137,22 +137,16 @@ pub fn run_can_transmit_actor<S: embedded_can::blocking::Can>(
         tracing::debug!(?msg, "transmitting CAN message");
 
         let mut buf = [0; 64];
-        let (id, raw_len) = match msg.try_write_into(&mut buf) {
+        let (id, len) = match msg.encode_into(&mut buf) {
             Ok(x) => x,
             Err(e) => {
                 tracing::error!(error = %e, "cannot encode message!");
                 continue;
             }
         };
-        // probably redundant, as `socketcan` also does this extension.
-        let Some(len) = next_valid_length(raw_len) else {
+        let Some(frame) = S::Frame::new(id, &buf[0..(len as usize)]) else {
             // should always already fail above, since the buf is at most 64 bytes.
-            tracing::error!(len = raw_len, "unreachable: message too large!");
-            continue;
-        };
-        let Some(frame) = S::Frame::new(id, &buf[0..len]) else {
-            // should always already fail above, since the buf is at most 64 bytes.
-            tracing::error!(len = raw_len, "unreachable: message too large!");
+            tracing::error!(len, "unreachable: message too large!");
             continue;
         };
         tracing::trace!(

@@ -15,9 +15,8 @@ tracing = "0.1.41"
 tokio = { version = "1.40.0", features = ["sync", "fs", "rt"] }
 hermes-mavlink = { path = "../../data-definitions/mavlink" }
 mavlink-core = { version = "0.13.1" }
-hermes-can = { path = "../../data-definitions/can", features = [
-    "all",
-], optional = true, version = "0.3.1" }
+messages = { path = "../../data-definitions/messages", default-features = false }
+can-hal = { path = "../../data-definitions/can-hal", optional = true }
 embedded-can = { version = "0.4.1", optional = true }
 hex = "0.4.3"
 
@@ -40,4 +39,4 @@ toml = "0.8.20"
 
 [features]
 default = ["can"]
-can = ["dep:hermes-can", "dep:embedded-can"]
+can = ["dep:embedded-can", "dep:can-hal", "messages/can"]
