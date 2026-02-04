@@ -1297,6 +1297,7 @@ dependencies = [
  "can-hal",
  "chrono",
  "csv-async",
+ "datatypes",
  "embedded-can",
  "fs4",
  "hermes-mavlink",
@@ -1847,8 +1848,9 @@ dependencies = [
 name = "pss-drivers"
 version = "0.1.0"
 dependencies = [
- "hermes-can",
+ "datatypes",
  "lib-mission",
+ "messages",
  "serde",
  "tokio",
  "tracing",
