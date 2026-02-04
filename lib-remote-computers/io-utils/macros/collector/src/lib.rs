@@ -112,6 +112,8 @@
 //!
 //! The macro generates a single impl block for `io_utils::Collector<{message_type}>`.
 //!
+// The [`darling::FromVariant`] macro seems to have needless continues
+#![allow(clippy::needless_continue)]
 
 use darling::{FromDeriveInput, FromField, ast};
 use proc_macro::TokenStream;
