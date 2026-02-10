@@ -42,6 +42,7 @@ pub fn init_telemetry(
         let health_watchable = input_tree.telemetry_health.clone();
         let clock = input_tree.time.clone();
         let states = state_machine.state_names();
+        #[allow(unreachable_code)] // intentional, this will never exit
         std::thread::spawn(move || {
             read_uplink(
                 conn.as_ref(),
@@ -51,7 +52,7 @@ pub fn init_telemetry(
                 &clock.watched(),
                 &states,
                 hermes_mavlink::RemoteSystem::REMOTE_FILLING_STATION,
-            );
+            )
         });
     }
     // Spawn downlink actor
