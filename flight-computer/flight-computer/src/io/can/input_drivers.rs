@@ -1,10 +1,12 @@
+use datatypes::status::ArmingState;
+use datatypes::units::RailStatus;
 use hermes_can::messages;
-use hermes_can::messages::board_status::{ArmingState, RfsComputerStatus};
-use hermes_can::messages::sensor_data::{EnvironmentalData, RailStatus24V, RailStatus5V};
 use hermes_can::CanMessage as _;
 use lib_mission::can::ConsumerRegistry;
 use lib_mission::reactive::Watched;
 use lib_mission::util::time::MissionTime;
+use messages::datapoints::dp_rfs_computer::RfsComputerStatus;
+use messages::datapoints::dp_sensor_carrier::EnvironmentalData;
 use tokio::task::AbortHandle;
 use tracing::Instrument as _;
 use watchable::Watchable;
@@ -236,8 +238,8 @@ pub fn spawn_and_register_kinematics_driver(
 pub fn spawn_and_register_raw_unprocessed_data_driver(
     registry: &mut ConsumerRegistry,
     environmental_data: Watchable<EnvironmentalData>,
-    rail_status_24v: Watchable<RailStatus24V>,
-    rail_status_5v: Watchable<RailStatus5V>,
+    rail_status_24v: Watchable<RailStatus>,
+    rail_status_5v: Watchable<RailStatus>,
 ) -> AbortHandle {
     let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
     if let Err(()) = registry.register(messages::sensor_data::EnvironmentalData::ID, tx.clone()) {

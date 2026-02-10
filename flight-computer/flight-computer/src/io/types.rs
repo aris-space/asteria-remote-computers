@@ -1,6 +1,6 @@
 //! Defines all types used in the data structures.
 
-pub use hermes_can::messages::sensor_data::OrientationData as Orientation;
+pub use messages::datapoints::dp_sensor_carrier::OrientationData as Orientation;
 
 /// Position in WGS84 inertial frame.
 /// Mirroring [`hermes_can::messages::sensor_data::PositionData`].

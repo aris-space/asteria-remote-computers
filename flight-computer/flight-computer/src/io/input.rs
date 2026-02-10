@@ -4,11 +4,13 @@ use crate::io::types::{
     Acceleration, Location, MainDeploymentState, Orientation, SeparationState,
     SteeringMotorRevolutions, Velocity,
 };
-use hermes_can::messages::board_status::{ArmingState, RfsComputerStatus};
-use hermes_can::messages::sensor_data::{EnvironmentalData, RailStatus24V, RailStatus5V};
+use datatypes::status::ArmingState;
+use datatypes::units::RailStatus;
 use lib_mission::telemetry::TelemetryHealth;
 use lib_mission::util::time::MissionTime;
 use lib_mission::{actuator_control, transition};
+use messages::datapoints::dp_rfs_computer::RfsComputerStatus;
+use messages::datapoints::dp_sensor_carrier::EnvironmentalData;
 use pss_drivers::input::{PSSSensors, PSSValves};
 use watchable::Watchable;
 
@@ -17,9 +19,9 @@ pub struct RawUnprocessedData {
     /// The newest environmental data from the sensors.
     pub environmental_data: Watchable<EnvironmentalData>,
     /// The power status of the 24V rail of the AV stack.
-    pub rail_status_24v: Watchable<RailStatus24V>,
+    pub rail_status_24v: Watchable<RailStatus>,
     /// The power status of the 5V rail of the AV stack.
-    pub rail_status_5v: Watchable<RailStatus5V>,
+    pub rail_status_5v: Watchable<RailStatus>,
 }
 
 /// Holds all information we gather from the rest of the rocket and environment.
