@@ -263,7 +263,7 @@ impl gnc_interface::GuidanceController for SelfTestGncController {
                 motor_right: 0.5,
             });
         };
-        let time_since = time_unix - start_time;
+        let time_since = time_unix.checked_sub(start_time).unwrap_or_default();
         let sec_in_period = time_since.as_secs_f32() % 35.;
         let (l, r) = match sec_in_period {
             0.0..5.0 => (0., 0.5),
