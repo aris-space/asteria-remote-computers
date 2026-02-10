@@ -355,7 +355,7 @@ type = "LiftoffDetection"
 acceleration_limit_ms2 = 20 # m/s^2 
 required_duration_s = 0.2 # seconds
 on_liftoff_detected = "Thrusting"
-on_ecu_aborted = "Firing Aborted"
+on_aborted = "Firing Aborted"
 manual_transitions = [
     { target = "Abort Firing", display = "Abort Ignition", abort = true },
     { target = "Thrusting", display = "Manual Liftoff" },

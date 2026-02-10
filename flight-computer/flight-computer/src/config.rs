@@ -272,8 +272,8 @@ pub enum StateLogicConfig<Gnc: GuidanceController> {
         required_duration_s: f32,
         /// The name of the state which to proceed to after detecting liftoff.
         on_liftoff_detected: String,
-        /// The name of the state which to proceed to after ecu aborted.
-        on_ecu_aborted: String,
+        /// The name of the state which to proceed to after we aborted.
+        on_aborted: String,
     },
     /// Describes a [`state_logic::ApogeeTrigger`].
     ApogeeTrigger {
@@ -566,7 +566,7 @@ impl<Gnc: GuidanceController> MakeState for StateLogicConfig<Gnc> {
                 acceleration_limit_ms2,
                 required_duration_s,
                 on_liftoff_detected,
-                on_ecu_aborted,
+                on_aborted: on_ecu_aborted,
             } => state_logic::LiftoffDetection {
                 acceleration_limit: acceleration_limit_ms2,
                 required_duration: Duration::from_secs_f32(required_duration_s),
