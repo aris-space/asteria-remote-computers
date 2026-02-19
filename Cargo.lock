@@ -686,6 +686,7 @@ dependencies = [
  "datatypes",
  "glob",
  "gnc_interface",
+ "hermes-can",
  "hermes_gnc",
  "lib-mission",
  "mavlink-core",

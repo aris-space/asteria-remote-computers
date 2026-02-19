@@ -1,11 +1,16 @@
 use datatypes::status::ArmingState;
 use datatypes::units::RailStatus;
-use hermes_can::messages;
-use hermes_can::CanMessage as _;
 use lib_mission::can::ConsumerRegistry;
 use lib_mission::reactive::Watched;
 use lib_mission::util::time::MissionTime;
+use messages::datapoints::dp_engine_control_board;
+use messages::datapoints::dp_fuel_control_board;
+use messages::datapoints::dp_oxidizer_control_board;
+use messages::datapoints::dp_power_board;
+use messages::datapoints::dp_recovery_board;
+use messages::datapoints::dp_rfs_computer;
 use messages::datapoints::dp_rfs_computer::RfsComputerStatus;
+use messages::datapoints::dp_sensor_carrier;
 use messages::datapoints::dp_sensor_carrier::EnvironmentalData;
 use tokio::task::AbortHandle;
 use tracing::Instrument as _;
@@ -27,13 +32,14 @@ pub fn spawn_and_register_board_health_driver(
 ) -> AbortHandle {
     let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
     for id in [
-        messages::board_status::RecoveryBoardStatus::ID,
-        messages::board_status::SensorCarrierStatus::ID,
-        messages::board_status::EngineControlBoardStatus::ID,
-        messages::board_status::PowerBoardStatus::ID,
-        messages::board_status::FuelControlBoardStatus::ID,
-        messages::board_status::OxidizerControlBoardStatus::ID,
-        messages::board_status::RfsComputerStatus::ID,
+        // FIXME: extracting the id like this is ugly, but the whole thing will be refactored probably
+        messages::datapoints::dp_recovery_board::__message_meta_can_ids::BoardStatus,
+        messages::datapoints::dp_sensor_carrier::__message_meta_can_ids::BoardStatus,
+        messages::datapoints::dp_engine_control_board::__message_meta_can_ids::BoardStatus,
+        messages::datapoints::dp_power_board::__message_meta_can_ids::BoardStatus,
+        messages::datapoints::dp_fuel_control_board::__message_meta_can_ids::BoardStatus,
+        messages::datapoints::dp_oxidizer_control_board::__message_meta_can_ids::BoardStatus,
+        messages::datapoints::dp_rfs_computer::__message_meta_can_ids::Status,
     ] {
         if let Err(()) = registry.register(id, tx.clone()) {
             tracing::error!("kicking out other consumer");
@@ -45,11 +51,13 @@ pub fn spawn_and_register_board_health_driver(
             let mut last_error_count_power_board = 0;
             let mut last_error_count_sensor_carrier = 0;
             while let Some(msg) = rx.recv().await {
-                use messages::board_status::SensorStatus;
+                use datatypes::status::SensorStatus;
 
                 // Depending on the board, there are different messages and conditions. Unify them here.
                 let (healthy, output, name) = match &msg {
-                    messages::Message::RecoveryBoardStatus(board_status) => {
+                    messages::Message::RecoveryBoard(dp_recovery_board::Message::BoardStatus(
+                        board_status,
+                    )) => {
                         let _ = recovery_armed.update(board_status.arming_state.clone());
                         (
                             is_recovery_board_healthy(board_status),
@@ -57,7 +65,9 @@ pub fn spawn_and_register_board_health_driver(
                             "Recovery Board",
                         )
                     }
-                    messages::Message::SensorCarrierStatus(board_status) => {
+                    messages::Message::SensorCarrier(dp_sensor_carrier::Message::BoardStatus(
+                        board_status,
+                    )) => {
                         let sensors = &board_status.sensor_health;
                         // Only 1 imu and 1 gps are mission critical.
                         let healthy = (sensors.gps_1 == SensorStatus::Online
@@ -69,7 +79,9 @@ pub fn spawn_and_register_board_health_driver(
 
                         (healthy, &health.sensor_carrier, "Sensor Carrier")
                     }
-                    messages::Message::EngineControlBoardStatus(board_status) => {
+                    messages::Message::EngineControlBoard(
+                        dp_engine_control_board::Message::BoardStatus(board_status),
+                    ) => {
                         let _ = ecu_armed.update(board_status.armed.clone());
                         let healthy = board_status.common.errors == 0;
                         (
@@ -78,18 +90,24 @@ pub fn spawn_and_register_board_health_driver(
                             "Engine Control Board",
                         )
                     }
-                    messages::Message::PowerBoardStatus(board_status) => {
-                        let healthy = board_status.common.errors == last_error_count_power_board;
-                        last_error_count_power_board = board_status.common.errors;
+                    messages::Message::PowerBoard(dp_power_board::Message::BoardStatus(
+                        board_status,
+                    )) => {
+                        let healthy = board_status.errors == last_error_count_power_board;
+                        last_error_count_power_board = board_status.errors;
                         (healthy, &health.power_board, "Power Board")
                     }
-                    messages::Message::FuelControlBoardStatus(board_status) => {
+                    messages::Message::FuelControlBoard(
+                        dp_fuel_control_board::Message::BoardStatus(board_status),
+                    ) => {
                         let healthy = board_status.common.errors == 0
                             && board_status.thermocouple_status == SensorStatus::Online
                             && board_status.pressure_bus == SensorStatus::Online;
                         (healthy, &health.fuel_control_board, "Fuel Control Board")
                     }
-                    messages::Message::OxidizerControlBoardStatus(board_status) => {
+                    messages::Message::OxidizerControlBoard(
+                        dp_oxidizer_control_board::Message::BoardStatus(board_status),
+                    ) => {
                         let healthy = board_status.common.errors == 0
                             && board_status.thermocouple_status == SensorStatus::Online
                             && board_status.pressure_bus == SensorStatus::Online;
@@ -99,7 +117,9 @@ pub fn spawn_and_register_board_health_driver(
                             "Oxidizer Control Board",
                         )
                     }
-                    messages::Message::RfsComputerStatus(board_status) => {
+                    messages::Message::RfsComputer(dp_rfs_computer::Message::Status(
+                        board_status,
+                    )) => {
                         let _ = rfs_status.update((board_status.clone(), clock.current()));
                         continue; // Don't store it in the board healths
                     }
@@ -126,8 +146,10 @@ pub fn spawn_and_register_board_health_driver(
 
 /// Checks the recovery board status for a simple healthy / unhealthy state.
 /// Does not do any error reporting, will only return `false` if *something* is unhealthy.
-fn is_recovery_board_healthy(board_status: &messages::board_status::RecoveryBoardStatus) -> bool {
-    use messages::board_status::{ActuatorStatus, WatchdogState};
+fn is_recovery_board_healthy(
+    board_status: &messages::datapoints::dp_recovery_board::RecoveryBoardStatus,
+) -> bool {
+    use messages::datapoints::dp_recovery_board::{ActuatorStatus, WatchdogState};
 
     board_status.common.errors == 0
         && matches!(
@@ -172,23 +194,35 @@ pub fn spawn_and_register_kinematics_driver(
     orientation: Watchable<Orientation>,
 ) -> AbortHandle {
     let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
-    if let Err(()) = registry.register(messages::sensor_data::PositionData::ID, tx.clone()) {
+    if let Err(()) = registry.register(
+        messages::datapoints::dp_sensor_carrier::__message_meta_can_ids::PositionData,
+        tx.clone(),
+    ) {
         tracing::error!("kicking out other consumer");
     }
-    if let Err(()) = registry.register(messages::sensor_data::VelocityData::ID, tx.clone()) {
+    if let Err(()) = registry.register(
+        messages::datapoints::dp_sensor_carrier::__message_meta_can_ids::VelocityData,
+        tx.clone(),
+    ) {
         tracing::error!("kicking out other consumer");
     }
-    if let Err(()) = registry.register(messages::sensor_data::ImuData::ID, tx.clone()) {
+    if let Err(()) = registry.register(
+        messages::datapoints::dp_sensor_carrier::__message_meta_can_ids::ImuData,
+        tx.clone(),
+    ) {
         tracing::error!("kicking out other consumer");
     }
-    if let Err(()) = registry.register(messages::sensor_data::OrientationData::ID, tx) {
+    if let Err(()) = registry.register(
+        messages::datapoints::dp_sensor_carrier::__message_meta_can_ids::OrientationData,
+        tx,
+    ) {
         tracing::error!("kicking out other consumer");
     }
 
     let task = async move {
         while let Some(msg) = rx.recv().await {
             match msg {
-                messages::Message::PositionData(pos) => {
+                messages::Message::SensorCarrier(dp_sensor_carrier::Message::PositionData(pos)) => {
                     // NED is native for position
                     let _ = location.update(Location {
                         latitude: pos.location_latitude,
@@ -198,7 +232,7 @@ pub fn spawn_and_register_kinematics_driver(
                         vertical_accuracy: pos.vertical_accuracy,
                     });
                 }
-                messages::Message::VelocityData(vel) => {
+                messages::Message::SensorCarrier(dp_sensor_carrier::Message::VelocityData(vel)) => {
                     // NED is native for velocity, but store both
                     let _ = velocity.update(Velocity {
                         north: vel.velocity_north,
@@ -209,7 +243,7 @@ pub fn spawn_and_register_kinematics_driver(
                         z: vel.velocity_z,
                     });
                 }
-                messages::Message::ImuData(imu) => {
+                messages::Message::SensorCarrier(dp_sensor_carrier::Message::ImuData(imu)) => {
                     // This is using potentially off-yaw data, but also the native ones
                     let _ = acceleration.update(Acceleration {
                         north: imu.acceleration_north,
@@ -220,7 +254,9 @@ pub fn spawn_and_register_kinematics_driver(
                         z: imu.acceleration_z,
                     });
                 }
-                messages::Message::OrientationData(orient) => {
+                messages::Message::SensorCarrier(dp_sensor_carrier::Message::OrientationData(
+                    orient,
+                )) => {
                     // This is using potentially off-yaw data
                     let _ = orientation.update(orient);
                 }
@@ -242,26 +278,39 @@ pub fn spawn_and_register_raw_unprocessed_data_driver(
     rail_status_5v: Watchable<RailStatus>,
 ) -> AbortHandle {
     let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
-    if let Err(()) = registry.register(messages::sensor_data::EnvironmentalData::ID, tx.clone()) {
+    if let Err(()) = registry.register(
+        messages::datapoints::dp_sensor_carrier::__message_meta_can_ids::EnvironmentalData,
+        tx.clone(),
+    ) {
         tracing::error!("kicking out other consumer");
     }
-    if let Err(()) = registry.register(messages::sensor_data::RailStatus24V::ID, tx.clone()) {
+    if let Err(()) = registry.register(
+        messages::datapoints::dp_power_board::__message_meta_can_ids::RailStatus24V,
+        tx.clone(),
+    ) {
         tracing::error!("kicking out other consumer");
     }
-    if let Err(()) = registry.register(messages::sensor_data::RailStatus5V::ID, tx.clone()) {
+    if let Err(()) = registry.register(
+        messages::datapoints::dp_power_board::__message_meta_can_ids::RailStatus5V,
+        tx.clone(),
+    ) {
         tracing::error!("kicking out other consumer");
     }
 
     let task = async move {
         while let Some(msg) = rx.recv().await {
             match msg {
-                messages::Message::EnvironmentalData(environment) => {
+                messages::Message::SensorCarrier(
+                    dp_sensor_carrier::Message::EnvironmentalData(environment),
+                ) => {
                     let _ = environmental_data.update(environment);
                 }
-                messages::Message::RailStatus24V(rail_s_24v) => {
+                messages::Message::PowerBoard(dp_power_board::Message::RailStatus24V(
+                    rail_s_24v,
+                )) => {
                     let _ = rail_status_24v.update(rail_s_24v);
                 }
-                messages::Message::RailStatus5V(rail_s_5v) => {
+                messages::Message::PowerBoard(dp_power_board::Message::RailStatus5V(rail_s_5v)) => {
                     let _ = rail_status_5v.update(rail_s_5v);
                 }
                 _ => tracing::warn!("Received message it hasn't subscribed to"),
@@ -279,14 +328,20 @@ pub fn spawn_and_register_actual_steering_driver(
     actual_pos: Watchable<SteeringMotorRevolutions>,
 ) -> AbortHandle {
     let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
-    if let Err(()) = registry.register(messages::event_messages::SteeringActualPositions::ID, tx) {
+    if let Err(()) = registry.register(
+        messages::datapoints::dp_recovery_board::__message_meta_can_ids::SteeringActualPositions,
+        tx,
+    ) {
         tracing::error!("kicking out other consumer");
     }
 
     tokio::spawn(
         async move {
             while let Some(msg) = rx.recv().await {
-                let messages::Message::SteeringActualPositions(pos) = msg else {
+                let messages::Message::RecoveryBoard(
+                    dp_recovery_board::Message::SteeringActualPositions(pos),
+                ) = msg
+                else {
                     tracing::warn!("Received message it hasn't subscribed to");
                     continue;
                 };
