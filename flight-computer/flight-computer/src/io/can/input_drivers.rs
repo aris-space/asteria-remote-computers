@@ -10,10 +10,7 @@ use tracing::Instrument as _;
 use watchable::Watchable;
 
 use crate::io::input::BoardsHealthyAsOf;
-use crate::io::types::{
-    Acceleration, ECUFiringState, FuelPressurizationCompletedState, Location, Orientation,
-    OxidizerPressurizationCompletedState, SteeringMotorRevolutions, Velocity,
-};
+use crate::io::types::{Acceleration, Location, Orientation, SteeringMotorRevolutions, Velocity};
 
 /// Listens for [`messages::board_status`] messages and updates [`BoardsHealthyAsOf`].
 ///
@@ -301,93 +298,6 @@ pub fn spawn_and_register_actual_steering_driver(
             tracing::warn!("Shutting down");
         }
         .instrument(tracing::info_span!("drivers::ActualSteeringPos")),
-    )
-    .abort_handle()
-}
-
-/// Listens for event messages from the ECU about firings.
-pub fn spawn_and_register_ecu_firing_messages(
-    registry: &mut ConsumerRegistry,
-    ecu_state: Watchable<ECUFiringState>,
-) -> AbortHandle {
-    let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
-    for id in [
-        messages::event_messages::FiringAborted::ID,
-        messages::event_messages::FiringInitiated::ID,
-        messages::event_messages::IgnitionDetected::ID,
-        messages::event_messages::CombustionDetected::ID,
-        messages::event_messages::FiringCompleted::ID,
-    ] {
-        if let Err(()) = registry.register(id, tx.clone()) {
-            tracing::error!("kicking out other consumer");
-        }
-    }
-
-    tokio::spawn(
-        async move {
-            while let Some(msg) = rx.recv().await {
-                match msg {
-                    messages::Message::FiringAborted(_) => {
-                        ecu_state.replace(ECUFiringState::Aborted);
-                    }
-                    messages::Message::FiringInitiated(_) => {
-                        ecu_state.replace(ECUFiringState::Initiated);
-                    }
-                    messages::Message::IgnitionDetected(_) => {
-                        ecu_state.replace(ECUFiringState::IgnitionDetected);
-                    }
-                    messages::Message::CombustionDetected(_) => {
-                        ecu_state.replace(ECUFiringState::CombustionDetected);
-                    }
-                    messages::Message::FiringCompleted(_) => {
-                        ecu_state.replace(ECUFiringState::Completed);
-                    }
-                    _ => tracing::warn!("Received message it hasn't subscribed to"),
-                }
-            }
-            tracing::warn!("Shutting down");
-        }
-        .instrument(tracing::info_span!("drivers::ECUFiringMessages")),
-    )
-    .abort_handle()
-}
-
-/// Listens for event messages from the ECU about oxidizer pressurization.
-pub fn spawn_and_register_pressurization_messages(
-    registry: &mut ConsumerRegistry,
-    fuel_state: Watchable<FuelPressurizationCompletedState>,
-    oxidizer_state: Watchable<OxidizerPressurizationCompletedState>,
-) -> AbortHandle {
-    let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
-    for id in [
-        messages::event_messages::FuelPressurizationCompleted::ID,
-        messages::event_messages::OxidizerPressurizationCompleted::ID,
-    ] {
-        if let Err(()) = registry.register(id, tx.clone()) {
-            tracing::error!("kicking out other consumer");
-        }
-    }
-
-    tokio::spawn(
-        async move {
-            while let Some(msg) = rx.recv().await {
-                match msg {
-                    messages::Message::FuelPressurizationComplete(
-                        messages::event_messages::FuelPressurizationCompleted,
-                    ) => {
-                        fuel_state.replace(FuelPressurizationCompletedState::Completed);
-                    }
-                    messages::Message::OxidizerPressurizationComplete(
-                        messages::event_messages::OxidizerPressurizationCompleted,
-                    ) => {
-                        oxidizer_state.replace(OxidizerPressurizationCompletedState::Completed);
-                    }
-                    _ => tracing::warn!("Received message it hasn't subscribed to"),
-                }
-            }
-            tracing::warn!("Shutting down");
-        }
-        .instrument(tracing::info_span!("drivers::ECUPressurizationMessages")),
     )
     .abort_handle()
 }

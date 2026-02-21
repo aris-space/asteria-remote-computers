@@ -3,7 +3,6 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use gnc_interface::GuidanceController;
-use hermes_can::messages::event_messages::ThrustPoint;
 use lib_mission::actuator_control::command::ActuatorControl;
 use lib_mission::common_states;
 use lib_mission::config::{BoxableState, MakeState};
@@ -13,7 +12,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::io::input::InputTree;
 use crate::io::output::OutputTree;
-use crate::io::types::{CameraPowerState, RecoveryArmingState, SteeringMotorRevolutions, Tank};
+use crate::io::types::{CameraPowerState, RecoveryArmingState, SteeringMotorRevolutions};
 use crate::state_logic;
 use crate::state_logic::helpers::ThresholdWatcher;
 
@@ -68,9 +67,6 @@ pub struct DownLinkRateConfig {
 pub struct CANConfig {
     /// The address used in `socketcan::Socket::open`.
     pub socket_address: String,
-    /// The thrust curve which is sent to the the engine control board.
-    /// Must at most 25 elements long.
-    pub ecu_thrust_curve: Vec<ThrustPoint>,
 }
 
 /// The main config file specification.
@@ -259,27 +255,6 @@ pub enum StateLogicConfig<Gnc: GuidanceController> {
         /// The name of the state which to proceed to after a timeout.
         on_timeout: String,
     },
-    /// Describes a [`state_logic::Pressurization`].
-    Pressurization {
-        /// The tank that should be pressurized
-        selected_tank: Tank,
-        /// The target pressure that should be reached for pressurization
-        target_pressure: f32,
-        /// The name of the state which to proceed to after sending the pressurisation command
-        on_done: String,
-    },
-    /// Describes a [`state_logic::AwaitPressurization`].
-    AwaitPressurization {
-        /// The tank that should be observed
-        selected_tank: Tank,
-        /// The name of the state which to proceed to after receiving the pressurization completed signal
-        on_pressurization_completed: String,
-    },
-    /// Describes a [`state_logic::AbortPressurization`].
-    AbortPressurization {
-        /// The name of the state which to proceed to after sending the abort signal.
-        on_done: String,
-    },
     /// Describes a [`state_logic::Ignition`].
     Ignition {
         /// The name of the state which to proceed to after sending the ignition signal.
@@ -297,8 +272,8 @@ pub enum StateLogicConfig<Gnc: GuidanceController> {
         required_duration_s: f32,
         /// The name of the state which to proceed to after detecting liftoff.
         on_liftoff_detected: String,
-        /// The name of the state which to proceed to after ecu aborted.
-        on_ecu_aborted: String,
+        /// The name of the state which to proceed to after we aborted.
+        on_aborted: String,
     },
     /// Describes a [`state_logic::ApogeeTrigger`].
     ApogeeTrigger {
@@ -579,32 +554,6 @@ impl<Gnc: GuidanceController> MakeState for StateLogicConfig<Gnc> {
                 on_timeout: StateName::try_new(&on_timeout, names)?,
             }
             .into_box(),
-            StateLogicConfig::Pressurization {
-                selected_tank,
-                target_pressure,
-                on_done,
-            } => state_logic::Pressurization {
-                selected_tank,
-                target_pressure,
-                on_done: StateName::try_new(&on_done, names)?,
-            }
-            .into_box(),
-            StateLogicConfig::AwaitPressurization {
-                selected_tank,
-                on_pressurization_completed,
-            } => state_logic::AwaitPressurization {
-                manual_transitions,
-                selected_tank,
-                on_pressurization_completed: StateName::try_new(
-                    &on_pressurization_completed,
-                    names,
-                )?,
-            }
-            .into_box(),
-            StateLogicConfig::AbortPressurization { on_done } => state_logic::AbortPressurization {
-                on_done: StateName::try_new(&on_done, names)?,
-            }
-            .into_box(),
             StateLogicConfig::Ignition { on_done } => state_logic::Ignition {
                 on_done: StateName::try_new(&on_done, names)?,
             }
@@ -617,12 +566,12 @@ impl<Gnc: GuidanceController> MakeState for StateLogicConfig<Gnc> {
                 acceleration_limit_ms2,
                 required_duration_s,
                 on_liftoff_detected,
-                on_ecu_aborted,
+                on_aborted: on_ecu_aborted,
             } => state_logic::LiftoffDetection {
                 acceleration_limit: acceleration_limit_ms2,
                 required_duration: Duration::from_secs_f32(required_duration_s),
                 on_liftoff_detected: StateName::try_new(&on_liftoff_detected, names)?,
-                on_ecu_aborted: StateName::try_new(&on_ecu_aborted, names)?,
+                on_aborted: StateName::try_new(&on_ecu_aborted, names)?,
                 manual_transitions,
             }
             .into_box(),

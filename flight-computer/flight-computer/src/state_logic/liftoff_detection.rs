@@ -1,4 +1,3 @@
-use crate::io::types::ECUFiringState;
 use crate::util::timer::Timer;
 use lib_mission::reactive::{IntoWatched, WatchedExt};
 use lib_mission::state_machine::{AdditionalState, StateLogic, StateName};
@@ -13,7 +12,8 @@ pub struct LiftoffDetection {
     pub(crate) acceleration_limit: f32,
     pub(crate) required_duration: Duration,
     pub(crate) on_liftoff_detected: StateName,
-    pub(crate) on_ecu_aborted: StateName,
+    #[allow(dead_code)] // todo
+    pub(crate) on_aborted: StateName,
     pub(crate) manual_transitions: ManualTransitions,
 }
 
@@ -31,7 +31,6 @@ impl StateLogic for LiftoffDetection {
         _p: &AdditionalState<Self::Parameter>,
     ) -> StateName {
         let mut acceleration_watcher = input.acceleration.watched();
-        let mut ecu_state_watcher = input.ecu_firing_state.watched();
 
         loop {
             tokio::select! {
@@ -62,10 +61,7 @@ impl StateLogic for LiftoffDetection {
                         },
                     }
                 }
-                _ = ecu_state_watcher.next_satisfying(|s| *s == ECUFiringState::Aborted) => {
-                        tracing::info!(cause = "ecu aborted", "transitioning");
-                        return self.on_ecu_aborted.clone();
-                }
+                // TODO: Move to `on_ecu_aborted` if firing aborted
             }
         }
     }

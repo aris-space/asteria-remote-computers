@@ -101,24 +101,6 @@ pub enum MainDeploymentState {
     Deployed,
 }
 
-/// The feedback we get from the ECU about the firing sequence.
-#[derive(Default, Debug, Clone, Copy, PartialEq, serde::Serialize)]
-pub enum ECUFiringState {
-    /// In default state, no firing initated yet.
-    #[default]
-    NotYetInitiated,
-    /// A firing was initated, and the ECU acknowledged that.
-    Initiated,
-    /// The igniter has ignited.
-    IgnitionDetected,
-    /// The main chamber has combustion.
-    CombustionDetected,
-    /// The ECU sent a completed message last.
-    Completed,
-    /// The ECU last sent an aborted message.
-    Aborted,
-}
-
 /// Steps of the steering motor, starting from 0 each during power-up
 /// and increasing by 1 for pulling the line a 1/4096th of a full rotation,
 /// decreasing analogously for relaxing the line.
@@ -159,76 +141,4 @@ impl SteeringMotorRevolutions {
         self.left_motor_steps >= other.left_motor_steps
             && self.right_motor_steps >= other.right_motor_steps
     }
-}
-
-/// Tells whether we should send the ignition signal.
-/// Whenever this is set to `Ignited`, the signal is sent.
-#[derive(Default, Debug, Clone, Copy, serde::Serialize)]
-pub enum IgnitionState {
-    #[default]
-    NotYetIgnited,
-    Ignited,
-}
-
-/// Tells whether we should send the abort ignition signal.
-#[derive(Default, Debug, Clone, Copy, serde::Serialize)]
-pub enum AbortIgnitionState {
-    #[default]
-    NotYetAborted,
-    Aborted,
-}
-
-/// Tells whether we should send the fuel pressurization signal.
-#[derive(Default, Debug, Clone, Copy, serde::Serialize)]
-pub enum FuelPressurizationState {
-    #[default]
-    NotYetPressurized,
-    Pressurized(f32),
-}
-
-/// Tells whether we should send the oxidizer pressurization signal.
-#[derive(Default, Debug, Clone, Copy, serde::Serialize)]
-pub enum OxidizerPressurizationState {
-    #[default]
-    NotYetPressurized,
-    Pressurized(f32),
-}
-
-/// Tells whether we should send the fuel pressurization abort signal.
-#[derive(Default, Debug, Clone, Copy, serde::Serialize)]
-pub enum AbortFuelPressurizationState {
-    #[default]
-    NotYetAborted,
-    Aborted,
-}
-
-/// Tells whether we should send the oxidizer pressurization abort signal.
-#[derive(Default, Debug, Clone, Copy, serde::Serialize)]
-pub enum AbortOxidizerPressurizationState {
-    #[default]
-    NotYetAborted,
-    Aborted,
-}
-
-/// The feedback we get from the ECU about the fuel pressurization sequence.
-#[derive(Default, Debug, Clone, Copy, PartialEq, serde::Serialize)]
-pub enum FuelPressurizationCompletedState {
-    #[default]
-    NotYetCompleted,
-    Completed,
-}
-
-/// The feedback we get from the ECU about the oxidizer pressurization sequence.
-#[derive(Default, Debug, Clone, Copy, PartialEq, serde::Serialize)]
-pub enum OxidizerPressurizationCompletedState {
-    #[default]
-    NotYetCompleted,
-    Completed,
-}
-
-/// The tank that should be pressurized at the pressurization sequence
-#[derive(Debug, Clone, Copy, serde::Deserialize, serde::Serialize)]
-pub enum Tank {
-    Fuel,
-    Oxidizer,
 }

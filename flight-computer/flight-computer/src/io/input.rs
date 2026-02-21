@@ -1,9 +1,8 @@
 //! Contains [`InputTree`]
 
 use crate::io::types::{
-    Acceleration, ECUFiringState, FuelPressurizationCompletedState, Location, MainDeploymentState,
-    Orientation, OxidizerPressurizationCompletedState, SeparationState, SteeringMotorRevolutions,
-    Velocity,
+    Acceleration, Location, MainDeploymentState, Orientation, SeparationState,
+    SteeringMotorRevolutions, Velocity,
 };
 use hermes_can::messages::board_status::{ArmingState, RfsComputerStatus};
 use hermes_can::messages::sensor_data::{EnvironmentalData, RailStatus24V, RailStatus5V};
@@ -67,13 +66,6 @@ pub struct InputTree {
     pub pss_valves: PSSValves,
     /// The sensor readings from the PSS.
     pub pss_sensors: PSSSensors,
-
-    /// The last known sent message by the ECU about the firing sequence.
-    pub ecu_firing_state: Watchable<ECUFiringState>,
-    /// The last known sent message by the ECU about the fuel pressurization sequence.
-    pub fuel_pressurization_state: Watchable<FuelPressurizationCompletedState>,
-    /// The last known sent message by the ECU about the oxidizer pressurization sequence.
-    pub oxidizer_pressurization_state: Watchable<OxidizerPressurizationCompletedState>,
 }
 
 /// The processed health report for the avionics boards.

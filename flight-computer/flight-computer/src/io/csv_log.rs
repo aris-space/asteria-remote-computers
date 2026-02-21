@@ -37,9 +37,6 @@ impl InputTree {
             raw_unprocessed_data,
             pss_valves,
             pss_sensors,
-            ecu_firing_state,
-            fuel_pressurization_state,
-            oxidizer_pressurization_state,
         } = self;
         let RawUnprocessedData {
             environmental_data,
@@ -356,39 +353,6 @@ impl InputTree {
                 .map(|v| (v.temperature, v.humidity, v.pressure)),
             time.watched(),
         );
-        // Log ecu firing status
-        spawn_watchable_logger(
-            make_timeseries_writer(
-                folder,
-                "ecu_firing_state",
-                &["last ECU State [NotYetInitiated|Initiated|Completed|Aborted]"],
-            )
-            .await?,
-            ecu_firing_state.watched(),
-            time.watched(),
-        );
-        // Log fuel pressurization status
-        spawn_watchable_logger(
-            make_timeseries_writer(
-                folder,
-                "fuel_pressurization_state",
-                &["last Fuel Pressurization State [NotYetPressurized|Pressurized]"],
-            )
-            .await?,
-            fuel_pressurization_state.watched(),
-            time.watched(),
-        );
-        // Log oxidizer pressurization status
-        spawn_watchable_logger(
-            make_timeseries_writer(
-                folder,
-                "oxidizer_pressurization_state",
-                &["last Oxidizer Pressurization State [NotYetPressurized|Pressurized]"],
-            )
-            .await?,
-            oxidizer_pressurization_state.watched(),
-            time.watched(),
-        );
         pss_valves.start_logging(folder, time).await?;
         pss_sensors.start_logging(folder, time).await?;
 
@@ -413,13 +377,7 @@ impl OutputTree {
             deploy_main_chute,
             steering_motor_target_deflections,
             recovery_actuators_armed,
-            ignite,
-            abort_ignition,
             camera_powered_on,
-            pressurize_fuel,
-            pressurize_oxidizer,
-            abort_fuel_pressurization,
-            abort_oxidizer_pressurization,
             valves,
         } = self;
 
@@ -458,66 +416,10 @@ impl OutputTree {
             recovery_actuators_armed.watched(),
             time.watched(),
         );
-        // Log ignition status
-        spawn_watchable_logger(
-            make_timeseries_writer(folder, "ignition", &["target ignition"]).await?,
-            ignite.watched(),
-            time.watched(),
-        );
-        // Log abort ignition status
-        spawn_watchable_logger(
-            make_timeseries_writer(folder, "abort_ignition", &["target abort ignition"]).await?,
-            abort_ignition.watched(),
-            time.watched(),
-        );
         // Log camera power status
         spawn_watchable_logger(
             make_timeseries_writer(folder, "cameras", &["target camera power"]).await?,
             camera_powered_on.watched(),
-            time.watched(),
-        );
-        // Log fuel pressurization status
-        spawn_watchable_logger(
-            make_timeseries_writer(
-                folder,
-                "fuel_pressurization",
-                &["target fuel pressurization"],
-            )
-            .await?,
-            pressurize_fuel.watched(),
-            time.watched(),
-        );
-        // Log oxidizer pressurization status
-        spawn_watchable_logger(
-            make_timeseries_writer(
-                folder,
-                "oxidizer_pressurization",
-                &["target oxidizer pressurization"],
-            )
-            .await?,
-            pressurize_oxidizer.watched(),
-            time.watched(),
-        );
-        // Log abort fuel pressurization status
-        spawn_watchable_logger(
-            make_timeseries_writer(
-                folder,
-                "abort_fuel_pressurization",
-                &["target abort fuel pressurization"],
-            )
-            .await?,
-            abort_fuel_pressurization.watched(),
-            time.watched(),
-        );
-        // Log abort oxidizer pressurization status
-        spawn_watchable_logger(
-            make_timeseries_writer(
-                folder,
-                "abort_oxidizer_pressurization",
-                &["target abort oxidizer pressurization"],
-            )
-            .await?,
-            abort_oxidizer_pressurization.watched(),
             time.watched(),
         );
         // Log valve target states
