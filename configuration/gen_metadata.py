@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Generate a YAML intermediate file for a Typst config validation document.
+Generate a JSON intermediate file to stdout for a Typst config validation document.
 
 Usage:
     python gen_metadata.py <config_path> <base_config_path> <binary_commit>
@@ -13,7 +13,7 @@ import json
 from pathlib import Path
 
 
-def short_hash(path: Path) -> str:
+def object_hash(path: Path) -> str:
     result = subprocess.run(
         ["git", "hash-object", str(path)],
         capture_output=True, text=True, check=True
@@ -117,7 +117,7 @@ def main():
         "config": {
             "path": str(config_path),
             "base": str(base_config_path),
-            "hash": short_hash(config_path),
+            "hash": object_hash(config_path),
             "branch": config_info["branch"],
             "last_change": config_info["last_change"],
         },
