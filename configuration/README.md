@@ -16,7 +16,7 @@ There are two steps:
 
 1. generate the metadata.
     ```sh
-    python3 ./configuration/gen_metadata.py $PATH_TO_CONFIG> $PATH_TO_CONFIG_TEMPLATE $BINARY_COMMIT > ./configuration/data.json 
+    python3 ./configuration/gen_metadata.py $PATH_TO_CONFIG $PATH_TO_CONFIG_TEMPLATE $BINARY_COMMIT > ./configuration/data.json 
     ```
 
     Noteably, the git commit of the binary can be HEAD for the current version, or a commit hash.
