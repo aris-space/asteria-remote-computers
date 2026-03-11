@@ -18,7 +18,7 @@ def object_hash(path: Path) -> str:
         ["git", "hash-object", str(path)],
         capture_output=True, text=True, check=True
     )
-    return result.stdout.strip()[:7]
+    return "H" + result.stdout.strip()[:5]
 
 
 def git_log_oneline(ref: str, cwd: Path) -> str:
@@ -39,7 +39,7 @@ def git_branch(ref: str, cwd: Path) -> str:
             ["git", "name-rev", "--name-only", ref],
             capture_output=True, text=True, check=True, cwd=cwd
         )
-        return result.stdout.strip()
+        return result.stdout.strip().replace("remotes/origin/")
     except subprocess.CalledProcessError:
         return "unknown"
 
@@ -88,7 +88,11 @@ def main():
 
     config_path = Path(sys.argv[1])
     base_config_path = Path(sys.argv[2])
-    commit = sys.argv[3]
+    cwd = config_path.parent
+    commit = subprocess.run(
+        ["git", "rev-parse", sys.argv[3]],
+        capture_output=True, text=True, check=True, cwd=cwd
+    ).stdout.strip()
 
     for p in (config_path, base_config_path):
         if not p.exists():
@@ -99,17 +103,10 @@ def main():
     base_lines = base_config_path.read_text().splitlines(keepends=True)
     annotated = annotate_diff(config_lines, base_lines)
 
-    cwd = config_path.parent
     config_info = git_config_info(config_path)
-
-    commit = subprocess.run(
-        ["git", "rev-parse", commit],
-        capture_output=True, text=True, check=True, cwd=cwd
-    ).stdout.strip()
 
     data = {
         "binary": {
-            "name": config_path.stem,
             "commit": commit[:7],
             "branch": git_branch(commit, cwd),
             "last_change": git_log_oneline(commit, cwd),
