@@ -39,7 +39,7 @@ def git_branch(ref: str, cwd: Path) -> str:
             ["git", "name-rev", "--name-only", ref],
             capture_output=True, text=True, check=True, cwd=cwd
         )
-        return result.stdout.strip().replace("remotes/origin/")
+        return result.stdout.strip().replace("remotes/origin/", "")
     except subprocess.CalledProcessError:
         return "unknown"
 
