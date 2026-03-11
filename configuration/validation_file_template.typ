@@ -1,3 +1,5 @@
+#import "base.typ": page-layout 
+#show: page-layout.with(subteam: "SFW", title: "Config Validation File")
 
 #let data = json(sys.inputs.metadata-file)
 #let bin = data.binary
@@ -60,7 +62,7 @@
 #table(
   columns: (1fr, 1fr, 4fr),
   [git commit], [branch], [latest change],
-  highlight(raw(bin.commit)),
+  highlight(raw(bin.commit), fill: orange.lighten(70%)),
   raw(bin.branch),
   [#bin.last_change],
 )
