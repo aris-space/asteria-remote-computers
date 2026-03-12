@@ -4,3 +4,6 @@
 [submodule "flight-computer/hermes-recovery-gnc"]
 	path = flight-computer/hermes-recovery-gnc
 	url = ../hermes-recovery-gnc
+[submodule "asteria-data-definitions"]
+	path = asteria-data-definitions
+	url = https://github.com/aris-space/asteria-data-definitions

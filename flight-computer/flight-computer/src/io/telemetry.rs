@@ -314,10 +314,10 @@ fn armed(is_armed: bool) -> hermes_mavlink::Armed {
     }
 }
 
-fn conv_armed(is_armed: &hermes_can::messages::board_status::ArmingState) -> hermes_mavlink::Armed {
+fn conv_armed(is_armed: &datatypes::status::ArmingState) -> hermes_mavlink::Armed {
     match is_armed {
-        hermes_can::messages::board_status::ArmingState::Safe => hermes_mavlink::Armed::DISARMED,
-        hermes_can::messages::board_status::ArmingState::Armed => hermes_mavlink::Armed::ARMED,
+        datatypes::status::ArmingState::Safe => hermes_mavlink::Armed::DISARMED,
+        datatypes::status::ArmingState::Armed => hermes_mavlink::Armed::ARMED,
     }
 }
 
