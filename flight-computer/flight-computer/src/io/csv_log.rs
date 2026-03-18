@@ -325,7 +325,7 @@ impl InputTree {
             .await?,
             rail_status_5v
                 .watched()
-                .map(|v| (v.data.voltage, v.data.current, v.data.power)),
+                .map(|v| (v.voltage, v.current, v.power)),
             time.watched(),
         );
         spawn_watchable_logger(
@@ -337,7 +337,7 @@ impl InputTree {
             .await?,
             rail_status_24v
                 .watched()
-                .map(|v| (v.data.voltage, v.data.current, v.data.power)),
+                .map(|v| (v.voltage, v.current, v.power)),
             time.watched(),
         );
         // Log environmental data
