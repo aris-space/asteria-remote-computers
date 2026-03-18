@@ -252,9 +252,9 @@ fn start_telemetry_streaming(
                 let value = rail_status_24v.get();
                 hermes_mavlink::MavMessage::RAIL_STATUS_24V(hermes_mavlink::RAIL_STATUS_24V_DATA {
                     time_unix_ms: time.as_ms_timestamp(),
-                    voltage: value.data.voltage,
-                    current: value.data.current,
-                    power: value.data.power,
+                    voltage: value.voltage,
+                    current: value.current,
+                    power: value.power,
                 })
             }),
             conn.clone(),
@@ -264,9 +264,9 @@ fn start_telemetry_streaming(
                 let value = rail_status_5v.get();
                 hermes_mavlink::MavMessage::RAIL_STATUS_5V(hermes_mavlink::RAIL_STATUS_5V_DATA {
                     time_unix_ms: time.as_ms_timestamp(),
-                    voltage: value.data.voltage,
-                    current: value.data.current,
-                    power: value.data.power,
+                    voltage: value.voltage,
+                    current: value.current,
+                    power: value.power,
                 })
             }),
             conn.clone(),
