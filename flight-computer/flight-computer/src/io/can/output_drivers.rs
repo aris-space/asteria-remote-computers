@@ -268,9 +268,9 @@ pub fn spawn_flight_computer_debug_driver(
                         commit_hash,
                         is_git_dirty: build_info.git_dirty,
                         can_semver: [
-                            can_hal::VERSION_MAJOR,
-                            can_hal::VERSION_MINOR,
-                            can_hal::VERSION_PATCH,
+                            dp_flight_computer::VERSION_MAJOR,
+                            dp_flight_computer::VERSION_MINOR,
+                            dp_flight_computer::VERSION_PATCH,
                         ],
                     }),
                 );
