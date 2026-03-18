@@ -239,9 +239,9 @@ fn start_telemetry_streaming(
                 hermes_mavlink::MavMessage::ENVIRONMENTAL_DATA(
                     hermes_mavlink::ENVIRONMENTAL_DATA_DATA {
                         time_unix_ms: time.as_ms_timestamp(),
-                        temperature: value.temperature,
+                        temperature: value.temperature.0,
                         humidity: value.humidity,
-                        pressure: value.pressure,
+                        pressure: value.pressure.0,
                     },
                 )
             }),
