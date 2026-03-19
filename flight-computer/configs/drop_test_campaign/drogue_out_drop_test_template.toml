@@ -45,17 +45,7 @@ check_pss_boards = false       # Not connected during drop tests
 [state_machine.states."Waiting"]
 type = "Waiting"
 manual_transitions = [
-    { target = "Calibration", display = "Calibration" },
-    { target = "Soft Failure", display = "Manual Reset", abort = true },
-]
-
-# TODO Replace this with the actual Calibration state
-# There should be a field with the time limit for calibration and telemetry and
-# a field with the name of the state we transition to in case the calibration fails or telemetry is lost
-[state_machine.states."Calibration"]
-type = "Waiting"
-manual_transitions = [
-    { target = "Ready", display = "Skip Calibration" },
+    { target = "Ready", display = "Ready" },
     { target = "Soft Failure", display = "Manual Reset", abort = true },
 ]
 
