@@ -218,7 +218,7 @@ mod tests {
     use quote::quote;
 
     #[test]
-    fn test_darling_parsing() {
+    fn test_broadcast_input_parsing() {
         let input = quote! {
             #[broadcast(
                 message_type = "SensorMessage",
@@ -295,11 +295,11 @@ mod tests {
             "missing field b clone in: {output_str}"
         );
         assert!(
-            output_str.contains("| v | Msg :: A (v)"),
+            output_str.contains("| __value | Msg :: A (__value)"),
             "missing closure A in: {output_str}"
         );
         assert!(
-            output_str.contains("| v | Msg :: B (v)"),
+            output_str.contains("| __value | Msg :: B (__value)"),
             "missing closure B in: {output_str}"
         );
         assert!(
@@ -333,6 +333,27 @@ mod tests {
             #[broadcast(message_type = "Msg", loop_type = "MyLoop")]
             struct Data {
                 #[datapoint(pattern = "Msg::A(#value)")]
+                #[broadcast(min_freq_hz = 1.)]
+                a: Watchable<i32>,
+            }
+        };
+
+        let parsed: syn::DeriveInput = syn::parse2(input).expect("failed to parse input");
+        let output = derive_broadcast_impl(&parsed);
+        let output_str = output.to_string();
+
+        assert!(
+            output_str.contains("error"),
+            "expected error in: {output_str}"
+        );
+    }
+
+    #[test]
+    fn test_error_on_missing_datapoint() {
+        let input = quote! {
+            #[broadcast(message_type = "Msg", loop_type = "MyLoop")]
+            struct Data {
+                #[broadcast(min_freq_hz = 1., max_freq_hz = 1.)]
                 a: Watchable<i32>,
             }
         };
