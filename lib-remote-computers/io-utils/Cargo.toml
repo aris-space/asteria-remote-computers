@@ -5,6 +5,9 @@ edition = "2024"
 
 [dependencies]
 collector-derive = { path = "./macros/collector" }
+broadcast-derive = { path = "./macros/broadcast" }
+tokio = { version = "1", features = ["rt"] }
+watchable = "1.1.2"
 
 [lints]
 workspace = true
