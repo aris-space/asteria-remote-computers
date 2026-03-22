@@ -9,5 +9,8 @@ broadcast-derive = { path = "./macros/broadcast" }
 tokio = { version = "1", features = ["rt"] }
 watchable = "1.1.2"
 
+[dev-dependencies]
+tokio = { version = "1", features = ["rt", "macros"] }
+
 [lints]
 workspace = true
