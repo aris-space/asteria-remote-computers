@@ -1,7 +1,7 @@
 //! The `Broadcast` derive macro spawns a telemetry broadcast tokio task for each annotated field.
 //!
 //! For each field annotated with `#[broadcast]`, this generates a
-//! [`tokio::spawn`] call that invokes the configured [`BroadcastLoop`][io_utils::BroadcastLoop]
+//! `tokio::spawn` call that invokes the configured `io_utils::BroadcastLoop`
 //! implementation.
 //!
 //! ## Basic Usage
@@ -53,14 +53,14 @@
 //! `#[broadcast(message_type = ..., loop_type = ...)]`
 //!
 //! - `message_type` (required): The message type produced by broadcast tasks.
-//! - `loop_type` (required): The [`BroadcastLoop`][io_utils::BroadcastLoop] implementor to use.
+//! - `loop_type` (required): The `io_utils::BroadcastLoop` implementor to use.
 //!
 //! ## Field Attributes
 //!
 //! For a field to be broadcast it needs to have:
 //!
 //! - `#[broadcast(min_freq_hz = ..., max_freq_hz = ...)]`: Frequency bounds passed to
-//!   [`BroadcastLoop::broadcast_loop`][io_utils::BroadcastLoop::broadcast_loop].
+//!   `io_utils::BroadcastLoop::broadcast_loop`.
 //!   Float literals are required (e.g. `1.` or `1.0`).
 //! - `#[datapoint(pattern = "...")]`: Maps the field value to a message variant.
 //!   The `#value` placeholder becomes the closure argument.
