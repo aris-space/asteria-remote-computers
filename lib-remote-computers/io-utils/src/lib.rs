@@ -72,14 +72,11 @@ pub use collector_derive::Collector;
 ///     handle.abort();
 /// }
 /// ```
-///
-/// ## How the macro works
-///
-/// `start_broadcasting` spawns one tokio task per annotated field. Each task
-/// reads updates from the field's [`Watchable`][watchable::Watchable] and forwards
-/// them to `channel`, using the configured [`BroadcastLoop`] implementation to
-/// control timing.
 pub trait Broadcast<T> {
+    /// When derived, this function spawns one tokio task per annotated field.
+    /// Each task reads updates from the field's [`Watchable`][watchable::Watchable]
+    /// and forwards them to `channel` in a time aware fashion,
+    /// depending on the [`BroadcastLoop`] implementation given to a macro attribute.
     fn start_broadcasting(
         &self,
         channel: std::sync::mpsc::Sender<T>,

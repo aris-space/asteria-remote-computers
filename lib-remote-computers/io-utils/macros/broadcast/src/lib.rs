@@ -80,11 +80,11 @@
 // The [`darling::FromVariant`] macro seems to have needless continues
 #![allow(clippy::needless_continue)]
 
-use darling::{FromDeriveInput, FromField, ast};
+use darling::{FromDeriveInput, FromField, ast, util::Flag};
 use proc_macro::TokenStream;
 use proc_macro2::Literal;
 use quote::quote;
-use syn::parse_macro_input;
+use syn::{parse_macro_input, spanned::Spanned};
 
 /// Struct-level attributes parsed from `#[broadcast(...)]`.
 #[derive(Debug, FromDeriveInput)]
@@ -109,20 +109,16 @@ struct BroadcastField {
     ty: syn::Type,
 
     /// The match pattern containing `#value`, from `#[datapoint(pattern = "...")]`.
-    #[darling(default)]
     pattern: Option<String>,
 
     /// Minimum broadcast frequency in Hz, from `#[broadcast(min_freq_hz = ...)]`.
-    #[darling(default)]
     min_freq_hz: Option<f32>,
 
     /// Maximum broadcast frequency in Hz, from `#[broadcast(max_freq_hz = ...)]`.
-    #[darling(default)]
     max_freq_hz: Option<f32>,
 
     /// If true, delegate to the field's own `Broadcast` impl via `start_broadcasting`.
-    #[darling(default)]
-    flatten: bool,
+    flatten: Flag,
 }
 
 /// Derive macro for implementing the `Broadcast` trait.
@@ -153,77 +149,93 @@ fn derive_broadcast_impl(raw_input: &syn::DeriveInput) -> proc_macro2::TokenStre
         .fields;
 
     // Each element is a statement that pushes/extends __handles.
-    let mut handle_stmts = Vec::new();
+    let mut error = darling::Error::accumulator();
 
-    for field in fields {
-        let field_name = field
-            .ident
-            .as_ref()
-            .expect("darling restricted to struct_named");
+    let handle_stmts: Vec<_> = fields
+        .iter()
+        .filter_map(|field| {
+            let field_name = field
+                .ident
+                .as_ref()
+                .expect("darling restricted to struct_named");
 
-        if field.flatten {
-            if field.min_freq_hz.is_some() || field.max_freq_hz.is_some() || field.pattern.is_some()
-            {
-                return darling::Error::custom(format!(
-                    "field `{field_name}` has #[broadcast(flatten)] and must not have min_freq_hz, max_freq_hz, or #[datapoint]"
-                ))
-                .write_errors();
-            }
-            let field_ty = &field.ty;
-            handle_stmts.push(quote! {
-                __handles.extend(
-                    <#field_ty as io_utils::Broadcast<#message_type>>::start_broadcasting(
-                        &self.#field_name,
-                        channel.clone(),
-                    )
-                );
-            });
-            continue;
-        }
-
-        let (Some(min_freq_hz), Some(max_freq_hz)) = (field.min_freq_hz, field.max_freq_hz) else {
-            if field.max_freq_hz.is_some() || field.min_freq_hz.is_some() {
-                return darling::Error::custom(format!(
-                    "field `{field_name}` has #[broadcast] with min_freq_hz or max_freq_hz, but not both"
-                ))
-                .write_errors();
-            }
-            // skip fields without #[broadcast]
-            continue;
-        };
-
-        let Some(ref pattern) = field.pattern else {
-            return darling::Error::custom(format!(
-                "field `{field_name}` has #[broadcast] but is missing #[datapoint]"
-            ))
-            .write_errors();
-        };
-
-        let closure_body: proc_macro2::TokenStream =
-            match pattern.replace("#value", "__value").parse() {
-                Ok(t) => t,
-                Err(e) => {
-                    return darling::Error::custom(format!("invalid pattern: {e}")).write_errors();
+            if field.flatten.is_present() {
+                if field.min_freq_hz.is_some()
+                    || field.max_freq_hz.is_some()
+                    || field.pattern.is_some()
+                {
+                    error.push(
+                        darling::Error::custom(format!(
+                            "field `{field_name}` has #[broadcast(flatten)] \
+                             and must not have min_freq_hz, max_freq_hz, or #[datapoint]"
+                        ))
+                        .with_span(&field.ident.span()),
+                    );
+                    return None;
                 }
+                let field_ty = &field.ty;
+                return Some(quote! {
+                    __handles.extend(
+                        <#field_ty as io_utils::Broadcast<#message_type>>::start_broadcasting(
+                            &self.#field_name,
+                            channel.clone(),
+                        )
+                    );
+                });
+            }
+
+            let (Some(min_freq_hz), Some(max_freq_hz)) = (field.min_freq_hz, field.max_freq_hz)
+            else {
+                if field.max_freq_hz.is_some() || field.min_freq_hz.is_some() {
+                    error.push(darling::Error::custom(format!(
+                    "field `{field_name}` has #[broadcast] with min_freq_hz or max_freq_hz, \
+                     but not both"
+                )).with_span(&field.ident.span()));
+                    return None;
+                }
+                // skip fields without #[broadcast]
+                return None;
             };
 
-        let min_lit = Literal::f32_suffixed(min_freq_hz);
-        let max_lit = Literal::f32_suffixed(max_freq_hz);
+            let Some(ref pattern) = field.pattern else {
+                error.push(
+                    darling::Error::custom(format!(
+                        "field `{field_name}` has #[broadcast] but is missing #[datapoint]"
+                    ))
+                    .with_span(&field.ident.span()),
+                );
+                return None;
+            };
 
-        handle_stmts.push(quote! {
-            __handles.push(
-                ::tokio::spawn(
-                    <#loop_type as io_utils::BroadcastLoop<#message_type>>::broadcast_loop(
-                        self.#field_name.clone(),
-                        |__value| #closure_body,
-                        channel.clone(),
-                        #min_lit,
-                        #max_lit,
-                    ),
-                )
-                .abort_handle()
-            );
-        });
+            let closure_body = pattern
+                .replace("#value", "__value")
+                .parse()
+                .unwrap_or_else(|err| {
+                    darling::Error::custom(format!("invalid pattern: {err}")).write_errors()
+                });
+
+            let min_lit = Literal::f32_suffixed(min_freq_hz);
+            let max_lit = Literal::f32_suffixed(max_freq_hz);
+
+            Some(quote! {
+                __handles.push(
+                    ::tokio::spawn(
+                        <#loop_type as io_utils::BroadcastLoop<#message_type>>::broadcast_loop(
+                            self.#field_name.clone(),
+                            |__value| #closure_body,
+                            channel.clone(),
+                            #min_lit,
+                            #max_lit,
+                        ),
+                    )
+                    .abort_handle()
+                );
+            })
+        })
+        .collect();
+
+    if let Err(err) = error.finish() {
+        return err.write_errors();
     }
 
     if handle_stmts.is_empty() {
