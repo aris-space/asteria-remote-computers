@@ -106,6 +106,7 @@ struct BroadcastInput {
 #[darling(attributes(datapoint, broadcast))]
 struct BroadcastField {
     ident: Option<syn::Ident>,
+    ty: syn::Type,
 
     /// The match pattern containing `#value`, from `#[datapoint(pattern = "...")]`.
     #[darling(default)]
@@ -168,9 +169,10 @@ fn derive_broadcast_impl(raw_input: &syn::DeriveInput) -> proc_macro2::TokenStre
                 ))
                 .write_errors();
             }
+            let field_ty = &field.ty;
             handle_stmts.push(quote! {
                 __handles.extend(
-                    <io_utils::Broadcast<#message_type>>::start_broadcasting(
+                    <#field_ty as io_utils::Broadcast<#message_type>>::start_broadcasting(
                         &self.#field_name,
                         channel.clone(),
                     )
@@ -373,7 +375,7 @@ mod tests {
         );
         assert!(
             output_str
-                .contains("< io_utils :: Broadcast < Msg >> :: start_broadcasting (& self . inner"),
+                .contains("< Inner as io_utils :: Broadcast < Msg >> :: start_broadcasting (& self . inner"),
             "missing delegated start_broadcasting in: {output_str}"
         );
         assert!(
