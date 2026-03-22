@@ -247,142 +247,12 @@ fn derive_broadcast_impl(raw_input: &syn::DeriveInput) -> proc_macro2::TokenStre
     }
 }
 
+/// Checks some error messages.
+/// The functional generated code is checked in an integration test in `io-utils`.
 #[cfg(test)]
 mod tests {
     use super::*;
     use quote::quote;
-
-    #[test]
-    fn test_broadcast_input_parsing() {
-        let input = quote! {
-            #[broadcast(
-                message_type = "SensorMessage",
-                loop_type = "PeriodicLoop"
-            )]
-            struct Sensors {
-                #[datapoint(pattern = "SensorMessage::Temperature(#value)")]
-                #[broadcast(min_freq_hz = 1., max_freq_hz = 10.)]
-                temperature: Watchable<f32>,
-
-                // Field without datapoint should be skipped
-                other: String,
-            }
-        };
-
-        let parsed: syn::DeriveInput = syn::parse2(input).expect("failed to parse input");
-        let broadcast_input =
-            BroadcastInput::from_derive_input(&parsed).expect("darling parsing failed");
-
-        let fields = broadcast_input
-            .data
-            .as_ref()
-            .take_struct()
-            .expect("should be struct")
-            .fields;
-
-        assert_eq!(fields.len(), 2);
-        assert_eq!(
-            fields[0].pattern,
-            Some("SensorMessage::Temperature(#value)".to_string())
-        );
-        assert!(fields[0].min_freq_hz.is_some());
-        assert!(fields[0].max_freq_hz.is_some());
-        assert_eq!(fields[1].pattern, None);
-    }
-
-    #[test]
-    fn test_code_generation() {
-        let input = quote! {
-            #[broadcast(message_type = "Msg", loop_type = "MyLoop")]
-            struct Data {
-                #[datapoint(pattern = "Msg::A(#value)")]
-                #[broadcast(min_freq_hz = 5., max_freq_hz = 20.)]
-                a: Watchable<i32>,
-
-                #[datapoint(pattern = "Msg::B(#value)")]
-                #[broadcast(min_freq_hz = 1., max_freq_hz = 2.5)]
-                b: Watchable<String>,
-            }
-        };
-
-        let parsed: syn::DeriveInput = syn::parse2(input).expect("failed to parse input");
-        let output = derive_broadcast_impl(&parsed);
-        let output_str = output.to_string();
-
-        assert!(
-            output_str.contains("impl io_utils :: Broadcast < Msg > for Data"),
-            "missing impl header in: {output_str}"
-        );
-        assert!(
-            output_str.contains("fn start_broadcasting"),
-            "missing start_broadcasting in: {output_str}"
-        );
-        assert!(
-            output_str.contains("MyLoop as io_utils :: BroadcastLoop < Msg >"),
-            "missing loop type in: {output_str}"
-        );
-        assert!(
-            output_str.contains("self . a . clone ()"),
-            "missing field a clone in: {output_str}"
-        );
-        assert!(
-            output_str.contains("self . b . clone ()"),
-            "missing field b clone in: {output_str}"
-        );
-        assert!(
-            output_str.contains("| __value | Msg :: A (__value)"),
-            "missing closure A in: {output_str}"
-        );
-        assert!(
-            output_str.contains("| __value | Msg :: B (__value)"),
-            "missing closure B in: {output_str}"
-        );
-        assert!(
-            output_str.contains("abort_handle"),
-            "missing abort_handle in: {output_str}"
-        );
-        assert!(
-            output_str.contains("let mut __handles"),
-            "missing __handles vec in: {output_str}"
-        );
-    }
-
-    #[test]
-    fn test_flatten_code_generation() {
-        let input = quote! {
-            #[broadcast(message_type = "Msg", loop_type = "MyLoop")]
-            struct Outer {
-                #[broadcast(flatten)]
-                inner: Inner,
-
-                #[datapoint(pattern = "Msg::Count(#value)")]
-                #[broadcast(min_freq_hz = 1., max_freq_hz = 10.)]
-                count: Watchable<u32>,
-            }
-        };
-
-        let parsed: syn::DeriveInput = syn::parse2(input).expect("failed to parse input");
-        let output = derive_broadcast_impl(&parsed);
-        let output_str = output.to_string();
-
-        assert!(
-            output_str.contains("impl io_utils :: Broadcast < Msg > for Outer"),
-            "missing impl header in: {output_str}"
-        );
-        assert!(
-            output_str.contains("__handles . extend"),
-            "missing extend for flatten in: {output_str}"
-        );
-        assert!(
-            output_str
-                .contains("< Inner as io_utils :: Broadcast < Msg >> :: start_broadcasting (& self . inner"),
-            "missing delegated start_broadcasting in: {output_str}"
-        );
-        assert!(
-            output_str.contains("__handles . push"),
-            "missing push for count field in: {output_str}"
-        );
-    }
 
     #[test]
     fn test_error_on_flatten_with_freq() {
@@ -399,7 +269,7 @@ mod tests {
         let output_str = output.to_string();
 
         assert!(
-            output_str.contains("error"),
+            output_str.contains("field `inner` has #[broadcast(flatten)] and must not have min_freq_hz, max_freq_hz, or #[datapoint]"),
             "expected error in: {output_str}"
         );
     }
@@ -418,7 +288,7 @@ mod tests {
         let output_str = output.to_string();
 
         assert!(
-            output_str.contains("error"),
+            output_str.contains("at least one field must have a #[broadcast(...)] or #[broadcast(flatten)] attribute"),
             "expected error in: {output_str}"
         );
     }
@@ -439,7 +309,9 @@ mod tests {
         let output_str = output.to_string();
 
         assert!(
-            output_str.contains("error"),
+            output_str.contains(
+                "field `a` has #[broadcast] with min_freq_hz or max_freq_hz, but not both"
+            ),
             "expected error in: {output_str}"
         );
     }
@@ -459,7 +331,7 @@ mod tests {
         let output_str = output.to_string();
 
         assert!(
-            output_str.contains("error"),
+            output_str.contains("field `a` has #[broadcast] but is missing #[datapoint]"),
             "expected error in: {output_str}"
         );
     }
