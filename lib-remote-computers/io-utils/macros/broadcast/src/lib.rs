@@ -131,6 +131,7 @@ pub fn derive_broadcast(input: TokenStream) -> TokenStream {
 }
 
 /// Inner implementation using proc_macro2 types (testable).
+#[allow(clippy::too_many_lines)] // but it flows quite linearly
 fn derive_broadcast_impl(raw_input: &syn::DeriveInput) -> proc_macro2::TokenStream {
     let broadcast_input = match BroadcastInput::from_derive_input(raw_input) {
         Ok(v) => v,
@@ -148,9 +149,9 @@ fn derive_broadcast_impl(raw_input: &syn::DeriveInput) -> proc_macro2::TokenStre
         .expect("darling restricted to struct_named")
         .fields;
 
-    // Each element is a statement that pushes/extends __handles.
     let mut error = darling::Error::accumulator();
 
+    // Each element is a statement that pushes/extends __handles.
     let handle_stmts: Vec<_> = fields
         .iter()
         .filter_map(|field| {
