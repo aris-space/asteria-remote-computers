@@ -21,6 +21,9 @@
 //!
 //!     // Fields without #[broadcast] are ignored.
 //!     other: String,
+//!
+//!     #[broadcast(flatten)]
+//!     nested_fields: NestedSensors,
 //! }
 //! ```
 //!
@@ -64,6 +67,10 @@
 //!   Float literals are required (e.g. `1.` or `1.0`).
 //! - `#[datapoint(pattern = "...")]`: Maps the field value to a message variant.
 //!   The `#value` placeholder becomes the closure argument.
+//!
+//! Alternatively, a field may have the `#[broadcast(flatten)]` attribute,
+//! then it delegates broadcasting to the field that itself
+//! implements `Broadcast<T>`.
 //!
 //! ## Hygiene
 //!
@@ -111,6 +118,10 @@ struct BroadcastField {
     /// Maximum broadcast frequency in Hz, from `#[broadcast(max_freq_hz = ...)]`.
     #[darling(default)]
     max_freq_hz: Option<f32>,
+
+    /// If true, delegate to the field's own `Broadcast` impl via `start_broadcasting`.
+    #[darling(default)]
+    flatten: bool,
 }
 
 /// Derive macro for implementing the `Broadcast` trait.
@@ -140,13 +151,33 @@ fn derive_broadcast_impl(raw_input: &syn::DeriveInput) -> proc_macro2::TokenStre
         .expect("darling restricted to struct_named")
         .fields;
 
-    let mut spawn_exprs = Vec::new();
+    // Each element is a statement that pushes/extends __handles.
+    let mut handle_stmts = Vec::new();
 
     for field in fields {
         let field_name = field
             .ident
             .as_ref()
             .expect("darling restricted to struct_named");
+
+        if field.flatten {
+            if field.min_freq_hz.is_some() || field.max_freq_hz.is_some() || field.pattern.is_some()
+            {
+                return darling::Error::custom(format!(
+                    "field `{field_name}` has #[broadcast(flatten)] and must not have min_freq_hz, max_freq_hz, or #[datapoint]"
+                ))
+                .write_errors();
+            }
+            handle_stmts.push(quote! {
+                __handles.extend(
+                    <io_utils::Broadcast<#message_type>>::start_broadcasting(
+                        &self.#field_name,
+                        channel.clone(),
+                    )
+                );
+            });
+            continue;
+        }
 
         let (Some(min_freq_hz), Some(max_freq_hz)) = (field.min_freq_hz, field.max_freq_hz) else {
             if field.max_freq_hz.is_some() || field.min_freq_hz.is_some() {
@@ -177,23 +208,25 @@ fn derive_broadcast_impl(raw_input: &syn::DeriveInput) -> proc_macro2::TokenStre
         let min_lit = Literal::f32_suffixed(min_freq_hz);
         let max_lit = Literal::f32_suffixed(max_freq_hz);
 
-        spawn_exprs.push(quote! {
-            ::tokio::spawn(
-                <#loop_type as io_utils::BroadcastLoop<#message_type>>::broadcast_loop(
-                    self.#field_name.clone(),
-                    |__value| #closure_body,
-                    channel.clone(),
-                    #min_lit,
-                    #max_lit,
-                ),
-            )
-            .abort_handle()
+        handle_stmts.push(quote! {
+            __handles.push(
+                ::tokio::spawn(
+                    <#loop_type as io_utils::BroadcastLoop<#message_type>>::broadcast_loop(
+                        self.#field_name.clone(),
+                        |__value| #closure_body,
+                        channel.clone(),
+                        #min_lit,
+                        #max_lit,
+                    ),
+                )
+                .abort_handle()
+            );
         });
     }
 
-    if spawn_exprs.is_empty() {
+    if handle_stmts.is_empty() {
         return darling::Error::custom(
-            "at least one field must have a #[broadcast(...)] attribute",
+            "at least one field must have a #[broadcast(...)] or #[broadcast(flatten)] attribute",
         )
         .write_errors();
     }
@@ -204,9 +237,9 @@ fn derive_broadcast_impl(raw_input: &syn::DeriveInput) -> proc_macro2::TokenStre
                 &self,
                 channel: ::std::sync::mpsc::Sender<#message_type>,
             ) -> ::std::vec::Vec<::tokio::task::AbortHandle> {
-                vec![
-                    #(#spawn_exprs),*
-                ]
+                let mut __handles = ::std::vec::Vec::new();
+                #(#handle_stmts)*
+                __handles
             }
         }
     }
@@ -305,6 +338,67 @@ mod tests {
         assert!(
             output_str.contains("abort_handle"),
             "missing abort_handle in: {output_str}"
+        );
+        assert!(
+            output_str.contains("let mut __handles"),
+            "missing __handles vec in: {output_str}"
+        );
+    }
+
+    #[test]
+    fn test_flatten_code_generation() {
+        let input = quote! {
+            #[broadcast(message_type = "Msg", loop_type = "MyLoop")]
+            struct Outer {
+                #[broadcast(flatten)]
+                inner: Inner,
+
+                #[datapoint(pattern = "Msg::Count(#value)")]
+                #[broadcast(min_freq_hz = 1., max_freq_hz = 10.)]
+                count: Watchable<u32>,
+            }
+        };
+
+        let parsed: syn::DeriveInput = syn::parse2(input).expect("failed to parse input");
+        let output = derive_broadcast_impl(&parsed);
+        let output_str = output.to_string();
+
+        assert!(
+            output_str.contains("impl io_utils :: Broadcast < Msg > for Outer"),
+            "missing impl header in: {output_str}"
+        );
+        assert!(
+            output_str.contains("__handles . extend"),
+            "missing extend for flatten in: {output_str}"
+        );
+        assert!(
+            output_str
+                .contains("< io_utils :: Broadcast < Msg >> :: start_broadcasting (& self . inner"),
+            "missing delegated start_broadcasting in: {output_str}"
+        );
+        assert!(
+            output_str.contains("__handles . push"),
+            "missing push for count field in: {output_str}"
+        );
+    }
+
+    #[test]
+    fn test_error_on_flatten_with_freq() {
+        let input = quote! {
+            #[broadcast(message_type = "Msg", loop_type = "MyLoop")]
+            struct Data {
+                #[broadcast(flatten, min_freq_hz = 1., max_freq_hz = 2.)]
+                inner: Inner,
+            }
+        };
+
+        let parsed: syn::DeriveInput = syn::parse2(input).expect("failed to parse input");
+        let output = derive_broadcast_impl(&parsed);
+        let output_str = output.to_string();
+
+        assert!(
+            output_str.contains("error"),
+            "expected error in: {output_str}"
         );
     }
 
