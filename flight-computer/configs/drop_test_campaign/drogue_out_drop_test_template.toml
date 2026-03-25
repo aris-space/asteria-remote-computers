@@ -34,20 +34,10 @@ manual_transitions = [{ target = "Idle", display = "Restart" }]
 # This state continues only when all boards have sent healthy reports
 [state_machine.states."Diagnostics"]
 type = "Diagnostics"
-on_tests_pass = "Waiting"
+on_tests_pass = "Ready"
 on_tests_fail = "Soft Failure"
 outdated_threshold_sec = 5
 check_pss_boards = false       # Not connected during drop tests
-
-# TODO Replace this with the actual WaitingHealthy logic
-# There should be a field with the time limit for telemetry and
-# a field with the name of the state we transition to in case the telemetry is lost
-[state_machine.states."Waiting"]
-type = "Waiting"
-manual_transitions = [
-    { target = "Ready", display = "Ready" },
-    { target = "Soft Failure", display = "Manual Reset", abort = true },
-]
 
 # This state waits for a manual command which indicates that the rocket is ready for hooking onto the helicopter
 [state_machine.states."Ready"]
