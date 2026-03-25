@@ -33,5 +33,12 @@ must_use_candidate = "allow"         # Not all `new` calls are problematic to no
 implicit_hasher = "allow"            # We'll only ever use the default hasher
 doc_markdown = "allow"               # Too many false positives for acronymes I can't bother to whitelist
 
+[workspace.dependencies]
+serde = { version = "1.0.228", features = ["derive"], default-features = false }
+bincode = { version = "2.0.1", features = ["derive", "serde"], default-features = false }
+defmt = { version = "1.0.1" }
+arbitrary = { version = "1.4.1", features = ["derive"] }
+utoipa = { version = "5.4.0" }
+
 [patch.crates-io]
 ur20 = { git = "https://github.com/slowtec/ur20.git", rev = "592771d18d547e100aacd7204e65bf7d989910ac" }
