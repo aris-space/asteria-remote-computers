@@ -1,26 +1,26 @@
 [workspace]
 resolver = "3"
-
 members = [
-    "lib-remote-computers/lib-mission",
-    "lib-remote-computers/dummy-controller",
-    "lib-remote-computers/pss-drivers",
     "lib-remote-computers/io-utils",
     "lib-remote-computers/io-utils/macros/*",
+    "lib-remote-computers/lib-mission",
+    "lib-remote-computers/pss-drivers",
     # "rfs-computer/rfs-computer",
     # "rfs-computer/uremote-electronics",
     "rfs-computer/keller23sx",
-    "rfs-computer/tokio-modbus-shared",
     "rfs-computer/lox-fill-valve",
+    "rfs-computer/tokio-modbus-shared",
     "flight-computer/flight-computer",
     "flight-computer/hermes-recovery-gnc/gnc_interface",
     "flight-computer/hermes-recovery-gnc/hermes_gnc",
-    "data-definitions/mavlink",
-    "data-definitions/can",
     "data-definitions/can-hal",
-    "data-definitions/datatypes",
-    "data-definitions/messages",
+    "data-definitions/core",
     "data-definitions/datapoints/*",
+    "data-definitions/datatypes",
+    "data-definitions/macro-gated-derive",
+    "data-definitions/macros",
+    "data-definitions/mavlink-hal",
+    "data-definitions/messages",
 ]
 
 [workspace.lints.clippy]

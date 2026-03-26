@@ -90,9 +90,9 @@ impl InputTree {
             .await?,
             location.watched().map(|l| {
                 (
-                    l.latitude,
-                    l.longitude,
-                    l.altitude,
+                    l.location_latitude,
+                    l.location_longitude,
+                    l.location_hamsl,
                     l.horizontal_accuracy,
                     l.vertical_accuracy,
                 )
@@ -263,7 +263,14 @@ impl InputTree {
                 ],
             )
             .await?,
-            rfs_computer_status.watched().map(|(s, _)| s),
+            rfs_computer_status.watched().map(|(s, _)| {
+                (
+                    s.common.errors,
+                    s.common.micros_since_restart,
+                    s.has_pss_control,
+                    s.is_ignition_armed == datatypes::status::ArmingState::Armed,
+                )
+            }),
             time.watched(),
         );
         // Log arming states

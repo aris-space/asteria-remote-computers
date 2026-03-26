@@ -733,14 +733,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "dummy-controller"
-version = "0.1.0"
-dependencies = [
- "hermes-mavlink",
- "mavlink-core",
-]
-
-[[package]]
 name = "earcutr"
 version = "0.4.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -862,7 +854,9 @@ dependencies = [
  "glob",
  "gnc_interface",
  "hermes_gnc",
+ "io-utils",
  "lib-mission",
+ "mavio",
  "mavlink-core",
  "messages",
  "nalgebra 0.33.2",
@@ -1665,6 +1659,7 @@ dependencies = [
  "sha2",
  "tbytes",
  "thiserror 2.0.17",
+ "tokio",
 ]
 
 [[package]]

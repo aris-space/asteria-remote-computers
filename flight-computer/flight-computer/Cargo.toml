@@ -8,6 +8,7 @@ workspace = true
 
 [dependencies]
 lib-mission = { path = "../../lib-remote-computers/lib-mission" }
+io-utils = { path = "../../lib-remote-computers/io-utils" }
 gnc_interface = { path = "../hermes-recovery-gnc/gnc_interface" }
 hermes_gnc = { path = "../hermes-recovery-gnc/hermes_gnc", optional = true }
 datatypes = { path = "../../data-definitions/datatypes", features = [
@@ -17,6 +18,7 @@ datatypes = { path = "../../data-definitions/datatypes", features = [
 messages = { path = "../../data-definitions/messages", features = [
     "derive_debug",
     "derive_serde",
+    "mavlink",
 ], default-features = false }
 pss-drivers = { path = "../../lib-remote-computers/pss-drivers" }
 tokio = { version = "1.37.0", features = ["full"] }
@@ -28,6 +30,7 @@ async-trait = "0.1.83"
 tracing = "0.1.41"
 mavlink-core = { version = "0.13.1" }
 nalgebra = "0.33.2"
+mavio = { version = "0.5.10", features = ["std", "tokio"] }
 
 [target.'cfg(target_os = "linux")'.dependencies]
 socketcan = "3.5.0"
