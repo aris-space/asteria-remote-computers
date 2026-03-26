@@ -96,7 +96,7 @@ struct BroadcastInput {
     /// The message type produced by broadcast tasks (e.g., `"SensorMessage"`).
     message_type: syn::Type,
 
-    /// The [`BroadcastLoop`][io_utils::BroadcastLoop] implementor (e.g., `"PeriodicLoop"`).
+    /// The `BroadcastLoop` implementor (e.g., `"PeriodicLoop"`).
     /// Named `loop_type` because `loop` is a reserved keyword.
     loop_type: syn::Type,
 }
