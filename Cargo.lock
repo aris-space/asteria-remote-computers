@@ -2308,33 +2308,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7a2d987857b319362043e95f5353c0535c1f58eec5336fdfcf626430af7def58"
 
 [[package]]
-name = "rfs-computer"
-version = "0.1.0"
-dependencies = [
- "async-trait",
- "built",
- "glob",
- "hermes-can",
- "keller23sx",
- "lib-mission",
- "lox-fill-valve",
- "mavlink-core",
- "pss-drivers",
- "serde",
- "socketcan",
- "thiserror 1.0.69",
- "tokio",
- "tokio-modbus",
- "tokio-modbus-shared",
- "tokio-serial",
- "tokio_serial_pacing",
- "toml",
- "tracing",
- "uremote-electronics",
- "watchable",
-]
-
-[[package]]
 name = "robust"
 version = "1.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3091,45 +3064,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6d49784317cd0d1ee7ec5c716dd598ec5b4483ea832a2dced265471cc0f690ae"
 
 [[package]]
-name = "ur20"
-version = "0.6.0"
-source = "git+https://github.com/slowtec/ur20.git?rev=592771d18d547e100aacd7204e65bf7d989910ac#592771d18d547e100aacd7204e65bf7d989910ac"
-dependencies = [
- "byteorder",
- "lazy_static",
- "num-derive",
- "num-traits",
-]
-
-[[package]]
-name = "ur20-modbus"
-version = "0.5.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ab4adf311ce3f37742d7bec2985baab91449bea159939764d1fa61b11fff127f"
-dependencies = [
- "log",
- "thiserror 2.0.17",
- "tokio-modbus",
- "ur20",
-]
-
-[[package]]
-name = "uremote-electronics"
-version = "0.1.0"
-dependencies = [
- "futures-util",
- "lib-mission",
- "serde",
- "serde_json",
- "thiserror 2.0.17",
- "tokio",
- "tracing",
- "ur20",
- "ur20-modbus",
- "watchable",
-]
-
-[[package]]
 name = "url"
 version = "2.5.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3728,3 +3662,8 @@ dependencies = [
  "quote",
  "syn 2.0.114",
 ]
+
+[[patch.unused]]
+name = "ur20"
+version = "0.6.0"
+source = "git+https://github.com/slowtec/ur20.git?rev=592771d18d547e100aacd7204e65bf7d989910ac#592771d18d547e100aacd7204e65bf7d989910ac"
