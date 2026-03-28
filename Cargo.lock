@@ -157,10 +157,10 @@ dependencies = [
 name = "broadcast-derive"
 version = "0.1.0"
 dependencies = [
- "darling",
+ "darling 0.20.11",
  "proc-macro2",
  "quote",
- "syn 2.0.108",
+ "syn 2.0.114",
 ]
 
 [[package]]
