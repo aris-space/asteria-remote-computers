@@ -19,7 +19,7 @@ use watchable::Watchable;
 use crate::io::input::BoardsHealthyAsOf;
 use crate::io::types::{Acceleration, Location, Orientation, SteeringMotorRevolutions, Velocity};
 
-/// Listens for [`messages::board_status`] messages and updates [`BoardsHealthyAsOf`].
+/// Listens for board_status messages and updates [`BoardsHealthyAsOf`].
 ///
 /// Additionally stores the full RFS computer status and arming states.
 #[allow(clippy::too_many_lines)] // fine, probably will be refactored soon
@@ -323,7 +323,7 @@ pub fn spawn_and_register_raw_unprocessed_data_driver(
     tokio::spawn(task).abort_handle()
 }
 
-/// Listens for [`messages::event_messages::SteeringActualPositions`].
+/// Listens for `SteeringActualPositions` messages.
 pub fn spawn_and_register_actual_steering_driver(
     registry: &mut ConsumerRegistry,
     actual_pos: Watchable<SteeringMotorRevolutions>,
