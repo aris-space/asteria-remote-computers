@@ -182,42 +182,31 @@ fn read_uplink_once<ActuatorName>(
     }
 }
 
-/// Spawns a task which calls `watched_value` every `period` and sends it to `telemetry_sender`.
-pub fn spawn_periodic_telemetry_streamer(
-    mut watched_value: impl FnMut() -> MavMessage + Send + 'static,
-    period: Duration,
-    telemetry_sender: std::sync::mpsc::Sender<MavMessage>,
-) -> tokio::task::AbortHandle {
-    tokio::spawn(async move {
+/// A simple implementor of [`io_utils::BroadcastLoop`] that periodically send the current value.
+/// The period used is the average of min and max.
+pub struct PeriodicLoop;
+
+impl io_utils::BroadcastLoop<Message> for PeriodicLoop {
+    async fn broadcast_loop<T: Send + Sync + 'static + Clone>(
+        field: watchable::Watchable<T>,
+        mut map: impl FnMut(T) -> Message + Send + 'static,
+        channel: std::sync::mpsc::Sender<Message>,
+        min_freq_hz: f32,
+        max_freq_hz: f32,
+    ) -> io_utils::NeverReturns {
+        let period = Duration::from_secs_f32(((1. / min_freq_hz) + (1. / max_freq_hz)) / 2.);
         let mut interval = tokio::time::interval(period);
         interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
         loop {
             interval.tick().await;
-            let val = watched_value();
-            if telemetry_sender.send(val).is_err() {
-                tracing::warn!("Telemetry channel was closed. Shutting down!");
-                break;
+            let val = map(field.get());
+            if channel.send(val).is_err() {
+                tracing::warn!("Telemetry channel was closed. Slowing down!");
+                tokio::time::sleep(Duration::from_millis(5001));
+                // 5001 such that new clipyy doesn't complain yet
             }
         }
-    })
-    .abort_handle()
-}
-
-/// Spawns a task which continuously reads the newest update from `watched_value` and writes it to `telemetry_sender`.
-pub fn spawn_telemetry_streamer(
-    mut watched_value: impl Watched<MavMessage> + Send + 'static,
-    telemetry_sender: std::sync::mpsc::Sender<MavMessage>,
-) -> tokio::task::AbortHandle {
-    tokio::spawn(async move {
-        loop {
-            let val = watched_value.next().await;
-            if telemetry_sender.send(val).is_err() {
-                tracing::warn!("Telemetry channel was closed. Shutting down!");
-                break;
-            }
-        }
-    })
-    .abort_handle()
+    }
 }
 
 /// Blocks on `receiver` reading message by message and sending them to MavLink.
