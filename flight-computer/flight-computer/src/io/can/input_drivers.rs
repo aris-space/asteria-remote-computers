@@ -22,6 +22,7 @@ use crate::io::types::{Acceleration, Location, Orientation, SteeringMotorRevolut
 /// Listens for [`messages::board_status`] messages and updates [`BoardsHealthyAsOf`].
 ///
 /// Additionally stores the full RFS computer status and arming states.
+#[allow(clippy::too_many_lines)] // fine, probably will be refactored soon
 pub fn spawn_and_register_board_health_driver(
     registry: &mut ConsumerRegistry,
     health: BoardsHealthyAsOf,
@@ -58,7 +59,7 @@ pub fn spawn_and_register_board_health_driver(
                     messages::Message::RecoveryBoard(dp_recovery_board::Message::BoardStatus(
                         board_status,
                     )) => {
-                        let _ = recovery_armed.update(board_status.arming_state.clone());
+                        let _ = recovery_armed.update(board_status.arming_state);
                         (
                             is_recovery_board_healthy(board_status),
                             &health.recovery_board,
@@ -82,7 +83,7 @@ pub fn spawn_and_register_board_health_driver(
                     messages::Message::EngineControlBoard(
                         dp_engine_control_board::Message::BoardStatus(board_status),
                     ) => {
-                        let _ = ecu_armed.update(board_status.armed.clone());
+                        let _ = ecu_armed.update(board_status.armed);
                         let healthy = board_status.common.errors == 0;
                         (
                             healthy,

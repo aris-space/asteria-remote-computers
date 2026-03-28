@@ -132,13 +132,13 @@ fn start_telemetry_streaming(
                 let (rfs_status, rfs_time) = rfs_computer_status.get();
                 hermes_mavlink::MavMessage::FC_STATUS(hermes_mavlink::FC_STATUS_DATA {
                     time_unix_ms: time.as_ms_timestamp(),
-                    recovery_armed: conv_armed(&recovery_armed.get()),
-                    ecu_armed: conv_armed(&ecu_armed.get()),
+                    recovery_armed: conv_armed(recovery_armed.get()),
+                    ecu_armed: conv_armed(ecu_armed.get()),
                     software_armed: armed(
                         recovery_actuators_armed.get()
                             == crate::io::types::RecoveryArmingState::Armed,
                     ),
-                    rfs_armed: conv_armed(&rfs_status.is_ignition_armed),
+                    rfs_armed: conv_armed(rfs_status.is_ignition_armed),
                     has_pss_control: pss_active.current().into(),
                     rfs_has_pss_control: rfs_status.has_pss_control.into(),
                     cats_sep_signal: (cats_separation.get()
@@ -314,7 +314,7 @@ fn armed(is_armed: bool) -> hermes_mavlink::Armed {
     }
 }
 
-fn conv_armed(is_armed: &datatypes::status::ArmingState) -> hermes_mavlink::Armed {
+fn conv_armed(is_armed: datatypes::status::ArmingState) -> hermes_mavlink::Armed {
     match is_armed {
         datatypes::status::ArmingState::Safe => hermes_mavlink::Armed::DISARMED,
         datatypes::status::ArmingState::Armed => hermes_mavlink::Armed::ARMED,
