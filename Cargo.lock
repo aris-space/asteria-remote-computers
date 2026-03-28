@@ -154,6 +154,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "broadcast-derive"
+version = "0.1.0"
+dependencies = [
+ "darling",
+ "proc-macro2",
+ "quote",
+ "syn 2.0.108",
+]
+
+[[package]]
 name = "built"
 version = "0.7.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1367,7 +1377,10 @@ dependencies = [
 name = "io-utils"
 version = "0.1.0"
 dependencies = [
+ "broadcast-derive",
  "collector-derive",
+ "tokio",
+ "watchable",
 ]
 
 [[package]]
