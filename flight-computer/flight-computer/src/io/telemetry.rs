@@ -1,6 +1,8 @@
 //! Sets up telemetry over Mavlink.
 
-use lib_mission::telemetry::{start_downlink_actor, start_uplink_actor, RemoteSystem};
+use lib_mission::telemetry::{
+    start_downlink_actor, start_uplink_actor, PeriodicLoop, RemoteSystem,
+};
 use std::net::UdpSocket;
 use std::thread::JoinHandle;
 
@@ -19,7 +21,7 @@ use tokio::task::AbortHandle;
 pub fn init_telemetry(
     config: &TelemetryConfig,
     input_tree: &InputTree,
-    output_tree: &OutputTree,
+    _output_tree: &OutputTree,
     state_machine: &StateMachine<InputTree, OutputTree, ()>,
 ) -> Result<(JoinHandle<NeverReturns>, JoinHandle<()>, Vec<AbortHandle>), Box<dyn std::error::Error>>
 {
@@ -48,7 +50,7 @@ pub fn init_telemetry(
     let downlink = start_downlink_actor(socket, rx, RemoteSystem::FlightComputer);
 
     // spawns tokio tasks which send mavlink messages periodically to the channel.
-    let mut input_streamers = input_tree.start_broadcasting(tx.clone());
+    let input_streamers = input_tree.start_broadcasting::<PeriodicLoop>(tx.clone());
 
     // TODO: current state and FC status
 

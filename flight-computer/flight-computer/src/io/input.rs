@@ -1,41 +1,42 @@
 //! Contains [`InputTree`]
 
-use crate::io::types::{
-    MainDeploymentState, SeparationState, SteeringMotorRevolutions,
-};
-use io_utils::Broadcast;
-use datatypes::status::ArmingState;
+use crate::io::types::{MainDeploymentState, SeparationState, SteeringMotorRevolutions};
+
+use datatypes::status::{ArmingState, UplinkTelemetryHealth};
 use datatypes::units::RailStatus;
-use dp_sensor_carrier::{EnvironmentalData, ImuData, OrientationData, PositionData, VelocityData};
-use dp_rfs_computer::RfsComputerStatus;
-use lib_mission::telemetry::TelemetryHealth;
+use io_utils::Broadcast;
 use lib_mission::util::time::MissionTime;
 use lib_mission::{actuator_control, transition};
+use messages::datapoints::dp_power_board::Message as PWBMessage;
 use messages::datapoints::dp_rfs_computer::RfsComputerStatus;
-use messages::datapoints::dp_sensor_carrier::EnvironmentalData;
+use messages::datapoints::dp_sensor_carrier::Message as SCMessage;
+use messages::datapoints::dp_sensor_carrier::{
+    EnvironmentalData, ImuData, OrientationData, PositionData, VelocityData,
+};
+use messages::Message;
 use pss_drivers::input::{PSSSensors, PSSValves};
 use watchable::Watchable;
 
 #[derive(Broadcast, Debug, Default, Clone)]
-#[broadcast(message_type = "messages::Message", loop_type = "BroadcastLoop")]
+#[broadcast(message_type = "messages::Message")]
 pub struct RawUnprocessedData {
     /// The newest environmental data from the sensors.
-    #[datapoint(pattern = "messages::Message::SensorCarrier(dp_sensor_carrier::Message::EnvironmentalData(#value))")]
-    #[broadcast(min_freq_hz = 1., max_freq_hz = 1.)]
+    #[datapoint(pattern = "Message::SensorCarrier(SCMessage::EnvironmentalData(#value))")]
+    #[broadcast(min_freq_hz = 0.5, max_freq_hz = 2.)]
     pub environmental_data: Watchable<EnvironmentalData>,
     /// The power status of the 24V rail of the AV stack.
-    #[datapoint(pattern = "messages::Message::PowerBoard(dp_power_board::Message::RailStatus24V(#value))")]
-    #[broadcast(min_freq_hz = 10., max_freq_hz = 10.)]
+    #[datapoint(pattern = "Message::PowerBoard(PWBMessage::RailStatus24V(#value))")]
+    #[broadcast(min_freq_hz = 0.5, max_freq_hz = 2.)]
     pub rail_status_24v: Watchable<RailStatus>,
     /// The power status of the 5V rail of the AV stack.
-    #[datapoint(pattern = "messages::Message::PowerBoard(dp_power_board::Message::RailStatus5V(#value))")]
-    #[broadcast(min_freq_hz = 10., max_freq_hz = 10.)]
+    #[datapoint(pattern = "Message::PowerBoard(PWBMessage::RailStatus5V(#value))")]
+    #[broadcast(min_freq_hz = 0.5, max_freq_hz = 2.)]
     pub rail_status_5v: Watchable<RailStatus>,
 }
 
 /// Holds all information we gather from the rest of the rocket and environment.
 #[derive(Broadcast, Debug, Default, Clone)]
-#[broadcast(message_type = "messages::Message", loop_type = "BroadcastLoop")]
+#[broadcast(message_type = "messages::Message")]
 pub struct InputTree {
     /// The current time, as as unix timestamp wrapper.
     pub time: Watchable<MissionTime>,
@@ -45,7 +46,7 @@ pub struct InputTree {
     pub actuator_command:
         Watchable<Option<actuator_control::Command<pss_drivers::output::ValveName>>>,
     /// Statistics about the health of the telemetry uplink.
-    pub telemetry_health: Watchable<TelemetryHealth>,
+    pub telemetry_health: Watchable<UplinkTelemetryHealth>,
     /// The processed health report for the avionics boards.
     pub boards_health: BoardsHealthyAsOf,
     /// The last received status of the RFS Computer and the timestamp when it was received.
@@ -69,21 +70,18 @@ pub struct InputTree {
     pub cats_deployment: Watchable<MainDeploymentState>,
 
     // GNC fields, see the types for documentation.
-    // FIXME: add the angular velocity
-    #[datapoint(pattern = "messages::Message::SensorCarrier(dp_sensor_carrier::Message::PositionData(#value))")]
-    #[broadcast(min_freq_hz = 20., max_freq_hz = 20.)]
+    // TODO: add the angular velocity
+    #[datapoint(pattern = "Message::SensorCarrier(SCMessage::PositionData(#value))")]
+    #[broadcast(min_freq_hz = 5., max_freq_hz = 15.)]
     pub location: Watchable<PositionData>,
-    
-    #[datapoint(pattern = "messages::Message::SensorCarrier(dp_sensor_carrier::Message::VelocityData(#value))")]
-    #[broadcast(min_freq_hz = 20., max_freq_hz = 20.)]
+    #[datapoint(pattern = "Message::SensorCarrier(SCMessage::VelocityData(#value))")]
+    #[broadcast(min_freq_hz = 5., max_freq_hz = 15.)]
     pub velocity: Watchable<VelocityData>,
-    
-    #[datapoint(pattern = "messages::Message::SensorCarrier(dp_sensor_carrier::Message::ImuData(#value))")]
-    #[broadcast(min_freq_hz = 40., max_freq_hz = 40.)]
+    #[datapoint(pattern = "Message::SensorCarrier(SCMessage::ImuData(#value))")]
+    #[broadcast(min_freq_hz = 5., max_freq_hz = 10.)]
     pub acceleration: Watchable<ImuData>,
-    
-    #[datapoint(pattern = "messages::Message::SensorCarrier(dp_sensor_carrier::Message::OrientationData(#value))")]
-    #[broadcast(min_freq_hz = 40., max_freq_hz = 40.)]
+    #[datapoint(pattern = "Message::SensorCarrier(SCMessage::OrientationData(#value))")]
+    #[broadcast(min_freq_hz = 5., max_freq_hz = 10.)]
     pub orientation: Watchable<OrientationData>,
 
     /// The valve states of the PSS.
