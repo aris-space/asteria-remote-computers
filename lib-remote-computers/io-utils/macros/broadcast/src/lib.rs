@@ -1,8 +1,7 @@
 //! The `Broadcast` derive macro spawns a telemetry broadcast tokio task for each annotated field.
 //!
 //! For each field annotated with `#[broadcast]`, this generates a
-//! `tokio::spawn` call that invokes the configured `io_utils::BroadcastLoop`
-//! implementation.
+//! `tokio::spawn` call that invokes the given `io_utils::BroadcastLoop` implementation.
 //!
 //! ## Basic Usage
 //!
@@ -13,7 +12,7 @@
 //! }
 //!
 //! #[derive(Broadcast, Default)]
-//! #[broadcast(message_type = "SensorMessage", loop_type = "PeriodicLoop")]
+//! #[broadcast(message_type = "SensorMessage")]
 //! struct Sensors {
 //!     #[datapoint(pattern = "SensorMessage::Temperature(#value)")]
 //!     #[broadcast(min_freq_hz = 1., max_freq_hz = 10.)]
@@ -31,13 +30,13 @@
 //!
 //! ```rust,ignore
 //! impl io_utils::Broadcast<SensorMessage> for Sensors {
-//!     fn start_broadcasting(
+//!     fn start_broadcasting<L: BroadcastLoop<SensorMessage>>(
 //!         &self,
 //!         channel: std::sync::mpsc::Sender<SensorMessage>,
 //!     ) -> Vec<tokio::task::AbortHandle> {
 //!         vec![
 //!             tokio::spawn(
-//!                 <PeriodicLoop as io_utils::BroadcastLoop<SensorMessage>>::broadcast_loop(
+//!                 L::broadcast_loop(
 //!                     self.temperature.clone(),
 //!                     |v| SensorMessage::Temperature(v),
 //!                     channel.clone(),
@@ -53,10 +52,9 @@
 //!
 //! ## Struct Attributes
 //!
-//! `#[broadcast(message_type = ..., loop_type = ...)]`
+//! `#[broadcast(message_type = ...)]`
 //!
 //! - `message_type` (required): The message type produced by broadcast tasks.
-//! - `loop_type` (required): The `io_utils::BroadcastLoop` implementor to use.
 //!
 //! ## Field Attributes
 //!
@@ -95,10 +93,6 @@ struct BroadcastInput {
 
     /// The message type produced by broadcast tasks (e.g., `"SensorMessage"`).
     message_type: syn::Type,
-
-    /// The `BroadcastLoop` implementor (e.g., `"PeriodicLoop"`).
-    /// Named `loop_type` because `loop` is a reserved keyword.
-    loop_type: syn::Type,
 }
 
 /// Field-level attributes parsed from `#[datapoint(...)]` and `#[broadcast(...)]`.
@@ -140,7 +134,6 @@ fn derive_broadcast_impl(raw_input: &syn::DeriveInput) -> proc_macro2::TokenStre
 
     let struct_name = &broadcast_input.ident;
     let message_type = &broadcast_input.message_type;
-    let loop_type = &broadcast_input.loop_type;
 
     let fields = broadcast_input
         .data
@@ -177,7 +170,7 @@ fn derive_broadcast_impl(raw_input: &syn::DeriveInput) -> proc_macro2::TokenStre
                 let field_ty = &field.ty;
                 return Some(quote! {
                     __handles.extend(
-                        <#field_ty as io_utils::Broadcast<#message_type>>::start_broadcasting(
+                        <#field_ty as io_utils::Broadcast<#message_type>>::start_broadcasting::<L>(
                             &self.#field_name,
                             channel.clone(),
                         )
@@ -221,7 +214,7 @@ fn derive_broadcast_impl(raw_input: &syn::DeriveInput) -> proc_macro2::TokenStre
             Some(quote! {
                 __handles.push(
                     ::tokio::spawn(
-                        <#loop_type as io_utils::BroadcastLoop<#message_type>>::broadcast_loop(
+                        L::broadcast_loop(
                             self.#field_name.clone(),
                             |__value| #closure_body,
                             channel.clone(),
@@ -248,7 +241,7 @@ fn derive_broadcast_impl(raw_input: &syn::DeriveInput) -> proc_macro2::TokenStre
 
     quote! {
         impl io_utils::Broadcast<#message_type> for #struct_name {
-            fn start_broadcasting(
+            fn start_broadcasting<L: io_utils::BroadcastLoop<#message_type>>(
                 &self,
                 channel: ::std::sync::mpsc::Sender<#message_type>,
             ) -> ::std::vec::Vec<::tokio::task::AbortHandle> {
@@ -270,7 +263,7 @@ mod tests {
     #[test]
     fn test_error_on_flatten_with_freq() {
         let input = quote! {
-            #[broadcast(message_type = "Msg", loop_type = "MyLoop")]
+            #[broadcast(message_type = "Msg")]
             struct Data {
                 #[broadcast(flatten, min_freq_hz = 1., max_freq_hz = 2.)]
                 inner: Inner,
@@ -290,7 +283,7 @@ mod tests {
     #[test]
     fn test_error_on_no_datapoints() {
         let input = quote! {
-            #[broadcast(message_type = "Msg", loop_type = "MyLoop")]
+            #[broadcast(message_type = "Msg")]
             struct Empty {
                 field: i32,
             }
@@ -309,7 +302,7 @@ mod tests {
     #[test]
     fn test_error_on_missing_freq() {
         let input = quote! {
-            #[broadcast(message_type = "Msg", loop_type = "MyLoop")]
+            #[broadcast(message_type = "Msg")]
             struct Data {
                 #[datapoint(pattern = "Msg::A(#value)")]
                 #[broadcast(min_freq_hz = 1.)]
@@ -332,7 +325,7 @@ mod tests {
     #[test]
     fn test_error_on_missing_datapoint() {
         let input = quote! {
-            #[broadcast(message_type = "Msg", loop_type = "MyLoop")]
+            #[broadcast(message_type = "Msg")]
             struct Data {
                 #[broadcast(min_freq_hz = 1., max_freq_hz = 1.)]
                 a: Watchable<i32>,

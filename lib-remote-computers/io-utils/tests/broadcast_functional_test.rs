@@ -52,7 +52,7 @@ impl BroadcastLoop<Msg> for TestLoop {
 // ---------------------------------------------------------------------------
 
 #[derive(Broadcast)]
-#[broadcast(message_type = "Msg", loop_type = "TestLoop")]
+#[broadcast(message_type = "Msg")]
 struct Inner {
     #[datapoint(pattern = "Msg::A(#value)")]
     #[broadcast(min_freq_hz = 1., max_freq_hz = 10.)]
@@ -60,7 +60,7 @@ struct Inner {
 }
 
 #[derive(Broadcast)]
-#[broadcast(message_type = "Msg", loop_type = "TestLoop")]
+#[broadcast(message_type = "Msg")]
 struct Outer {
     #[broadcast(flatten)]
     inner: Inner,
@@ -88,7 +88,7 @@ async fn smoke() {
     };
     let (tx, rx) = mpsc::channel::<Msg>();
 
-    let handles = outer.start_broadcasting(tx);
+    let handles = outer.start_broadcasting::<TestLoop>(tx);
 
     // Flatten contributes Inner's handles; Outer adds its own — 2 total.
     assert_eq!(handles.len(), 2);
