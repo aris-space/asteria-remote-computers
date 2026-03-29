@@ -1,19 +1,15 @@
 //! Sets up telemetry over Mavlink.
 
 use lib_mission::telemetry::{start_downlink_actor, start_uplink_actor, RemoteSystem};
-use mavio::io::{StdIoReader, StdIoWriter};
-use mavio::prelude::V2;
-use mavio::{Endpoint, MavLinkId, Receiver, Sender};
-use pss_drivers::input;
-use std::net::{TcpListener, UdpSocket};
+use std::net::UdpSocket;
 use std::thread::JoinHandle;
 
-use crate::config::{DownLinkRateConfig, TelemetryConfig};
+use crate::config::TelemetryConfig;
 use crate::io::input::InputTree;
 use crate::io::output::OutputTree;
-use messages::Message;
 
 use io_utils::{Broadcast, NeverReturns};
+use lib_mission::reactive::IntoWatched as _;
 use lib_mission::state_machine::StateMachine;
 use tokio::task::AbortHandle;
 
@@ -42,7 +38,7 @@ pub fn init_telemetry(
         input_tree.transition_command.clone(),
         input_tree.actuator_command.clone(),
         input_tree.telemetry_health.clone(),
-        input_tree.time.clone(),
+        input_tree.time.watched(),
         state_machine.state_names(),
         RemoteSystem::FlightComputer,
     );
@@ -52,14 +48,9 @@ pub fn init_telemetry(
     let downlink = start_downlink_actor(socket, rx, RemoteSystem::FlightComputer);
 
     // spawns tokio tasks which send mavlink messages periodically to the channel.
-    let mut input_streamers = input_tree.start_broadcasting(conn.clone());
-    let mut output_steamers = output_tree.start_broadcasting(conn.clone());
+    let mut input_streamers = input_tree.start_broadcasting(tx.clone());
 
     // TODO: current state and FC status
 
-    Ok((
-        uplink,
-        downlink,
-        [input_streamers, output_steamers].join([]),
-    ))
+    Ok((uplink, downlink, input_streamers))
 }
