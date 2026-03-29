@@ -18,7 +18,6 @@ messages = { path = "../../data-definitions/messages", features = [
     "derive_debug",
     "derive_serde",
 ], default-features = false }
-hermes-can = { path = "../../data-definitions/can", default-features = false }
 pss-drivers = { path = "../../lib-remote-computers/pss-drivers" }
 tokio = { version = "1.37.0", features = ["full"] }
 watchable = "1.1.2"
