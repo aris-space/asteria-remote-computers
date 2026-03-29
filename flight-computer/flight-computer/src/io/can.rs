@@ -130,7 +130,7 @@ fn init_input_drivers(
 fn init_output_drivers<C>(
     clock: C,
     output_tree: &OutputTree,
-    tx: &std::sync::mpsc::Sender<hermes_can::messages::Message>,
+    tx: &std::sync::mpsc::Sender<messages::Message>,
 ) -> Vec<AbortHandle>
 where
     C: IntoWatched<MissionTime> + Copy,

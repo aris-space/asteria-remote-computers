@@ -1,4 +1,4 @@
-use lib_mission::actuator_control::valves::NormallyClosedValve;
+use datatypes::actuator::NormallyClosedValve;
 use lib_mission::state_machine::{AdditionalState, StateLogic, StateName};
 
 /// This state sets all PSS valves to normal(*) position.

@@ -1,4 +1,4 @@
-use hermes_can::messages::board_status::ArmingState;
+use datatypes::status::ArmingState;
 use lib_mission::state_machine::{AdditionalState, StateLogic, StateName};
 
 /// This state proceeds to `on_armed` if the RFS' ignition is armed, otherwise proceeds to `on_not_armed`.

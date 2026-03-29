@@ -10,10 +10,14 @@ workspace = true
 lib-mission = { path = "../../lib-remote-computers/lib-mission" }
 gnc_interface = { path = "../hermes-recovery-gnc/gnc_interface" }
 hermes_gnc = { path = "../hermes-recovery-gnc/hermes_gnc", optional = true }
-hermes-can = { path = "../../data-definitions/can", features = [
-    "all",
-    "serde",
-], version = "0.3.2" }
+datatypes = { path = "../../data-definitions/datatypes", features = [
+    "std",
+    "watchable_settable",
+] }
+messages = { path = "../../data-definitions/messages", features = [
+    "derive_debug",
+    "derive_serde",
+], default-features = false }
 pss-drivers = { path = "../../lib-remote-computers/pss-drivers" }
 tokio = { version = "1.37.0", features = ["full"] }
 watchable = "1.1.2"

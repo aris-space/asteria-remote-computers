@@ -1,9 +1,8 @@
 use std::collections::BTreeMap;
 use std::time::Duration;
 
-use lib_mission::actuator_control::Settable;
+use datatypes::actuator::{NormallyClosedValve, NormallyOpenValve, Settable};
 use lib_mission::actuator_control::command::{ActuatorControl, Command};
-use lib_mission::actuator_control::valves::{NormallyClosedValve, NormallyOpenValve};
 use serde::{Deserialize, Serialize};
 use tokio::time::sleep;
 use watchable::Watchable;

@@ -132,13 +132,13 @@ fn start_telemetry_streaming(
                 let (rfs_status, rfs_time) = rfs_computer_status.get();
                 hermes_mavlink::MavMessage::FC_STATUS(hermes_mavlink::FC_STATUS_DATA {
                     time_unix_ms: time.as_ms_timestamp(),
-                    recovery_armed: conv_armed(&recovery_armed.get()),
-                    ecu_armed: conv_armed(&ecu_armed.get()),
+                    recovery_armed: conv_armed(recovery_armed.get()),
+                    ecu_armed: conv_armed(ecu_armed.get()),
                     software_armed: armed(
                         recovery_actuators_armed.get()
                             == crate::io::types::RecoveryArmingState::Armed,
                     ),
-                    rfs_armed: conv_armed(&rfs_status.is_ignition_armed),
+                    rfs_armed: conv_armed(rfs_status.is_ignition_armed),
                     has_pss_control: pss_active.current().into(),
                     rfs_has_pss_control: rfs_status.has_pss_control.into(),
                     cats_sep_signal: (cats_separation.get()
@@ -239,9 +239,9 @@ fn start_telemetry_streaming(
                 hermes_mavlink::MavMessage::ENVIRONMENTAL_DATA(
                     hermes_mavlink::ENVIRONMENTAL_DATA_DATA {
                         time_unix_ms: time.as_ms_timestamp(),
-                        temperature: value.temperature,
+                        temperature: value.temperature.0,
                         humidity: value.humidity,
-                        pressure: value.pressure,
+                        pressure: value.pressure.0,
                     },
                 )
             }),
@@ -252,9 +252,9 @@ fn start_telemetry_streaming(
                 let value = rail_status_24v.get();
                 hermes_mavlink::MavMessage::RAIL_STATUS_24V(hermes_mavlink::RAIL_STATUS_24V_DATA {
                     time_unix_ms: time.as_ms_timestamp(),
-                    voltage: value.data.voltage,
-                    current: value.data.current,
-                    power: value.data.power,
+                    voltage: value.voltage,
+                    current: value.current,
+                    power: value.power,
                 })
             }),
             conn.clone(),
@@ -264,9 +264,9 @@ fn start_telemetry_streaming(
                 let value = rail_status_5v.get();
                 hermes_mavlink::MavMessage::RAIL_STATUS_5V(hermes_mavlink::RAIL_STATUS_5V_DATA {
                     time_unix_ms: time.as_ms_timestamp(),
-                    voltage: value.data.voltage,
-                    current: value.data.current,
-                    power: value.data.power,
+                    voltage: value.voltage,
+                    current: value.current,
+                    power: value.power,
                 })
             }),
             conn.clone(),
@@ -314,10 +314,10 @@ fn armed(is_armed: bool) -> hermes_mavlink::Armed {
     }
 }
 
-fn conv_armed(is_armed: &hermes_can::messages::board_status::ArmingState) -> hermes_mavlink::Armed {
+fn conv_armed(is_armed: datatypes::status::ArmingState) -> hermes_mavlink::Armed {
     match is_armed {
-        hermes_can::messages::board_status::ArmingState::Safe => hermes_mavlink::Armed::DISARMED,
-        hermes_can::messages::board_status::ArmingState::Armed => hermes_mavlink::Armed::ARMED,
+        datatypes::status::ArmingState::Safe => hermes_mavlink::Armed::DISARMED,
+        datatypes::status::ArmingState::Armed => hermes_mavlink::Armed::ARMED,
     }
 }
 

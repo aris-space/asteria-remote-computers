@@ -3,7 +3,8 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::str::FromStr;
 
-use crate::actuator_control::Settable;
+use datatypes::actuator::Settable;
+
 use crate::reactive::{IntoWatched, Watched as _};
 
 /// A valid representation of the mavlink command sent.
