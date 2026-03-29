@@ -4,4 +4,3 @@ pub mod can_input_drivers;
 pub mod can_output_drivers;
 pub mod input;
 pub mod output;
-pub mod telemetry;
