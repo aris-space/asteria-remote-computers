@@ -46,7 +46,8 @@ pub fn start_uplink_actor<ActuatorName>(
     clock: impl Watched<MissionTime> + Send + 'static,
     states: HashSet<StateName>,
     this_system: RemoteSystem,
-) where
+) -> std::thread::JoinHandle<io_utils::NeverReturns>
+where
     ActuatorName: std::str::FromStr + std::fmt::Debug + PartialEq + Send + Sync + 'static,
 {
     std::thread::spawn(move || {
@@ -67,7 +68,7 @@ pub fn start_uplink_actor<ActuatorName>(
             &states,
             this_system,
         )
-    });
+    })
 }
 
 /// Blocks on the connection by reading message by message and handling it.
@@ -94,7 +95,7 @@ pub fn read_uplink<ActuatorName>(
     clock: &impl Watched<MissionTime>,
     states: &HashSet<StateName>,
     this_system: RemoteSystem,
-) -> std::convert::Infallible
+) -> io_utils::NeverReturns
 where
     ActuatorName: std::str::FromStr + std::fmt::Debug + PartialEq,
 {
@@ -291,7 +292,7 @@ pub fn start_downlink_actor(
     socket: std::net::UdpSocket,
     channel: std::sync::mpsc::Receiver<Message>,
     this_system: RemoteSystem,
-) {
+) -> std::thread::JoinHandle<()> {
     std::thread::spawn(move || {
         if let Err(e) =
             thread_priority::set_current_thread_priority(thread_priority::ThreadPriority::Min)
@@ -299,7 +300,7 @@ pub fn start_downlink_actor(
             tracing::warn!("cannot set downlink actor to low priority: {e}");
         }
         downlink_actor(&socket, channel, this_system);
-    });
+    })
 }
 
 /// Blocks on `channel` reading message by message and sending them to MavLink.

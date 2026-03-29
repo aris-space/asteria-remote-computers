@@ -34,8 +34,8 @@ pub struct Config<SM> {
 /// The sub config for telemetry.
 #[derive(Debug, Serialize, Deserialize)]
 pub struct TelemetryConfig {
-    /// The address used in [`mavlink_core::connect`].
-    /// Typically "udpout:127.0.0.1:{PORT}".
+    /// The address used in [`std::net::UdpSocket::connect`].
+    /// Typically "127.0.0.1:{PORT}".
     pub mavlink_address: String,
     /// Defines the rates at which certain measurements are sent down in Hz.
     pub downlink_rates: DownLinkRateConfig,

@@ -1,18 +1,21 @@
 //! Sets up telemetry over Mavlink.
 
-use std::net::{TcpListener};
+use lib_mission::telemetry::{start_downlink_actor, start_uplink_actor, RemoteSystem};
 use mavio::io::{StdIoReader, StdIoWriter};
 use mavio::prelude::V2;
 use mavio::{Endpoint, MavLinkId, Receiver, Sender};
+use pss_drivers::input;
+use std::net::{TcpListener, UdpSocket};
+use std::thread::JoinHandle;
 
 use crate::config::{DownLinkRateConfig, TelemetryConfig};
 use crate::io::input::InputTree;
 use crate::io::output::OutputTree;
 use messages::Message;
 
+use io_utils::{Broadcast, NeverReturns};
 use lib_mission::state_machine::StateMachine;
 use tokio::task::AbortHandle;
-use io_utils::Broadcast;
 
 /// Sets up the telemetry connection
 ///
@@ -22,51 +25,41 @@ pub fn init_telemetry(
     input_tree: &InputTree,
     output_tree: &OutputTree,
     state_machine: &StateMachine<InputTree, OutputTree, ()>,
-) -> Result<Vec<AbortHandle>, Box<dyn std::error::Error>> {
+) -> Result<(JoinHandle<NeverReturns>, JoinHandle<()>, Vec<AbortHandle>), Box<dyn std::error::Error>>
+{
     // Setup connection
-    let addr = &config.mavlink_address;
-    tracing::trace!("waiting for connection with {addr}");
-    // The connection can be simultaneously used for sending and receiving, but only one of each.
-    let listener = TcpListener::bind(addr)?;
-    let (stream, _) = listener.accept()?;
-    let sender_stream = stream.try_clone()?;
-    let _receiver = Receiver::versioned(StdIoReader::new(stream), V2);
-    tracing::info!("connected to MavLink at {addr}");
+    let socket = UdpSocket::bind("127.0.0.1:0")?;
+    socket.connect(&config.mavlink_address)?;
+    tracing::trace!(
+        "setup UDP at {:?} to {:?}",
+        socket.local_addr(),
+        socket.peer_addr()
+    );
+
+    // Spawn uplink actor
+    let uplink = start_uplink_actor(
+        socket.try_clone()?,
+        input_tree.transition_command.clone(),
+        input_tree.actuator_command.clone(),
+        input_tree.telemetry_health.clone(),
+        input_tree.time.clone(),
+        state_machine.state_names(),
+        RemoteSystem::FlightComputer,
+    );
 
     // Spawn downlink actor
-    let mut sender_handles = vec![];
-    {
-        //let conn = conn.clone();
-        let (tx, rx) = std::sync::mpsc::channel::<messages::Message>();
-        std::thread::spawn(move || {
-            let mut sender = Sender::new(StdIoWriter::new(sender_stream));
-            let endpoint = Endpoint::v2(MavLinkId::new(1, 1));
-            for msg in rx {
-                let frame = endpoint.next_frame(&msg).expect("must encode frame");
-                sender.send(&frame).expect("must send frame");
-            }
-        });
-        sender_handles.extend(start_telemetry_streaming(
-            input_tree,
-            output_tree,
-            &tx,
-            &config.downlink_rates,
-        ));
-    }
+    let (tx, rx) = std::sync::mpsc::channel::<messages::Message>();
+    let downlink = start_downlink_actor(socket, rx, RemoteSystem::FlightComputer);
 
-    Ok(sender_handles)
-}
+    // spawns tokio tasks which send mavlink messages periodically to the channel.
+    let mut input_streamers = input_tree.start_broadcasting(conn.clone());
+    let mut output_steamers = output_tree.start_broadcasting(conn.clone());
 
-/// Spawns tokio tasks which send mavlink messages periodically to the channel.
-#[allow(clippy::too_many_lines)]
-fn start_telemetry_streaming(
-    input_tree: &InputTree,
-    output_tree: &OutputTree,
-    conn: &std::sync::mpsc::Sender<messages::Message>,
-    rates: &DownLinkRateConfig,
-) -> Vec<AbortHandle> {
-    let mut handles = input_tree.start_broadcasting(conn.clone());
+    // TODO: current state and FC status
 
-
-    handles
+    Ok((
+        uplink,
+        downlink,
+        [input_streamers, output_steamers].join([]),
+    ))
 }

@@ -3,7 +3,7 @@
 system_time_rate_hz = 10
 
 [telemetry]
-mavlink_address = "udpout:127.0.0.1:5760"
+mavlink_address = "127.0.0.1:5760"
 
 [telemetry.downlink_rates]
 # slowened telemetry.
