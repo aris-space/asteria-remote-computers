@@ -3,7 +3,7 @@
 pub use messages::datapoints::dp_sensor_carrier::OrientationData as Orientation;
 
 /// Position in WGS84 inertial frame.
-/// Mirroring [`hermes_can::messages::sensor_data::PositionData`].
+/// Mirroring [`messages::datapoints::dp_sensor_carrier::PositionData`].
 #[derive(Debug, Default, Clone, PartialEq, serde::Deserialize, serde::Serialize)]
 pub struct Location {
     /// Location Latitude WGS84 in `°`
@@ -20,7 +20,7 @@ pub struct Location {
 }
 
 /// Velocity (m/s) in both inertial (native) and box fixed frame.
-/// Mirroring [`hermes_can::messages::sensor_data::VelocityData`].
+/// Mirroring [`messages::datapoints::dp_sensor_carrier::VelocityData`].
 #[derive(Debug, Default, Clone, PartialEq, serde::Deserialize, serde::Serialize)]
 pub struct Velocity {
     /// Linear velocity north (inertial frame) in `m/s`
@@ -39,7 +39,7 @@ pub struct Velocity {
 }
 
 /// Acceleration (m/s^2) in both inertial and body fixed (native) frame.
-/// Subset of [`hermes_can::messages::sensor_data::ImuData`].
+/// Subset of [`messages::datapoints::dp_sensor_carrier::ImuData`].
 #[derive(Debug, Default, Clone, PartialEq, serde::Deserialize, serde::Serialize)]
 pub struct Acceleration {
     /// Linear acceleration north (inertial frame) in `m/s^2`
