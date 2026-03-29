@@ -416,11 +416,14 @@ pub async fn await_telemetry_loss(
 mod tests {
     use crate::Error;
     use crate::reactive::IntoWatched;
+    use datatypes::units::InstantUs;
+    use mavio::{Endpoint, MavLinkId};
+    use messages::datapoints::dp_flight_computer::Message as FCMessage;
+    use messages::datapoints::dp_rfs_computer::Message as RFSCMessage;
 
     use super::*;
-    use mockall::predicate::*;
-    use mockall::*;
     use std::collections::HashSet;
+    use std::num::Wrapping;
     use std::str::FromStr;
     use std::time::Duration;
     use watchable::Watchable;
@@ -447,19 +450,6 @@ mod tests {
         }
     }
 
-    mock! {
-        pub MavConnection {}
-
-        impl MavConnection<MavMessage> for MavConnection {
-            fn recv(&self) -> core::result::Result<(mavlink_core::MavHeader, MavMessage), mavlink_core::error::MessageReadError>;
-
-            // Unused
-            fn send(&self, header: &mavlink_core::MavHeader, data: &MavMessage) -> core::result::Result<usize, mavlink_core::error::MessageWriteError>;
-            fn set_protocol_version(&mut self, version: mavlink_core::MavlinkVersion);
-            fn get_protocol_version(&self) -> mavlink_core::MavlinkVersion;
-        }
-    }
-
     // Helper function to create a set of valid state names
     fn create_state_names() -> HashSet<StateName> {
         let full_len = "A".repeat(StateName::MAX_LEN);
@@ -472,37 +462,59 @@ mod tests {
             .collect()
     }
 
-    /// Will run [`read_uplink_once`] once with the provided mavlink message.
-    /// Gives back the updated transition command and health (was default beforehand).
+    /// Runs [`read_uplink_once`] with an optional message sent over UDP loopback.
+    /// `this_system` is always `FlightComputer`; pass `Message::RfsComputer(...)` to simulate a message for another system.
+    /// If `msg` is `None`, no message is sent and an IO error path is exercised.
     fn helper_read_uplink_once_with(
-        msg: std::result::Result<
-            (mavlink_core::MavHeader, MavMessage),
-            mavlink_core::error::MessageReadError,
-        >,
+        msg: Option<&Message>,
     ) -> (
         transition::Command,
         Option<actuator_control::Command<ActuatorName>>,
         UplinkTelemetryHealth,
     ) {
-        let mut mock_conn = MockMavConnection::new();
+        use std::net::UdpSocket;
+
+        let receiver = UdpSocket::bind("127.0.0.1:0").expect("bind receiver");
+        let receiver_addr = receiver.local_addr().expect("get receiver addr");
+
+        match msg {
+            Some(msg) => {
+                let sender = UdpSocket::bind("127.0.0.1:0").expect("bind sender");
+                sender.connect(receiver_addr).expect("connect sender");
+                let endpoint = Endpoint::v2(MavLinkId::new(200, 1));
+                mavlink_hal::transport::send_message(msg, &endpoint, &sender)
+                    .expect("send message");
+            }
+            None => {
+                receiver.set_nonblocking(true).expect("set nonblocking");
+            }
+        }
+
         let transition_command = Watchable::new(None);
-        let actuator_command = Watchable::new(None);
+        let actuator_command: Watchable<Option<actuator_control::Command<ActuatorName>>> =
+            Watchable::new(None);
         let telemetry_health = Watchable::new(UplinkTelemetryHealth::default());
         let clock = Watchable::new(Duration::from_millis(100).into());
         let states = create_state_names();
-        let this_system = RemoteSystem::ROCKET;
-
-        mock_conn.expect_recv().return_once(move || msg);
+        let this_system = RemoteSystem::FlightComputer;
+        let mut seq = Wrapping(0u8);
 
         read_uplink_once(
-            &mock_conn,
-            &transition_command,
-            &actuator_command,
+            &receiver,
             &telemetry_health,
             &clock.watched(),
-            &states,
-            this_system,
+            &mut seq,
+            |msg| {
+                msg_processor(
+                    &msg,
+                    &transition_command,
+                    &actuator_command,
+                    &states,
+                    this_system,
+                )
+            },
         );
+
         (
             transition_command.get(),
             actuator_command.get(),
@@ -512,14 +524,12 @@ mod tests {
 
     #[test]
     fn test_read_uplink_once_successful_message() {
-        let (transition_command, _, health) = helper_read_uplink_once_with(Ok((
-            mavlink_core::MavHeader::default(),
-            MavMessage::COMMAND_MANUAL_TRANSITION(COMMAND_MANUAL_TRANSITION_DATA {
-                target_system: RemoteSystem::ROCKET,
+        let (transition_command, _, health) = helper_read_uplink_once_with(Some(
+            &Message::FlightComputer(FCMessage::ManualStateTransition(ManualStateTransition {
                 transition_index: 0,
                 state: *b"Idle\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0",
-            }),
-        )));
+            })),
+        ));
 
         assert_eq!(
             transition_command,
@@ -530,20 +540,18 @@ mod tests {
         );
         assert_eq!(health.num_msg_received, 1);
         assert_eq!(health.num_msg_processed, 1);
-        assert_eq!(health.time_of_last_msg.as_ms_timestamp(), 100);
-        assert_eq!(health.time_of_last_processed_msg.as_ms_timestamp(), 100);
+        assert_eq!(health.time_of_last_msg, InstantUs(100_000));
+        assert_eq!(health.time_of_last_processed_msg, InstantUs(100_000));
     }
 
     #[test]
     fn test_read_uplink_once_valid_state_with_index() {
-        let (transition_command, _, health) = helper_read_uplink_once_with(Ok((
-            mavlink_core::MavHeader::default(),
-            MavMessage::COMMAND_MANUAL_TRANSITION(COMMAND_MANUAL_TRANSITION_DATA {
-                target_system: RemoteSystem::ROCKET,
+        let (transition_command, _, health) = helper_read_uplink_once_with(Some(
+            &Message::FlightComputer(FCMessage::ManualStateTransition(ManualStateTransition {
                 transition_index: 1,
                 state: *b"Idle\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0",
-            }),
-        )));
+            })),
+        ));
 
         assert_eq!(
             transition_command,
@@ -554,63 +562,53 @@ mod tests {
         );
         assert_eq!(health.num_msg_received, 1);
         assert_eq!(health.num_msg_processed, 1);
-        assert_eq!(health.time_of_last_msg.as_ms_timestamp(), 100);
-        assert_eq!(health.time_of_last_processed_msg.as_ms_timestamp(), 100);
+        assert_eq!(health.time_of_last_msg, InstantUs(100_000));
+        assert_eq!(health.time_of_last_processed_msg, InstantUs(100_000));
     }
 
     #[test]
     fn test_read_uplink_once_error_in_reception() {
-        let (transition_command, _, health) =
-            helper_read_uplink_once_with(Err(std::io::Error::other("Connection error").into()));
+        // IO errors (no message available) do not update health — the uplink actor just retries.
+        let (transition_command, _, health) = helper_read_uplink_once_with(None);
 
-        // Ensure that the transition command was not updated
         assert_eq!(transition_command, None);
-        assert_eq!(health.num_msg_received, 1);
+        assert_eq!(health.num_msg_received, 0);
         assert_eq!(health.num_msg_processed, 0);
-        assert_eq!(health.time_of_last_msg.as_ms_timestamp(), 100);
-        assert_eq!(health.time_of_last_processed_msg.as_ms_timestamp(), 0);
+        assert_eq!(health.time_of_last_msg, InstantUs(0));
+        assert_eq!(health.time_of_last_processed_msg, InstantUs(0));
     }
 
     #[test]
     fn test_read_uplink_once_transition_for_other_system() {
-        let (transition_command, _, health) = helper_read_uplink_once_with(Ok((
-            mavlink_core::MavHeader::default(),
-            MavMessage::COMMAND_MANUAL_TRANSITION(COMMAND_MANUAL_TRANSITION_DATA {
-                target_system: RemoteSystem::REMOTE_FILLING_STATION,
+        // A message addressed to the RFS system is ignored by the FC.
+        let (transition_command, _, health) = helper_read_uplink_once_with(Some(
+            &Message::RfsComputer(RFSCMessage::ManualStateTransition(ManualStateTransition {
                 transition_index: 0,
                 state: *b"Idle\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0",
-            }),
-        )));
+            })),
+        ));
 
-        // Ensure that the transition command was not updated
         assert_eq!(transition_command, None);
         assert_eq!(health.num_msg_received, 1);
         assert_eq!(health.num_msg_processed, 0);
-        assert_eq!(health.time_of_last_msg.as_ms_timestamp(), 100);
-        assert_eq!(health.time_of_last_processed_msg.as_ms_timestamp(), 0);
+        assert_eq!(health.time_of_last_msg, InstantUs(100_000));
+        assert_eq!(health.time_of_last_processed_msg, InstantUs(0));
     }
 
     #[test]
     fn test_read_uplink_once_unknown_state() {
-        let (transition_command, _, health) = helper_read_uplink_once_with(Ok((
-            mavlink_core::MavHeader {
-                system_id: 200,
-                component_id: 1,
-                sequence: 0,
-            },
-            MavMessage::COMMAND_MANUAL_TRANSITION(COMMAND_MANUAL_TRANSITION_DATA {
-                target_system: RemoteSystem::ROCKET,
+        let (transition_command, _, health) = helper_read_uplink_once_with(Some(
+            &Message::FlightComputer(FCMessage::ManualStateTransition(ManualStateTransition {
                 transition_index: 0,
                 state: *b"Unknown\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0",
-            }),
-        )));
+            })),
+        ));
 
-        // Ensure that the transition command was not updated
         assert_eq!(transition_command, None);
         assert_eq!(health.num_msg_received, 1);
         assert_eq!(health.num_msg_processed, 0);
-        assert_eq!(health.time_of_last_msg.as_ms_timestamp(), 100);
-        assert_eq!(health.time_of_last_processed_msg.as_ms_timestamp(), 0);
+        assert_eq!(health.time_of_last_msg, InstantUs(100_000));
+        assert_eq!(health.time_of_last_processed_msg, InstantUs(0));
     }
 
     /// Test encoding and decoding a valid state name.
@@ -677,15 +675,13 @@ mod tests {
     /// Test a valid actuator command
     #[test]
     fn test_read_uplink_once_valid_actuator_command() {
-        let (_, actuator_command, health) = helper_read_uplink_once_with(Ok((
-            mavlink_core::MavHeader::default(),
-            MavMessage::COMMAND_MANUAL_ACTUATOR(COMMAND_MANUAL_ACTUATOR_DATA {
-                target_system: RemoteSystem::ROCKET,
-                path_index: 1,
-                actuator_id: *b"A\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0",
+        let (_, actuator_command, health) = helper_read_uplink_once_with(Some(
+            &Message::FlightComputer(FCMessage::ManualActuatorChange(ManualActuatorChange {
                 value: 42.0,
-            }),
-        )));
+                path_index: 1,
+                actuator: *b"A\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0",
+            })),
+        ));
 
         assert_eq!(
             actuator_command,
@@ -697,70 +693,121 @@ mod tests {
         );
         assert_eq!(health.num_msg_received, 1);
         assert_eq!(health.num_msg_processed, 1);
-        assert_eq!(health.time_of_last_msg.as_ms_timestamp(), 100);
-        assert_eq!(health.time_of_last_processed_msg.as_ms_timestamp(), 100);
+        assert_eq!(health.time_of_last_msg, InstantUs(100_000));
+        assert_eq!(health.time_of_last_processed_msg, InstantUs(100_000));
     }
 
     /// Test ignoring a command for another system
     #[test]
     fn test_read_uplink_once_actuator_for_other_system() {
-        let (_, actuator_command, health) = helper_read_uplink_once_with(Ok((
-            mavlink_core::MavHeader::default(),
-            MavMessage::COMMAND_MANUAL_ACTUATOR(COMMAND_MANUAL_ACTUATOR_DATA {
-                target_system: RemoteSystem::REMOTE_FILLING_STATION,
-                path_index: 1,
-                actuator_id: *b"A\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0",
+        let (_, actuator_command, health) = helper_read_uplink_once_with(Some(
+            &Message::RfsComputer(RFSCMessage::ManualActuatorChange(ManualActuatorChange {
                 value: 42.0,
-            }),
-        )));
+                path_index: 1,
+                actuator: *b"A\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0",
+            })),
+        ));
 
         assert_eq!(actuator_command, None);
         assert_eq!(health.num_msg_received, 1);
         assert_eq!(health.num_msg_processed, 0);
-        assert_eq!(health.time_of_last_msg.as_ms_timestamp(), 100);
-        assert_eq!(health.time_of_last_processed_msg.as_ms_timestamp(), 0);
+        assert_eq!(health.time_of_last_msg, InstantUs(100_000));
+        assert_eq!(health.time_of_last_processed_msg, InstantUs(0));
     }
 
     /// Test ignoring a non-utf8 actuator name.
     #[test]
     fn test_read_uplink_once_invalid_actuator_id() {
-        let (_, actuator_command, health) = helper_read_uplink_once_with(Ok((
-            mavlink_core::MavHeader::default(),
-            MavMessage::COMMAND_MANUAL_ACTUATOR(COMMAND_MANUAL_ACTUATOR_DATA {
-                target_system: RemoteSystem::ROCKET,
+        let (_, actuator_command, health) = helper_read_uplink_once_with(Some(
+            &Message::FlightComputer(FCMessage::ManualActuatorChange(ManualActuatorChange {
+                value: 42.0,
                 path_index: 1,
                 // Not utf-8
-                actuator_id: [
+                actuator: [
                     0xC3, 0x28, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
                 ],
-                value: 42.0,
-            }),
-        )));
+            })),
+        ));
 
         assert_eq!(actuator_command, None);
         assert_eq!(health.num_msg_received, 1);
         assert_eq!(health.num_msg_processed, 0);
-        assert_eq!(health.time_of_last_msg.as_ms_timestamp(), 100);
-        assert_eq!(health.time_of_last_processed_msg.as_ms_timestamp(), 0);
+        assert_eq!(health.time_of_last_msg, InstantUs(100_000));
+        assert_eq!(health.time_of_last_processed_msg, InstantUs(0));
     }
 
-    /// Test ignoring a non parseable acutator name
+    /// Test ignoring a non parseable actuator name
     #[test]
     fn test_read_uplink_once_invalid_actuator_name() {
-        let (_, actuator_command, health) = helper_read_uplink_once_with(Ok((
-            mavlink_core::MavHeader::default(),
-            MavMessage::COMMAND_MANUAL_ACTUATOR(COMMAND_MANUAL_ACTUATOR_DATA {
-                target_system: RemoteSystem::ROCKET,
-                path_index: 1,
-                actuator_id: *b"E\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0",
+        let (_, actuator_command, health) = helper_read_uplink_once_with(Some(
+            &Message::FlightComputer(FCMessage::ManualActuatorChange(ManualActuatorChange {
                 value: 42.0,
-            }),
-        )));
+                path_index: 1,
+                actuator: *b"E\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0",
+            })),
+        ));
 
         assert_eq!(actuator_command, None);
         assert_eq!(health.num_msg_received, 1);
         assert_eq!(health.num_msg_processed, 0);
-        assert_eq!(health.time_of_last_msg.as_ms_timestamp(), 100);
-        assert_eq!(health.time_of_last_processed_msg.as_ms_timestamp(), 0);
+        assert_eq!(health.time_of_last_msg, InstantUs(100_000));
+        assert_eq!(health.time_of_last_processed_msg, InstantUs(0));
+    }
+
+    /// Test that the lost-message counter handles sequence-number wrap-around correctly.
+    ///
+    /// Scenario: we last saw sequence 249 (so `expected_seq = 250`).
+    /// The next message arrives with sequence 0 (fresh endpoint), skipping over
+    /// 250, 251, …, 255 — six sequences lost.
+    /// `(0 - 250) mod 256 = 6` must be counted as lost.
+    #[test]
+    fn test_read_uplink_once_sequence_loss_with_wrap() {
+        use std::net::UdpSocket;
+
+        let receiver = UdpSocket::bind("127.0.0.1:0").expect("bind receiver");
+        let receiver_addr = receiver.local_addr().expect("get receiver addr");
+        let sender = UdpSocket::bind("127.0.0.1:0").expect("bind sender");
+        sender.connect(receiver_addr).expect("connect sender");
+
+        let endpoint = Endpoint::v2(MavLinkId::new(200, 1));
+        let msg =
+            Message::FlightComputer(FCMessage::ManualStateTransition(ManualStateTransition {
+                transition_index: 0,
+                state: *b"Idle\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0",
+            }));
+        mavlink_hal::transport::send_message(&msg, &endpoint, &sender).expect("send message");
+
+        let telemetry_health = Watchable::new(UplinkTelemetryHealth::default());
+        let clock = Watchable::new(Duration::from_millis(0).into());
+        let states = create_state_names();
+        let transition_command = Watchable::new(None);
+        let actuator_command: Watchable<Option<actuator_control::Command<ActuatorName>>> =
+            Watchable::new(None);
+        let this_system = RemoteSystem::FlightComputer;
+        // Simulate having last received sequence 249, expecting 250 next.
+        let mut seq = Wrapping(250u8);
+
+        read_uplink_once(
+            &receiver,
+            &telemetry_health,
+            &clock.watched(),
+            &mut seq,
+            |msg| {
+                msg_processor(
+                    &msg,
+                    &transition_command,
+                    &actuator_command,
+                    &states,
+                    this_system,
+                )
+            },
+        );
+
+        let health = telemetry_health.get();
+        assert_eq!(health.num_msg_received, 1);
+        assert_eq!(health.num_msg_lost, 6); // (0 - 250) mod 256 = 6
+        assert_eq!(health.num_msg_processed, 1);
+        // expected_seq should now be 1 (= 0 + 1)
+        assert_eq!(seq, Wrapping(1u8));
     }
 }
