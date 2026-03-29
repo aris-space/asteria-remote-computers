@@ -1,34 +1,73 @@
 use std::collections::HashSet;
+use std::num::Wrapping;
 use std::time::Duration;
 
 use crate::Result;
 use crate::actuator_control;
-use crate::reactive::{IntoWatched, Repeatedly, Watched, WatchedExt as _};
-use crate::state_machine::{StateMachine, StateName};
+use crate::reactive::{IntoWatched, Watched};
+use crate::state_machine::StateName;
 use crate::transition;
 use crate::util::time::MissionTime;
 
-use hermes_mavlink::{
-    COMMAND_MANUAL_ACTUATOR_DATA, COMMAND_MANUAL_TRANSITION_DATA, MavMessage, RemoteSystem,
-};
-use mavlink_core::MavConnection;
-use tokio::task::AbortHandle;
+use datatypes::status::ManualActuatorChange;
+use datatypes::status::ManualStateTransition;
+use datatypes::status::UplinkTelemetryHealth;
+use mavio::Endpoint;
+use mavio::MavLinkId;
+use mavio::protocol::SystemId;
+use messages::Message;
+use messages::datapoints::dp_flight_computer::Message as FCMessage;
+use messages::datapoints::dp_rfs_computer::Message as RFSCMessage;
 use watchable::Watchable;
 
-pub use hermes_mavlink;
+#[derive(Debug, Clone, Copy)]
+pub enum RemoteSystem {
+    FlightComputer,
+    RfsComputer,
+}
 
-/// Telemetry health statistics.
-#[derive(Default, Debug, Clone)]
-pub struct TelemetryHealth {
-    /// The timestamp of the last message received, including malformed ones.
-    pub time_of_last_msg: MissionTime,
-    /// The total number of the messages received, including malformed ones.
-    pub num_msg_received: u64,
+impl RemoteSystem {
+    pub fn mavlink_system_id(self) -> SystemId {
+        match self {
+            RemoteSystem::FlightComputer => 1,
+            RemoteSystem::RfsComputer => 2,
+        }
+    }
+}
 
-    /// The timestamp of the last message that has been understood and processed successfully.
-    pub time_of_last_processed_msg: MissionTime,
-    /// The number of the messages received that have been understood and processed successfully.
-    pub num_msg_processed: u64,
+/// Starts a medium priority thread to read from `socket` and set the given commands.
+///
+/// Reasoning for medium is that the CAN interaction is more important, but uplink is more important than downlink.
+pub fn start_uplink_actor<ActuatorName>(
+    socket: std::net::UdpSocket,
+    transition_command: Watchable<transition::Command>,
+    actuator_command: Watchable<Option<actuator_control::Command<ActuatorName>>>,
+    telemetry_health: Watchable<UplinkTelemetryHealth>,
+    clock: impl Watched<MissionTime> + Send + 'static,
+    states: HashSet<StateName>,
+    this_system: RemoteSystem,
+) where
+    ActuatorName: std::str::FromStr + std::fmt::Debug + PartialEq + Send + Sync + 'static,
+{
+    std::thread::spawn(move || {
+        if let Err(e) = thread_priority::set_current_thread_priority(
+            thread_priority::ThreadPriority::Crossplatform(
+                thread_priority::ThreadPriorityValue::try_from(40)
+                    .expect("constant is in range of 0..100"),
+            ),
+        ) {
+            tracing::warn!("cannot set uplink actor to medium priority: {e}");
+        }
+        read_uplink(
+            &socket,
+            &transition_command,
+            &actuator_command,
+            &telemetry_health,
+            &clock,
+            &states,
+            this_system,
+        )
+    });
 }
 
 /// Blocks on the connection by reading message by message and handling it.
@@ -48,10 +87,10 @@ pub struct TelemetryHealth {
     fields(this_system)
 )]
 pub fn read_uplink<ActuatorName>(
-    reader: &dyn MavConnection<MavMessage>,
+    reader: &std::net::UdpSocket,
     transition_command: &Watchable<transition::Command>,
     actuator_command: &Watchable<Option<actuator_control::Command<ActuatorName>>>,
-    telemetry_health: &Watchable<TelemetryHealth>,
+    telemetry_health: &Watchable<UplinkTelemetryHealth>,
     clock: &impl Watched<MissionTime>,
     states: &HashSet<StateName>,
     this_system: RemoteSystem,
@@ -59,74 +98,112 @@ pub fn read_uplink<ActuatorName>(
 where
     ActuatorName: std::str::FromStr + std::fmt::Debug + PartialEq,
 {
+    let mut seq = Wrapping(0);
     loop {
-        read_uplink_once(
-            reader,
-            transition_command,
-            actuator_command,
-            telemetry_health,
-            clock,
-            states,
-            this_system,
-        );
+        read_uplink_once(reader, telemetry_health, clock, &mut seq, |msg| {
+            msg_processor(
+                &msg,
+                transition_command,
+                actuator_command,
+                states,
+                this_system,
+            )
+        });
     }
 }
 
 #[tracing::instrument(level = "TRACE", skip_all)]
-fn read_uplink_once<ActuatorName>(
-    reader: &dyn MavConnection<MavMessage>,
-    transition_command: &Watchable<transition::Command>,
-    actuator_command: &Watchable<Option<actuator_control::Command<ActuatorName>>>,
-    telemetry_health: &Watchable<TelemetryHealth>,
+fn read_uplink_once(
+    reader: &std::net::UdpSocket,
+    telemetry_health: &Watchable<UplinkTelemetryHealth>,
     clock: &impl Watched<MissionTime>,
-    states: &HashSet<StateName>,
-    this_system: RemoteSystem,
-) where
-    ActuatorName: std::str::FromStr + std::fmt::Debug + PartialEq,
-{
-    let received = reader.recv();
-    let time = clock.current();
-    {
-        // Critical Section
-        let mut health = telemetry_health.write();
-        health.time_of_last_msg = time;
-        health.num_msg_received += 1;
-    }
+    expected_seq: &mut Wrapping<u8>,
+    processor: impl FnOnce(Message) -> bool,
+) {
+    // blockingly receive a frame
+    let received = mavlink_hal::transport::recv_message::<Message>(reader);
 
-    let (header, msg) = match received {
-        Ok((header, msg)) => (header, msg),
+    let time = clock.current().as_instant_us();
+    let (msg, lost) = match received {
+        Ok((msg, sequence)) => {
+            let lost = u32::from((sequence - *expected_seq).0);
+            *expected_seq = sequence + Wrapping(1);
+            (msg, lost)
+        }
+        Err(mavlink_hal::transport::RecvError::Decode { error, sequence }) => {
+            tracing::warn!(%error, "skipping bad frame");
+            {
+                // Critical Section
+                let mut health = telemetry_health.write();
+                health.time_of_last_msg = time;
+                health.num_msg_lost += u32::from((sequence - *expected_seq).0);
+                health.num_msg_received += 1;
+            }
+            *expected_seq = sequence + Wrapping(1);
+            return;
+        }
         Err(e) => {
-            tracing::warn!(error = %e, "skipping bad frame, waiting 5ms");
+            tracing::warn!(error = %e, "failed to receive frame, waiting 5ms");
             // If the link is severed, then this causes a infinite loop, thus keep it under control. Shouldn't happen with UDP
             std::thread::sleep(std::time::Duration::from_millis(5));
             return;
         }
     };
 
-    tracing::debug!(?header, ?msg, "received MavLink message");
+    tracing::debug!(?msg, "received MavLink message"); // fixme: csv logging
 
-    let good = match msg {
-        MavMessage::COMMAND_MANUAL_TRANSITION(COMMAND_MANUAL_TRANSITION_DATA {
-            target_system,
+    // Critical Section:
+    let mut health = telemetry_health.write();
+    health.time_of_last_msg = time;
+    health.num_msg_lost += lost;
+    health.num_msg_received += 1;
+    if processor(msg) {
+        health.time_of_last_processed_msg = time;
+        health.num_msg_processed += 1;
+    }
+}
+
+/// Process an uplink command, and return if it did so successfully.
+///
+/// This either sets the `transition_command` value to the received transition command,
+/// or the `actuator_command` to the received actuator command.
+fn msg_processor<ActuatorName>(
+    msg: &Message,
+    transition_command: &Watchable<transition::Command>,
+    actuator_command: &Watchable<Option<actuator_control::Command<ActuatorName>>>,
+    states: &HashSet<StateName>,
+    this_system: RemoteSystem,
+) -> bool
+where
+    ActuatorName: std::str::FromStr + std::fmt::Debug + PartialEq,
+{
+    match msg {
+        Message::FlightComputer(FCMessage::ManualStateTransition(ManualStateTransition {
             transition_index,
             state,
-        }) => {
-            if target_system != this_system {
+        }))
+        | Message::RfsComputer(RFSCMessage::ManualStateTransition(ManualStateTransition {
+            transition_index,
+            state,
+        })) => {
+            if matches!(msg, Message::FlightComputer(_))
+                != matches!(this_system, RemoteSystem::FlightComputer)
+            {
                 tracing::trace!("skipping transition command for other system");
-                return;
+                return false;
             }
 
-            let Ok(target) = StateName::try_from_array(&state, states) else {
+            let Ok(target) = StateName::try_from_array(state, states) else {
                 tracing::warn!(
-                    received = %String::from_utf8_lossy(&state),
+                    received = %String::from_utf8_lossy(state),
                     "skipping transition command to unknown state"
                 );
-                return;
+                return false;
             };
-            let index = if transition_index == 0 {
+            let index = if *transition_index == 0 {
                 None
             } else {
-                Some(transition_index as usize)
+                Some(*transition_index as usize)
             };
 
             let command: transition::Command = Some((index, target));
@@ -136,32 +213,38 @@ fn read_uplink_once<ActuatorName>(
 
             true
         }
-        MavMessage::COMMAND_MANUAL_ACTUATOR(COMMAND_MANUAL_ACTUATOR_DATA {
-            target_system,
+        Message::FlightComputer(FCMessage::ManualActuatorChange(ManualActuatorChange {
             path_index,
-            actuator_id,
+            actuator,
             value,
-        }) => {
-            if target_system != this_system {
-                tracing::trace!("skipping transition command for other system");
-                return;
+        }))
+        | Message::RfsComputer(RFSCMessage::ManualActuatorChange(ManualActuatorChange {
+            path_index,
+            actuator,
+            value,
+        })) => {
+            if matches!(msg, Message::FlightComputer(_))
+                != matches!(this_system, RemoteSystem::FlightComputer)
+            {
+                tracing::trace!("skipping actuator command for other system");
+                return false;
             }
 
             // Decode the name from zero padded utf8
-            let Ok(Ok(actuator_name)) = std::str::from_utf8(&actuator_id)
+            let Ok(Ok(actuator_name)) = std::str::from_utf8(actuator)
                 .map(|s| ActuatorName::from_str(s.trim_end_matches('\0')))
             else {
                 tracing::warn!(
-                    received = %String::from_utf8_lossy(&actuator_id),
+                    received = %String::from_utf8_lossy(actuator),
                     "skipping actuator command for bad actuator"
                 );
-                return;
+                return false;
             };
 
             let command = actuator_control::Command {
-                in_state_index: path_index as usize,
+                in_state_index: *path_index as usize,
                 actuator: actuator_name,
-                value,
+                value: *value,
             };
             tracing::debug!(?command, "received actuator command");
 
@@ -172,18 +255,12 @@ fn read_uplink_once<ActuatorName>(
         }
         // ignore other signals
         _ => false,
-    };
-
-    if good {
-        // Critical Section
-        let mut health = telemetry_health.write();
-        health.time_of_last_processed_msg = time;
-        health.num_msg_processed += 1;
     }
 }
 
 /// A simple implementor of [`io_utils::BroadcastLoop`] that periodically send the current value.
 /// The period used is the average of min and max.
+// TODO: make a responsive loop
 pub struct PeriodicLoop;
 
 impl io_utils::BroadcastLoop<Message> for PeriodicLoop {
@@ -194,7 +271,7 @@ impl io_utils::BroadcastLoop<Message> for PeriodicLoop {
         min_freq_hz: f32,
         max_freq_hz: f32,
     ) -> io_utils::NeverReturns {
-        let period = Duration::from_secs_f32(((1. / min_freq_hz) + (1. / max_freq_hz)) / 2.);
+        let period = Duration::from_secs_f32(f32::midpoint(1. / min_freq_hz, 1. / max_freq_hz));
         let mut interval = tokio::time::interval(period);
         interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
         loop {
@@ -202,39 +279,47 @@ impl io_utils::BroadcastLoop<Message> for PeriodicLoop {
             let val = map(field.get());
             if channel.send(val).is_err() {
                 tracing::warn!("Telemetry channel was closed. Slowing down!");
-                tokio::time::sleep(Duration::from_millis(5001));
+                tokio::time::sleep(Duration::from_millis(5001)).await;
                 // 5001 such that new clipyy doesn't complain yet
             }
         }
     }
 }
 
-/// Blocks on `receiver` reading message by message and sending them to MavLink.
+/// Starts a low priority thread to read from `channel` and send items as mavlink messages to `socket`.
+pub fn start_downlink_actor(
+    socket: std::net::UdpSocket,
+    channel: std::sync::mpsc::Receiver<Message>,
+    this_system: RemoteSystem,
+) {
+    std::thread::spawn(move || {
+        if let Err(e) =
+            thread_priority::set_current_thread_priority(thread_priority::ThreadPriority::Min)
+        {
+            tracing::warn!("cannot set downlink actor to low priority: {e}");
+        }
+        downlink_actor(&socket, channel, this_system);
+    });
+}
+
+/// Blocks on `channel` reading message by message and sending them to MavLink.
 ///
 /// This is needed, as only one thread can send at a time this actor arbitrates the accesses.
 /// Writing to the mpsc won't block.
-#[tracing::instrument(
-    level = "TRACE",
-    name = "telemetry::downlink",
-    skip_all,
-    fields(this_system)
-)]
-pub fn downlink_actor(
-    writer: &dyn MavConnection<MavMessage>,
-    receiver: std::sync::mpsc::Receiver<MavMessage>,
+#[tracing::instrument(level = "TRACE", name = "telemetry::downlink", skip_all)]
+fn downlink_actor(
+    socket: &std::net::UdpSocket,
+    channel: std::sync::mpsc::Receiver<Message>,
     this_system: RemoteSystem,
 ) {
+    let endpoint = Endpoint::v2(MavLinkId::new(
+        RemoteSystem::mavlink_system_id(this_system),
+        1,
+    ));
+
     // Blocking iterator
-    for msg in receiver {
-        tracing::trace!(?msg, "sending MAVLink message");
-        let res = writer.send(
-            &mavlink_core::MavHeader {
-                system_id: this_system as u8,
-                component_id: 1,
-                sequence: 0, // this is ignored by the library
-            },
-            &msg,
-        );
+    for msg in channel {
+        let res = mavlink_hal::transport::send_message(&msg, &endpoint, socket);
         if let Err(err) = res {
             tracing::error!(error = %err, "failed to send MAVLink message. Dropping it.");
         }
@@ -242,33 +327,35 @@ pub fn downlink_actor(
     tracing::warn!("Exiting downlink_actor, should only happen at shutdown");
 }
 
-impl<I, O, P> StateMachine<I, O, P> {
-    /// Spawn a thread to send the current state to the ground station at a rate of `rate_hz` Hz.
-    pub fn start_streaming_state(
-        &self,
-        telemetry_sender: std::sync::mpsc::Sender<MavMessage>,
-        clock: impl Watched<MissionTime> + Send + 'static,
-        rate_hz: f32,
-    ) -> AbortHandle {
-        let watched = self.watch_state_path();
-        spawn_telemetry_streamer(
-            Repeatedly::new(clock, Duration::from_secs_f32(1. / rate_hz)).map(move |t| {
-                let path = watched.current();
-                let current = path
-                    .last()
-                    .expect("state_path is initialized with one element and never shortened")
-                    .clone();
-                #[allow(clippy::cast_possible_truncation)] // We'll never have millions of states
-                MavMessage::CURRENT_STATE(hermes_mavlink::CURRENT_STATE_DATA {
-                    time_unix_ms: t.as_ms_timestamp(),
-                    path_index: path.len() as u32 - 1,
-                    state: current.to_array(),
-                })
-            }),
-            telemetry_sender,
-        )
-    }
-}
+// FIXME:
+// impl<I, O, P> StateMachine<I, O, P> {
+//     /// Spawn a thread to send the current state to the ground station at a rate of `rate_hz` Hz.
+//     pub fn start_streaming_state(
+//         &self,
+//         telemetry_sender: std::sync::mpsc::Sender<Message>,
+//         clock: impl Watched<MissionTime> + Send + 'static,
+//         rate_hz: f32,
+//     ) -> AbortHandle {
+//         let watched = self.watch_state_path();
+//         spawn_telemetry_streamer(
+//             Repeatedly::new(clock, Duration::from_secs_f32(1. / rate_hz)).map(move |t| {
+//                 let path = watched.current();
+//                 let current = path
+//                     .last()
+//                     .expect("state_path is initialized with one element and never shortened")
+//                     .clone();
+//                 MavMessage::CURRENT_STATE(hermes_mavlink::CURRENT_STATE_DATA {
+//                     time_unix_ms: t.as_ms_timestamp(),
+//                     path_index: u32::try_from(path.len())
+//                         .expect("We'll never have millions of transitions")
+//                         - 1,
+//                     state: current.to_array(),
+//                 })
+//             }),
+//             telemetry_sender,
+//         )
+//     }
+// }
 
 /// Encoding of `StateName` into/from Mavlink
 impl StateName {
@@ -309,7 +396,7 @@ impl StateName {
 
 /// This function will return once the last received message has been longer than `timeout` ago.
 pub async fn await_telemetry_loss(
-    health: impl IntoWatched<TelemetryHealth>,
+    health: impl IntoWatched<UplinkTelemetryHealth>,
     clock: impl IntoWatched<MissionTime>,
     timeout: Duration,
 ) {
@@ -318,7 +405,10 @@ pub async fn await_telemetry_loss(
     let mut clock = clock.watched();
     let health = health.watched();
     clock
-        .next_satisfying(move |t| *t >= health.current().time_of_last_msg + timeout)
+        .next_satisfying(move |t| {
+            *t >= MissionTime::from(Duration::from_micros(health.current().time_of_last_msg.0))
+                + timeout
+        })
         .await;
 }
 
@@ -392,12 +482,12 @@ mod tests {
     ) -> (
         transition::Command,
         Option<actuator_control::Command<ActuatorName>>,
-        TelemetryHealth,
+        UplinkTelemetryHealth,
     ) {
         let mut mock_conn = MockMavConnection::new();
         let transition_command = Watchable::new(None);
         let actuator_command = Watchable::new(None);
-        let telemetry_health = Watchable::new(TelemetryHealth::default());
+        let telemetry_health = Watchable::new(UplinkTelemetryHealth::default());
         let clock = Watchable::new(Duration::from_millis(100).into());
         let states = create_state_names();
         let this_system = RemoteSystem::ROCKET;

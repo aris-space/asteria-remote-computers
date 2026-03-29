@@ -1143,19 +1143,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "hermes-mavlink"
-version = "0.1.0"
-dependencies = [
- "bitflags 2.10.0",
- "mavlink-bindgen",
- "mavlink-core",
- "num-derive",
- "num-traits",
- "serde",
- "serde_arrays",
-]
-
-[[package]]
 name = "hermes_gnc"
 version = "0.1.0"
 dependencies = [
@@ -1446,14 +1433,16 @@ dependencies = [
  "datatypes",
  "embedded-can",
  "fs4",
- "hermes-mavlink",
  "hex",
- "mavlink-core",
+ "io-utils",
+ "mavio",
+ "mavlink-hal",
  "messages",
  "mockall",
  "serde",
  "sha2",
  "thiserror 1.0.69",
+ "thread-priority",
  "tokio",
  "tokio-util",
  "toml",
@@ -1599,7 +1588,7 @@ dependencies = [
  "heck",
  "log",
  "parse_int",
- "quick-xml 0.37.5",
+ "quick-xml",
  "regex",
  "serde",
  "serde_yml",
@@ -1625,20 +1614,6 @@ dependencies = [
  "tbytes",
  "thiserror 2.0.17",
  "tokio",
-]
-
-[[package]]
-name = "mavlink-bindgen"
-version = "0.13.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f83b15a4ad504e29cabfb03fdc97250a22d2354a5404d80fc48dbf02e06acf5f"
-dependencies = [
- "crc-any",
- "lazy_static",
- "proc-macro2",
- "quick-xml 0.26.0",
- "quote",
- "thiserror 1.0.69",
 ]
 
 [[package]]
@@ -1677,6 +1652,7 @@ dependencies = [
  "crc",
  "mavio",
  "tbytes",
+ "thiserror 2.0.17",
 ]
 
 [[package]]
@@ -1977,17 +1953,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "num-derive"
-version = "0.4.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ed3955f1a9c7c0c15e092f9c887db08b1fc683305fdf6eb6684f22555355e202"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn 2.0.114",
-]
-
-[[package]]
 name = "num-integer"
 version = "0.1.46"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2200,15 +2165,6 @@ dependencies = [
  "tokio",
  "tracing",
  "watchable",
-]
-
-[[package]]
-name = "quick-xml"
-version = "0.26.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7f50b1c63b38611e7d4d7f68b82d3ad0cc71a2ad2e7f61fc10f1328d917c93cd"
-dependencies = [
- "memchr",
 ]
 
 [[package]]
@@ -2759,6 +2715,20 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.114",
+]
+
+[[package]]
+name = "thread-priority"
+version = "3.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2210811179577da3d54eb69ab0b50490ee40491a25d95b8c6011ba40771cb721"
+dependencies = [
+ "bitflags 2.10.0",
+ "cfg-if",
+ "libc",
+ "log",
+ "rustversion",
+ "windows",
 ]
 
 [[package]]
