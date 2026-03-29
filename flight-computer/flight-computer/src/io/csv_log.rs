@@ -115,9 +115,16 @@ impl InputTree {
                 ],
             )
             .await?,
-            acceleration
-                .watched()
-                .map(|a| (a.north, a.east, a.down, a.x, a.y, a.z)),
+            acceleration.watched().map(|a| {
+                (
+                    a.acceleration_north,
+                    a.acceleration_east,
+                    a.acceleration_down,
+                    a.acceleration_x,
+                    a.acceleration_y,
+                    a.acceleration_z,
+                )
+            }),
             time.watched(),
         );
         // Log velocity data to "timeseries-velocity.csv" with headers "timestamp [unix ms]", "velocity north [m/s]", "velocity east [m/s]", "velocity down [m/s]".
@@ -136,9 +143,16 @@ impl InputTree {
                 ],
             )
             .await?,
-            velocity
-                .watched()
-                .map(|v| (v.north, v.east, v.down, v.x, v.y, v.z)),
+            velocity.watched().map(|v| {
+                (
+                    v.velocity_north,
+                    v.velocity_east,
+                    v.velocity_down,
+                    v.velocity_x,
+                    v.velocity_y,
+                    v.velocity_z,
+                )
+            }),
             time.watched(),
         );
         // Log orientation data as NED quaternion to "timeseries-orientation.csv" with headers "timestamp [unix ms]", "orientation W", "orientation X", "orientation Y", "orientation Z".
@@ -172,18 +186,20 @@ impl InputTree {
                 folder,
                 "telemetry_health",
                 &[
-                    "time_of_last_msg [unix ms]",
+                    "time_of_last_msg [unix us]",
                     "num_msg_received",
-                    "time_of_last_processed_msg [unix ms]",
+                    "num_msg_lost",
+                    "time_of_last_processed_msg [unix us]",
                     "num_msg_processed",
                 ],
             )
             .await?,
             telemetry_health.watched().map(|h| {
                 (
-                    h.time_of_last_msg.as_ms_timestamp(),
+                    h.time_of_last_msg.0,
                     h.num_msg_received,
-                    h.time_of_last_processed_msg.as_ms_timestamp(),
+                    h.num_msg_lost,
+                    h.time_of_last_processed_msg.0,
                     h.num_msg_processed,
                 )
             }),
