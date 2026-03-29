@@ -33,7 +33,7 @@ impl StateLogic for Thrust {
                 tracing::info!(cause = "manual", "transitioning");
                 return next;
             },
-            _ = velocity_watcher.next_satisfying(|v| v.down > self.abort_downward_velocity_m_s) => {
+            _ = velocity_watcher.next_satisfying(|v| v.velocity_down > self.abort_downward_velocity_m_s) => {
                 tracing::info!(cause = "fc apogee trigger", "transitioning");
                 return self.on_apogee_reached.clone();
             },

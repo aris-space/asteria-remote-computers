@@ -3,6 +3,7 @@ use gnc_interface::MotorDeflections;
 use lib_mission::reactive::{IntoWatched, Repeatedly, Watched};
 use lib_mission::state_machine::{AdditionalState, StateLogic, StateName};
 use lib_mission::transition::ManualTransitions;
+use messages::datapoints::dp_sensor_carrier as sensor_types;
 use nalgebra::{Quaternion, UnitQuaternion};
 use std::sync::Mutex;
 use std::time::Duration;
@@ -68,9 +69,9 @@ where
                     // FIXME: might need to add angular velocity.
                     gnc.step(
                         input.time.get().into(),
-                        input.location.get().into(),
-                        input.velocity.get().into(),
-                        input.acceleration.get().into(),
+                        conv_loc(input.location.get()),
+                        conv_vel(input.velocity.get()),
+                        conv_accl(input.acceleration.get()),
                         quat_to_angles(&input.orientation.get()),
                     )
                 },
@@ -145,7 +146,7 @@ impl<Gnc> ControlLoop<Gnc> {
 }
 
 #[allow(clippy::similar_names)]
-fn quat_to_angles(orient: &types::Orientation) -> gnc_interface::Orientation {
+fn quat_to_angles(orient: &sensor_types::OrientationData) -> gnc_interface::Orientation {
     let quat = Quaternion::new(
         f64::from(orient.orientation_w),
         f64::from(orient.orientation_x),
@@ -170,35 +171,29 @@ fn quat_to_angles(orient: &types::Orientation) -> gnc_interface::Orientation {
 }
 
 /// Conversion from internal type to GNC type.
-impl From<types::Location> for gnc_interface::Position {
-    fn from(loc: types::Location) -> Self {
-        gnc_interface::Position {
-            latitude: loc.latitude,
-            longitude: loc.longitude,
-            altitude: loc.altitude.into(),
-        }
+fn conv_loc(loc: sensor_types::PositionData) -> gnc_interface::Position {
+    gnc_interface::Position {
+        latitude: loc.location_latitude,
+        longitude: loc.location_longitude,
+        altitude: loc.location_hamsl.into(),
     }
 }
 
 /// Conversion from internal type to GNC type.
-impl From<types::Velocity> for gnc_interface::Velocity {
-    fn from(vel: types::Velocity) -> Self {
-        gnc_interface::Velocity {
-            north: vel.north.into(),
-            east: vel.east.into(),
-            down: vel.down.into(),
-        }
+fn conv_vel(vel: sensor_types::VelocityData) -> gnc_interface::Velocity {
+    gnc_interface::Velocity {
+        north: vel.velocity_north.into(),
+        east: vel.velocity_east.into(),
+        down: vel.velocity_down.into(),
     }
 }
 
 /// Conversion from internal type to GNC type.
-impl From<types::Acceleration> for gnc_interface::Acceleration {
-    fn from(accl: types::Acceleration) -> Self {
-        gnc_interface::Acceleration {
-            north: accl.north.into(),
-            east: accl.east.into(),
-            down: accl.down.into(),
-        }
+fn conv_accl(accl: sensor_types::ImuData) -> gnc_interface::Acceleration {
+    gnc_interface::Acceleration {
+        north: accl.acceleration_north.into(),
+        east: accl.acceleration_east.into(),
+        down: accl.acceleration_down.into(),
     }
 }
 

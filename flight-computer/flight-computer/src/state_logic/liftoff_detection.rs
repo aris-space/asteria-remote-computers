@@ -40,13 +40,13 @@ impl StateLogic for LiftoffDetection {
                 },
                 // Wait until the condition gets fulfilled. The z axis points towards the tail of the rocket.
                 // Because absolute values are used the direction of acceleration on the z axis does not matter
-                _ = acceleration_watcher.next_satisfying(|a| a.z.abs() >= self.acceleration_limit) => {
+                _ = acceleration_watcher.next_satisfying(|a| a.acceleration_z.abs() >= self.acceleration_limit) => {
                     // Once inside, we race a `required_duration` timer against the condition breaking.
                     let mut timer = Timer::new(input.time.watched(), self.required_duration);
 
                     tokio::select! {
                         // If acceleration fell again below the threshold before `required_duration` we loop and watch again.
-                        _ = acceleration_watcher.next_satisfying(|a| a.z.abs() < self.acceleration_limit) => {
+                        _ = acceleration_watcher.next_satisfying(|a| a.acceleration_z.abs() < self.acceleration_limit) => {
                             tracing::warn!("acceleration spiked but not sustained over {}s", self.required_duration.as_secs_f32());
                         },
                         // If `required_duration` passed without acceleration dropping below the threshold, we transition to `on_liftoff_detected`

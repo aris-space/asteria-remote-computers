@@ -42,7 +42,7 @@ impl StateLogic for ApogeeTrigger {
                 tracing::info!(cause = "manual", "transitioning");
                 return next;
             },
-            _ = velocity_watcher.next_satisfying(|v| v.down > simplified_trigger_threshold) => {
+            _ = velocity_watcher.next_satisfying(|v| v.velocity_down > simplified_trigger_threshold) => {
                 tracing::info!(cause = "fc apogee trigger", "transitioning");
                 return self.on_apogee_reached.clone();
             },
