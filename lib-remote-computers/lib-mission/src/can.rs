@@ -7,6 +7,7 @@ use std::collections::BTreeMap;
 
 use can_hal::{CanDecode as _, CanEncode as _};
 use embedded_can::{Frame, StandardId};
+use io_utils::Collector;
 use messages::Message as CanMessage;
 use tokio::sync::mpsc;
 
@@ -19,14 +20,27 @@ use tokio::sync::mpsc;
 ///
 /// At the moment only one consumer can be registered for every ID, which I think should suffice. Otherwise store a vector.
 #[derive(Default)]
-pub struct ConsumerRegistry {
+pub struct ConsumerRegistry<C = NoopCollector> {
     consumers: BTreeMap<StandardId, mpsc::UnboundedSender<CanMessage>>,
+    collector: C,
 }
 
 impl ConsumerRegistry {
     /// Create a new empty registry.
     pub fn new() -> Self {
-        Self::default()
+        Self {
+            consumers: BTreeMap::default(),
+            collector: NoopCollector,
+        }
+    }
+}
+
+impl<C> ConsumerRegistry<C> {
+    pub fn with_collector<C2>(self, collector: C2) -> ConsumerRegistry<C2> {
+        ConsumerRegistry {
+            consumers: self.consumers,
+            collector,
+        }
     }
 
     /// Registers to the given channel to receives messages of type `id`.
@@ -44,18 +58,30 @@ impl ConsumerRegistry {
         self.consumers.insert(id, tx);
         Ok(())
     }
+}
 
-    /// Forwards a message to all registered consumers.
+impl<C> ConsumerRegistry<C>
+where
+    C: Collector<CanMessage>,
+{
+    /// Forwards a message to the registered consumer or the collector.
     ///
     /// Returns the message back if there is no subscriber or the channel has closed.
-    fn forward(&self, id: StandardId, msg: CanMessage) -> Result<(), CanMessage> {
+    fn forward(&mut self, id: StandardId, msg: CanMessage) -> Result<(), CanMessage> {
         let Some(consumer) = self.consumers.get(&id) else {
-            return Err(msg);
+            return self.collector.update_from(msg);
         };
         if let Err(e) = consumer.send(msg) {
             return Err(e.0);
         }
         Ok(())
+    }
+}
+
+pub struct NoopCollector;
+impl<T> Collector<T> for NoopCollector {
+    fn update_from(&mut self, msg: T) -> Result<(), T> {
+        Err(msg)
     }
 }
 
@@ -71,8 +97,13 @@ impl std::fmt::Debug for ConsumerRegistry {
 /// Received frames are parsed and passed to registers `consumers`.
 ///
 /// Note that this uses the [`embedded_can::Frame`] trait, which technically is meant for CAN 2.0. We abuse this to also carry CAN FD frames.
-#[tracing::instrument(level = "TRACE", name = "can::receiver", skip_all, fields(?consumers))]
-pub fn read_can<S: embedded_can::blocking::Can>(receiver: &mut S, consumers: &ConsumerRegistry) {
+#[tracing::instrument(level = "TRACE", name = "can::receiver", skip_all)]
+pub fn read_can<S: embedded_can::blocking::Can, Col>(
+    receiver: &mut S,
+    consumers: &mut ConsumerRegistry<Col>,
+) where
+    Col: Collector<CanMessage>,
+{
     let mut n = 0;
     loop {
         read_can_once(receiver, consumers, n);
@@ -82,11 +113,13 @@ pub fn read_can<S: embedded_can::blocking::Can>(receiver: &mut S, consumers: &Co
 
 /// Read the message, parse it and forward it accordingly.
 #[tracing::instrument(level = "DEBUG", name = "can::receive", skip_all, fields(nr = n))]
-fn read_can_once<S: embedded_can::blocking::Can>(
+fn read_can_once<S: embedded_can::blocking::Can, Col>(
     receiver: &mut S,
-    consumers: &ConsumerRegistry,
+    consumers: &mut ConsumerRegistry<Col>,
     n: usize,
-) {
+) where
+    Col: Collector<CanMessage>,
+{
     let frame = match receiver.receive() {
         Ok(f) => f,
         Err(e) => {

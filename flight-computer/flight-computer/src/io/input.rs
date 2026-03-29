@@ -4,7 +4,7 @@ use crate::io::types::{MainDeploymentState, SeparationState, SteeringMotorRevolu
 
 use datatypes::status::{ArmingState, UplinkTelemetryHealth};
 use datatypes::units::RailStatus;
-use io_utils::Broadcast;
+use io_utils::{Broadcast, Collector};
 use lib_mission::util::time::MissionTime;
 use lib_mission::{actuator_control, transition};
 use messages::datapoints::dp_power_board::Message as PWBMessage;
@@ -17,8 +17,12 @@ use messages::Message;
 use pss_drivers::input::{PSSSensors, PSSValves};
 use watchable::Watchable;
 
-#[derive(Broadcast, Debug, Default, Clone)]
-#[broadcast(message_type = "messages::Message")]
+#[derive(Debug, Default, Clone, Broadcast, Collector)]
+#[broadcast(message_type = "Message")]
+#[collector(
+    message_type = "Message",
+    update_expr = "let _ = #field.update(#value);"
+)]
 pub struct RawUnprocessedData {
     /// The newest environmental data from the sensors.
     #[datapoint(pattern = "Message::SensorCarrier(SCMessage::EnvironmentalData(#value))")]
@@ -35,8 +39,12 @@ pub struct RawUnprocessedData {
 }
 
 /// Holds all information we gather from the rest of the rocket and environment.
-#[derive(Broadcast, Debug, Default, Clone)]
+#[derive(Debug, Default, Clone, Broadcast, Collector)]
 #[broadcast(message_type = "messages::Message")]
+#[collector(
+    message_type = "Message",
+    update_expr = "let _ = #field.update(#value);"
+)]
 pub struct InputTree {
     /// The current time, as as unix timestamp wrapper.
     pub time: Watchable<MissionTime>,

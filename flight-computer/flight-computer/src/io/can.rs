@@ -45,11 +45,12 @@ pub fn init_can_drivers(
     let input_handles = init_input_drivers(input_tree, &mut consumers);
     let (tx, rx) = std::sync::mpsc::channel();
     let output_handles = init_output_drivers(&input_tree.time, output_tree, &tx);
+    let mut consumers = consumers.with_collector(input_tree.clone());
 
     // Spawn the receiving thread
     std::thread::spawn(move || {
         let mut receiver = receiver;
-        read_can(&mut receiver, &consumers);
+        read_can(&mut receiver, &mut consumers);
     });
     // Spawn the transmitting thread
     std::thread::spawn(move || {
@@ -95,19 +96,6 @@ fn init_input_drivers(
             recovery_armed.clone(),
             ecu_armed.clone(),
             time.watched(),
-        ),
-        input_drivers::spawn_and_register_kinematics_driver(
-            consumers,
-            location.clone(),
-            velocity.clone(),
-            acceleration.clone(),
-            orientation.clone(),
-        ),
-        input_drivers::spawn_and_register_raw_unprocessed_data_driver(
-            consumers,
-            raw_unprocessed_data.environmental_data.clone(),
-            raw_unprocessed_data.rail_status_24v.clone(),
-            raw_unprocessed_data.rail_status_5v.clone(),
         ),
         input_drivers::spawn_and_register_actual_steering_driver(
             consumers,
