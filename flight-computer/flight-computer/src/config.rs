@@ -37,29 +37,6 @@ pub struct TelemetryConfig {
     /// The address used in [`std::net::UdpSocket::connect`].
     /// Typically "127.0.0.1:{PORT}".
     pub mavlink_address: String,
-    /// Defines the rates at which certain measurements are sent down in Hz.
-    pub downlink_rates: DownLinkRateConfig,
-}
-
-/// Defines the rates at which certain measurements are sent down.
-#[derive(Debug, Serialize, Deserialize)]
-pub struct DownLinkRateConfig {
-    /// The rate in Hz at which the current state should be sent down.
-    pub state_hz: f32,
-    /// The rate in Hz at which the kinematics (position, velocity, acceleration, orientation) should be sent down.
-    pub kinematics_hz: f32,
-    /// The rate in Hz at which the raw unprocessed data (environmental data, rail status 24V, rail status 5V) should be sent down.
-    pub av_stack_data_hz: f32,
-    /// The rate in Hz at which the steering motor positions should be sent down.
-    pub steering_data_hz: f32,
-    /// The rate in Hz at which the state of the actuator is sent down.
-    pub actuator_feedback_hz: f32,
-    /// The rate in Hz at which the temperature readings are sent down.
-    pub temperature_sensors_hz: f32,
-    /// The rate in Hz at which the pressure readings are sent down.
-    pub pressure_sensors_hz: f32,
-    /// The rate in Hz at which the tank fill levels are sent down.
-    pub fill_levels_hz: f32,
 }
 
 /// The sub config for CAN.
