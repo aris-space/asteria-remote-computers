@@ -68,17 +68,16 @@ fn init_input_drivers(
     // Register the consumers
     let InputTree {
         time: _,
-        transition_command: _, // doesn't originate from CAN
-        actuator_command: _,   // doesn't originate from CAN
-        telemetry_health: _,   // doesn't originate from CAN
-        boards_health: _,
-        rfs_computer_status: _,
+        transition_command: _,
+        actuator_command: _,
+        telemetry_health: _,
+        boards_status: _,
         recovery_armed: _,
         ecu_armed: _,
         raw_unprocessed_data: _,
         motors_position: _,
-        cats_separation: _, // doesn't originate from CAN,
-        cats_deployment: _, // doesn't originate from CAN,
+        cats_separation: _,
+        cats_deployment: _,
         location: _,
         velocity: _,
         acceleration: _,
