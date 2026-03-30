@@ -1,5 +1,6 @@
 use datatypes::status::ArmingState;
 use datatypes::units::RailStatus;
+use dp_recovery_board::SteeringPositions;
 use lib_mission::can::ConsumerRegistry;
 use lib_mission::reactive::Watched;
 use lib_mission::util::time::MissionTime;
@@ -189,7 +190,7 @@ fn is_recovery_board_healthy(
 /// Listens for `SteeringActualPositions` messages.
 pub fn spawn_and_register_actual_steering_driver(
     registry: &mut ConsumerRegistry,
-    actual_pos: Watchable<SteeringMotorRevolutions>,
+    actual_pos: Watchable<SteeringPositions>,
 ) -> AbortHandle {
     let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
     if let Err(()) = registry.register(
@@ -209,12 +210,8 @@ pub fn spawn_and_register_actual_steering_driver(
                     tracing::warn!("Received message it hasn't subscribed to");
                     continue;
                 };
-
-                let revs = SteeringMotorRevolutions {
-                    left_motor_steps: pos.left_pos,
-                    right_motor_steps: pos.right_pos,
-                };
-                let _old = actual_pos.update(revs);
+                
+                let _old = actual_pos.update(pos);
             }
             tracing::warn!("Shutting down");
         }

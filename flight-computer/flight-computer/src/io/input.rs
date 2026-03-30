@@ -1,6 +1,7 @@
 //! Contains [`InputTree`]
 
-use crate::io::types::{MainDeploymentState, SeparationState, SteeringMotorRevolutions};
+use crate::io::types::{MainDeploymentState, SeparationState};
+use dp_recovery_board::SteeringPositions;
 
 use datatypes::status::{ArmingState, UplinkTelemetryHealth};
 use datatypes::units::RailStatus;
@@ -68,7 +69,9 @@ pub struct InputTree {
     pub raw_unprocessed_data: RawUnprocessedData,
 
     /// The most recently provided positions of the motors.
-    pub motors_position: Watchable<SteeringMotorRevolutions>,
+    #[datapoint(pattern = "messages::Message::RecoveryBoard(dp_recovery_board::Message::SteeringActualPositions(#value))")]
+    #[broadcast(min_freq_hz = 10., max_freq_hz = 10.)]
+    pub motors_position: Watchable<SteeringPositions>,
 
     /// The state of whether CATS has triggered separation.
     /// Might also be `Separated` for a short time during start up.

@@ -321,7 +321,7 @@ impl InputTree {
             .await?,
             motors_position
                 .watched()
-                .map(|r| (r.left_motor_steps, r.right_motor_steps)),
+                .map(|r| (r.left_pos, r.right_pos)),
             time.watched(),
         );
 
