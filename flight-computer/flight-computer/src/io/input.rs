@@ -63,7 +63,6 @@ pub struct InputTree {
     /// The current time, as as unix timestamp wrapper.
     pub time: Watchable<MissionTime>,
     /// The newest command from the ground station.
-    #[datapoint(pattern = "Message::FlightComputer(FCMessage::ManualStateTransition(#value))")]
     pub transition_command: Watchable<ManualStateTransition>,
     /// The newest actuator command from the ground station.
     pub actuator_command:
