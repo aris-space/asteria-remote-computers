@@ -6,7 +6,6 @@ use crate::Result;
 use crate::actuator_control;
 use crate::reactive::{IntoWatched, Watched};
 use crate::state_machine::StateName;
-use crate::transition;
 use crate::util::time::MissionTime;
 
 use datatypes::status::ManualActuatorChange;
@@ -195,21 +194,19 @@ where
                 return false;
             }
 
-            let Ok(target) = StateName::try_from_array(state, states) else {
+            let Ok(_) = StateName::try_from_array(state, states) else {
                 tracing::warn!(
                     received = %String::from_utf8_lossy(state),
                     "skipping transition command to unknown state"
                 );
                 return false;
             };
-            let index = if *transition_index == 0 {
+            if *transition_index == 0 {
                 None
             } else {
                 Some(*transition_index as usize)
             };
 
-            // let command: transition::Command = Some((index, target));
-            // tracing::debug!(?command, "received command");
             // we don't care about the old value or whether they were equal
             let _ = transition_command.update(ManualStateTransition {
                 transition_index: *transition_index,
@@ -473,7 +470,7 @@ mod tests {
             }
         }
 
-        let transition_command = Watchable::new(None);
+        let transition_command = Watchable::new(ManualStateTransition::default());
         let actuator_command: Watchable<Option<actuator_control::Command<ActuatorName>>> =
             Watchable::new(None);
         let telemetry_health = Watchable::new(UplinkTelemetryHealth::default());
@@ -516,10 +513,10 @@ mod tests {
 
         assert_eq!(
             transition_command,
-            Some((
-                None,
-                StateName::new_unchecked("Idle").expect("short enough")
-            ))
+            ManualStateTransition {
+                transition_index: 1,
+                state: *b"Idle\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0",
+            }
         );
         assert_eq!(health.num_msg_received, 1);
         assert_eq!(health.num_msg_processed, 1);
@@ -531,17 +528,17 @@ mod tests {
     fn test_read_uplink_once_valid_state_with_index() {
         let (transition_command, _, health) = helper_read_uplink_once_with(Some(
             &Message::FlightComputer(FCMessage::ManualStateTransition(ManualStateTransition {
-                transition_index: 1,
+                transition_index: 0,
                 state: *b"Idle\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0",
             })),
         ));
 
         assert_eq!(
             transition_command,
-            Some((
-                Some(1),
-                StateName::new_unchecked("Idle").expect("short enough")
-            ))
+            ManualStateTransition {
+                transition_index: 1,
+                state: *b"Idle\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0",
+            }
         );
         assert_eq!(health.num_msg_received, 1);
         assert_eq!(health.num_msg_processed, 1);
@@ -554,7 +551,7 @@ mod tests {
         // IO errors (no message available) do not update health — the uplink actor just retries.
         let (transition_command, _, health) = helper_read_uplink_once_with(None);
 
-        assert_eq!(transition_command, None);
+        assert_eq!(transition_command, ManualStateTransition::default());
         assert_eq!(health.num_msg_received, 0);
         assert_eq!(health.num_msg_processed, 0);
         assert_eq!(health.time_of_last_msg, InstantUs(0));
@@ -571,7 +568,7 @@ mod tests {
             })),
         ));
 
-        assert_eq!(transition_command, None);
+        assert_eq!(transition_command, ManualStateTransition::default());
         assert_eq!(health.num_msg_received, 1);
         assert_eq!(health.num_msg_processed, 0);
         assert_eq!(health.time_of_last_msg, InstantUs(100_000));
@@ -587,7 +584,8 @@ mod tests {
             })),
         ));
 
-        assert_eq!(transition_command, None);
+        assert_eq!(transition_command, ManualStateTransition::default());
+
         assert_eq!(health.num_msg_received, 1);
         assert_eq!(health.num_msg_processed, 0);
         assert_eq!(health.time_of_last_msg, InstantUs(100_000));
@@ -763,7 +761,7 @@ mod tests {
         let telemetry_health = Watchable::new(UplinkTelemetryHealth::default());
         let clock = Watchable::new(Duration::from_millis(0).into());
         let states = create_state_names();
-        let transition_command = Watchable::new(None);
+        let transition_command = Watchable::new(ManualStateTransition::default());
         let actuator_command: Watchable<Option<actuator_control::Command<ActuatorName>>> =
             Watchable::new(None);
         let this_system = RemoteSystem::FlightComputer;
