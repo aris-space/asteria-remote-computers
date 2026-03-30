@@ -27,6 +27,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     .await?;
 
     let input_tree = InputTree::default();
+    input_tree.boards_status.time = input_tree.time.clone();
 
     let output_tree = OutputTree::default();
     let state_machine = StateMachine::new(config_file.state_machine)?;

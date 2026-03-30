@@ -72,8 +72,7 @@ fn init_input_drivers(
         transition_command: _, // doesn't originate from CAN
         actuator_command: _,   // doesn't originate from CAN
         telemetry_health: _,   // doesn't originate from CAN
-        boards_health,
-        rfs_computer_status,
+        boards_status,
         recovery_armed,
         ecu_armed,
         raw_unprocessed_data,
@@ -88,20 +87,10 @@ fn init_input_drivers(
         pss_sensors,
     } = input_tree;
 
-    let mut handles = vec![
-        input_drivers::spawn_and_register_board_health_driver(
-            consumers,
-            boards_health.clone(),
-            rfs_computer_status.clone(),
-            recovery_armed.clone(),
-            ecu_armed.clone(),
-            time.watched(),
-        ),
-        input_drivers::spawn_and_register_actual_steering_driver(
-            consumers,
-            motors_position.clone(),
-        ),
-    ];
+    let mut handles = vec![input_drivers::spawn_and_register_actual_steering_driver(
+        consumers,
+        motors_position.clone(),
+    )];
     handles.extend(
         pss_drivers::can_input_drivers::register_and_spawn_input_drivers(
             pss_valves,
