@@ -41,7 +41,7 @@ impl RemoteSystem {
 /// Reasoning for medium is that the CAN interaction is more important, but uplink is more important than downlink.
 pub fn start_uplink_actor<ActuatorName>(
     socket: std::net::UdpSocket,
-    transition_command: Watchable<transition::Command>,
+    transition_command: Watchable<ManualStateTransition>,
     actuator_command: Watchable<Option<actuator_control::Command<ActuatorName>>>,
     telemetry_health: Watchable<UplinkTelemetryHealth>,
     clock: impl Watched<MissionTime> + Send + 'static,
@@ -90,7 +90,7 @@ where
 )]
 pub fn read_uplink<ActuatorName>(
     reader: &std::net::UdpSocket,
-    transition_command: &Watchable<transition::Command>,
+    transition_command: &Watchable<ManualStateTransition>,
     actuator_command: &Watchable<Option<actuator_control::Command<ActuatorName>>>,
     telemetry_health: &Watchable<UplinkTelemetryHealth>,
     clock: &impl Watched<MissionTime>,
@@ -171,7 +171,7 @@ fn read_uplink_once(
 /// or the `actuator_command` to the received actuator command.
 fn msg_processor<ActuatorName>(
     msg: &Message,
-    transition_command: &Watchable<transition::Command>,
+    transition_command: &Watchable<ManualStateTransition>,
     actuator_command: &Watchable<Option<actuator_control::Command<ActuatorName>>>,
     states: &HashSet<StateName>,
     this_system: RemoteSystem,
@@ -208,10 +208,13 @@ where
                 Some(*transition_index as usize)
             };
 
-            let command: transition::Command = Some((index, target));
-            tracing::debug!(?command, "received command");
+            // let command: transition::Command = Some((index, target));
+            // tracing::debug!(?command, "received command");
             // we don't care about the old value or whether they were equal
-            let _ = transition_command.update(command);
+            let _ = transition_command.update(ManualStateTransition {
+                transition_index: *transition_index,
+                state: *state,
+            });
 
             true
         }
@@ -448,7 +451,7 @@ mod tests {
     fn helper_read_uplink_once_with(
         msg: Option<&Message>,
     ) -> (
-        transition::Command,
+        ManualStateTransition,
         Option<actuator_control::Command<ActuatorName>>,
         UplinkTelemetryHealth,
     ) {

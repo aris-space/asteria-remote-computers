@@ -212,8 +212,10 @@ impl InputTree {
             )
             .await?,
             transition_command.watched().map(|r| {
-                // Propagate the Noneness to each field
-                r.map_or((None, None), |(i, s)| (i, Some(s.to_string())))
+                (
+                    r.transition_index,
+                    Some(String::from_utf8_lossy(&r.state).trim_end_matches('\0').to_string()),
+                )
             }),
             time.watched(),
         );

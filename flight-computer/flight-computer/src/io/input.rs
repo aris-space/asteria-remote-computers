@@ -8,9 +8,9 @@ use datapoints::dp_fuel_control_board::Message as FCBMessage;
 use datapoints::dp_oxidizer_control_board::Message as OCBMessage;
 use datapoints::dp_power_board::Message as PWBMessage;
 use datapoints::dp_recovery_board::Message as RECMessage;
-use datapoints::dp_recovery_board::SteeringPositions;
 use datapoints::dp_rfs_computer::Message as RFSCMessage;
 use datapoints::dp_sensor_carrier::Message as SCMessage;
+use datapoints::dp_recovery_board::SteeringPositions;
 use datapoints::dp_sensor_carrier::{
     EnvironmentalData, ImuData, OrientationData, PositionData, VelocityData,
 };
@@ -22,6 +22,7 @@ use lib_mission::util::time::MissionTime;
 use lib_mission::{actuator_control, transition};
 use messages::datapoints;
 use messages::Message;
+use messages::datapoints::dp_flight_computer::__message_meta_types::ManualStateTransition;
 use pss_drivers::input::{PSSSensors, PSSValves};
 use watchable::Watchable;
 
@@ -62,7 +63,8 @@ pub struct InputTree {
     /// The current time, as as unix timestamp wrapper.
     pub time: Watchable<MissionTime>,
     /// The newest command from the ground station.
-    pub transition_command: Watchable<transition::Command>,
+    #[datapoint(pattern = "Message::FlightComputer(FCMessage::ManualStateTransition(#value))")]
+    pub transition_command: Watchable<ManualStateTransition>,
     /// The newest actuator command from the ground station.
     pub actuator_command:
         Watchable<Option<actuator_control::Command<pss_drivers::output::ValveName>>>,
@@ -211,7 +213,7 @@ pub struct BoardsStatus {
 impl transition::GetTransitionCommand for InputTree {
     fn transition_cmd_watcher(
         &self,
-    ) -> impl lib_mission::reactive::IntoWatched<transition::Command> + Send {
+    ) -> impl lib_mission::reactive::IntoWatched<datatypes::status::ManualStateTransition> + Send {
         &self.transition_command
     }
 }
