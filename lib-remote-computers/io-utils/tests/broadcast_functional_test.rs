@@ -131,7 +131,9 @@ struct Doubled {
 
 #[tokio::test(flavor = "current_thread")]
 async fn extract_expr_transforms_value() {
-    let doubled = Doubled { b: Watchable::new(21) };
+    let doubled = Doubled {
+        b: Watchable::new(21),
+    };
     let (tx, rx) = mpsc::channel::<Msg>();
 
     let handles = doubled.start_broadcasting::<TestLoop>(tx);
@@ -141,9 +143,13 @@ async fn extract_expr_transforms_value() {
         vec![rx.recv_timeout(timeout).expect("timed out")]
     })
     .await
-    .unwrap();
+    .expect("must be able await channel for test");
 
-    assert_eq!(msgs, vec![Msg::B(42)], "extract_expr should double the value");
+    assert_eq!(
+        msgs,
+        vec![Msg::B(42)],
+        "extract_expr should double the value"
+    );
 
     for h in handles {
         h.abort();

@@ -15,6 +15,13 @@ use lib_mission::reactive::IntoWatched as _;
 use lib_mission::state_machine::StateMachine;
 use tokio::task::AbortHandle;
 
+#[derive(Debug)]
+pub struct Handles {
+    pub uplink: JoinHandle<NeverReturns>,
+    pub downlink: JoinHandle<()>,
+    pub streamers: Vec<AbortHandle>,
+}
+
 /// Sets up the telemetry connection
 ///
 /// Returns the handles to tokio tasks spawned. Note that this also spawns two OS threads which aren't included.
@@ -23,8 +30,7 @@ pub fn init_telemetry(
     input_tree: &InputTree,
     _output_tree: &OutputTree,
     state_machine: &StateMachine<InputTree, OutputTree, ()>,
-) -> Result<(JoinHandle<NeverReturns>, JoinHandle<()>, Vec<AbortHandle>), Box<dyn std::error::Error>>
-{
+) -> Result<Handles, Box<dyn std::error::Error>> {
     // Setup connection
     let socket = UdpSocket::bind("127.0.0.1:0")?;
     socket.connect(&config.mavlink_address)?;
@@ -54,5 +60,9 @@ pub fn init_telemetry(
 
     // TODO: current state and FC status
 
-    Ok((uplink, downlink, input_streamers))
+    Ok(Handles {
+        uplink,
+        downlink,
+        streamers: input_streamers,
+    })
 }

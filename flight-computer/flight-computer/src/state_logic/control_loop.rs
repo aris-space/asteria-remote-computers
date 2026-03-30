@@ -69,9 +69,9 @@ where
                     // FIXME: might need to add angular velocity.
                     gnc.step(
                         input.time.get().into(),
-                        conv_loc(input.location.get()),
-                        conv_vel(input.velocity.get()),
-                        conv_accl(input.acceleration.get()),
+                        conv_loc(&input.location.get()),
+                        conv_vel(&input.velocity.get()),
+                        conv_accl(&input.acceleration.get()),
                         quat_to_angles(&input.orientation.get()),
                     )
                 },
@@ -171,7 +171,7 @@ fn quat_to_angles(orient: &sensor_types::OrientationData) -> gnc_interface::Orie
 }
 
 /// Conversion from internal type to GNC type.
-fn conv_loc(loc: sensor_types::PositionData) -> gnc_interface::Position {
+fn conv_loc(loc: &sensor_types::PositionData) -> gnc_interface::Position {
     gnc_interface::Position {
         latitude: loc.location_latitude,
         longitude: loc.location_longitude,
@@ -180,7 +180,7 @@ fn conv_loc(loc: sensor_types::PositionData) -> gnc_interface::Position {
 }
 
 /// Conversion from internal type to GNC type.
-fn conv_vel(vel: sensor_types::VelocityData) -> gnc_interface::Velocity {
+fn conv_vel(vel: &sensor_types::VelocityData) -> gnc_interface::Velocity {
     gnc_interface::Velocity {
         north: vel.velocity_north.into(),
         east: vel.velocity_east.into(),
@@ -189,7 +189,7 @@ fn conv_vel(vel: sensor_types::VelocityData) -> gnc_interface::Velocity {
 }
 
 /// Conversion from internal type to GNC type.
-fn conv_accl(accl: sensor_types::ImuData) -> gnc_interface::Acceleration {
+fn conv_accl(accl: &sensor_types::ImuData) -> gnc_interface::Acceleration {
     gnc_interface::Acceleration {
         north: accl.acceleration_north.into(),
         east: accl.acceleration_east.into(),

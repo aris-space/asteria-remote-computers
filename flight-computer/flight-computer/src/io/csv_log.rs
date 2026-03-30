@@ -43,19 +43,6 @@ impl InputTree {
             rail_status_5v,
         } = raw_unprocessed_data;
 
-        /// A macro which captures `time` and `folder` to spawn a logger for the board health.
-        /// Probably could also be a closure.
-        macro_rules! spawn_board_health_logger {
-            ($name:literal, $e:expr, $header:expr,) => {
-                lib_mission::util::log::spawn_watchable_logger(
-                    lib_mission::util::log::make_timeseries_writer(folder, $name, &[$header])
-                        .await?,
-                    $e.watched().map(|h| h.map(|t| t.as_ms_timestamp())),
-                    time.watched(),
-                )
-            };
-        }
-
         // Log real time to "timeseries-realtime.csv" with headers "timestamp [unix ms]", "real time [unix ms]".
         // Disabled for now, since we use realtime to set the mission time.
 
