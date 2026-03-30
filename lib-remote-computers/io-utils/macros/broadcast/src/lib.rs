@@ -52,9 +52,17 @@
 //!
 //! ## Struct Attributes
 //!
-//! `#[broadcast(message_type = ...)]`
+//! `#[broadcast(message_type = ..., extract_expr = "...")]`
 //!
 //! - `message_type` (required): The message type produced by broadcast tasks.
+//! - `extract_expr` (optional): Expression placed inside every variant constructor.
+//!   `#value` is replaced with the closure argument. Defaults to the identity (`#value`).
+//!   Useful when the stored type differs from the message payload, e.g.:
+//!   ```rust,ignore
+//!   // Watchable<f32> stores raw f32; message expects Celsius(f32).
+//!   #[broadcast(message_type = "SensorMessage", extract_expr = "Celsius(#value)")]
+//!   ```
+//!   This produces `|__value| SensorMessage::Temperature(Celsius(__value))` for each field.
 //!
 //! ## Field Attributes
 //!
@@ -64,7 +72,7 @@
 //!   `io_utils::BroadcastLoop::broadcast_loop`.
 //!   Float literals are required (e.g. `1.` or `1.0`).
 //! - `#[datapoint(pattern = "...")]`: Maps the field value to a message variant.
-//!   The `#value` placeholder becomes the closure argument.
+//!   The `#value` placeholder is filled by `extract_expr` (or the raw value if omitted).
 //!
 //! Alternatively, a field may have the `#[broadcast(flatten)]` attribute,
 //! then it delegates broadcasting to the field that itself
@@ -93,6 +101,11 @@ struct BroadcastInput {
 
     /// The message type produced by broadcast tasks (e.g., `"SensorMessage"`).
     message_type: syn::Type,
+
+    /// Expression placed inside each variant constructor, from `extract_expr = "..."`.
+    /// `#value` is replaced with the closure argument. Defaults to the identity (`#value`).
+    #[darling(default)]
+    extract_expr: Option<String>,
 }
 
 /// Field-level attributes parsed from `#[datapoint(...)]` and `#[broadcast(...)]`.
@@ -201,8 +214,12 @@ fn derive_broadcast_impl(raw_input: &syn::DeriveInput) -> proc_macro2::TokenStre
                 return None;
             };
 
+            let inner_expr = match &broadcast_input.extract_expr {
+                Some(expr) => expr.replace("#value", "__value"),
+                None => "__value".to_string(),
+            };
             let closure_body = pattern
-                .replace("#value", "__value")
+                .replace("#value", &inner_expr)
                 .parse()
                 .unwrap_or_else(|err| {
                     darling::Error::custom(format!("invalid pattern: {err}")).write_errors()
