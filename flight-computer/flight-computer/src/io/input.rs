@@ -2,19 +2,23 @@
 
 use crate::io::types::{MainDeploymentState, SeparationState};
 
+use datapoints::dp_engine_control_board::Message as ECUMessage;
+use datapoints::dp_fuel_control_board::Message as FCBMessage;
+use datapoints::dp_oxidizer_control_board::Message as OCBMessage;
+use datapoints::dp_power_board::Message as PWBMessage;
+use datapoints::dp_recovery_board::Message as RECMessage;
+use datapoints::dp_recovery_board::SteeringPositions;
+use datapoints::dp_rfs_computer::Message as RFSCMessage;
+use datapoints::dp_sensor_carrier::Message as SCMessage;
+use datapoints::dp_sensor_carrier::{
+    EnvironmentalData, ImuData, OrientationData, PositionData, VelocityData,
+};
 use datatypes::status::{ArmingState, UplinkTelemetryHealth};
 use datatypes::units::RailStatus;
 use io_utils::{Broadcast, Collector};
 use lib_mission::util::time::MissionTime;
 use lib_mission::{actuator_control, transition};
-use messages::datapoints::dp_power_board::Message as PWBMessage;
-use messages::datapoints::dp_rfs_computer::RfsComputerStatus;
-use messages::datapoints::dp_recovery_board::Message as RCMessage;
-use messages::datapoints::dp_recovery_board::SteeringPositions;
-use messages::datapoints::dp_sensor_carrier::Message as SCMessage;
-use messages::datapoints::dp_sensor_carrier::{
-    EnvironmentalData, ImuData, OrientationData, PositionData, VelocityData,
-};
+use messages::datapoints;
 use messages::Message;
 use pss_drivers::input::{PSSSensors, PSSValves};
 use watchable::Watchable;
@@ -57,22 +61,21 @@ pub struct InputTree {
         Watchable<Option<actuator_control::Command<pss_drivers::output::ValveName>>>,
     /// Statistics about the health of the telemetry uplink.
     pub telemetry_health: Watchable<UplinkTelemetryHealth>,
-    /// The processed health report for the avionics boards.
-    pub boards_health: BoardsHealthyAsOf,
-    /// The last received status of the RFS Computer and the timestamp when it was received.
-    pub rfs_computer_status: Watchable<(RfsComputerStatus, MissionTime)>,
+    /// The health report for the avionics boards.
+    #[collector(flatten)]
+    #[broadcast(flatten)]
+    pub boards_status: BoardsStatus,
     /// Hardware arming as detected by the recovery board.
     pub recovery_armed: Watchable<ArmingState>,
     /// Main valve hardware arming as detected by the engine control board.
     pub ecu_armed: Watchable<ArmingState>,
     /// The newest raw data from the AV stack sensors.
     #[broadcast(flatten)]
+    #[collector(flatten)]
     pub raw_unprocessed_data: RawUnprocessedData,
 
     /// The most recently provided positions of the motors.
-    #[datapoint(
-        pattern = "Message::RecoveryBoard(RCMessage::SteeringActualPositions(#value))"
-    )]
+    #[datapoint(pattern = "Message::RecoveryBoard(RECMessage::SteeringActualPositions(#value))")]
     #[broadcast(min_freq_hz = 10., max_freq_hz = 10.)]
     pub motors_position: Watchable<SteeringPositions>,
 
@@ -104,18 +107,62 @@ pub struct InputTree {
     pub pss_sensors: PSSSensors,
 }
 
-/// The processed health report for the avionics boards.
+/// The health report for the avionics boards.
 ///
-/// If `Some(t)` the board was last observed to be healthy, which happend at `t`.
-/// If `None` the board was last observed unhealthy or not yet observed.
-#[derive(Debug, Default, Clone)]
-pub struct BoardsHealthyAsOf {
-    pub sensor_carrier: Watchable<Option<MissionTime>>,
-    pub power_board: Watchable<Option<MissionTime>>,
-    pub recovery_board: Watchable<Option<MissionTime>>,
-    pub fuel_control_board: Watchable<Option<MissionTime>>,
-    pub oxidizer_control_board: Watchable<Option<MissionTime>>,
-    pub engine_control_board: Watchable<Option<MissionTime>>,
+/// In addition to the status, this also keeps track of the time when the status was received
+#[derive(Debug, Default, Clone, Broadcast, Collector)]
+#[broadcast(message_type = "Message", extract_expr = "#value.1")]
+#[collector(
+    message_type = "Message",
+    update_expr = "let _ = #field.update((self.time.get(), #value));"
+)]
+pub struct BoardsStatus {
+    /// The current time, as as unix timestamp wrapper.
+    /// This is a clone from `InputTree` and used for updating the timestamps.
+    pub time: Watchable<MissionTime>,
+
+    #[datapoint(pattern = "Message::RfsComputer(RFSCMessage::Status(#value))")]
+    #[broadcast(min_freq_hz = 0.5, max_freq_hz = 2.)]
+    pub rfs_computer: Watchable<(MissionTime, datapoints::dp_rfs_computer::RfsComputerStatus)>,
+
+    #[datapoint(pattern = "Message::SensorCarrier(SCMessage::BoardStatus(#value))")]
+    #[broadcast(min_freq_hz = 0.5, max_freq_hz = 2.)]
+    pub sensor_carrier: Watchable<(
+        MissionTime,
+        datapoints::dp_sensor_carrier::SensorCarrierStatus,
+    )>,
+
+    #[datapoint(pattern = "Message::PowerBoard(PWBMessage::BoardStatus(#value))")]
+    #[broadcast(min_freq_hz = 0.5, max_freq_hz = 2.)]
+    pub power_board: Watchable<(MissionTime, datatypes::status::StatusCommonMessage)>,
+
+    #[datapoint(pattern = "Message::RecoveryBoard(RECMessage::BoardStatus(#value))")]
+    #[broadcast(min_freq_hz = 0.5, max_freq_hz = 2.)]
+    pub recovery_board: Watchable<(
+        MissionTime,
+        datapoints::dp_recovery_board::RecoveryBoardStatus,
+    )>,
+
+    #[datapoint(pattern = "Message::FuelControlBoard(FCBMessage::BoardStatus(#value))")]
+    #[broadcast(min_freq_hz = 0.5, max_freq_hz = 2.)]
+    pub fuel_control_board: Watchable<(
+        MissionTime,
+        datapoints::dp_fuel_control_board::FuelControlBoardStatus,
+    )>,
+
+    #[datapoint(pattern = "Message::OxidizerControlBoard(OCBMessage::BoardStatus(#value))")]
+    #[broadcast(min_freq_hz = 0.5, max_freq_hz = 2.)]
+    pub oxidizer_control_board: Watchable<(
+        MissionTime,
+        datapoints::dp_oxidizer_control_board::OxidizerControlBoardStatus,
+    )>,
+
+    #[datapoint(pattern = "Message::EngineControlBoard(ECUMessage::BoardStatus(#value))")]
+    #[broadcast(min_freq_hz = 0.5, max_freq_hz = 2.)]
+    pub engine_control_board: Watchable<(
+        MissionTime,
+        datapoints::dp_engine_control_board::EngineControlBoardStatus,
+    )>,
 }
 
 /// Allow common code to read the ground station transition command.

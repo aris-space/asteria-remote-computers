@@ -114,3 +114,38 @@ async fn smoke() {
         h.abort();
     }
 }
+
+// ---------------------------------------------------------------------------
+// extract_expr test
+// ---------------------------------------------------------------------------
+
+/// struct_level extract_expr wraps every field value before putting it in
+/// the variant. Here `extract_expr = "#value * 2"` doubles the stored value.
+#[derive(Broadcast)]
+#[broadcast(message_type = "Msg", extract_expr = "#value * 2")]
+struct Doubled {
+    #[datapoint(pattern = "Msg::B(#value)")]
+    #[broadcast(min_freq_hz = 2., max_freq_hz = 20.)]
+    b: Watchable<u32>,
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn extract_expr_transforms_value() {
+    let doubled = Doubled { b: Watchable::new(21) };
+    let (tx, rx) = mpsc::channel::<Msg>();
+
+    let handles = doubled.start_broadcasting::<TestLoop>(tx);
+
+    let msgs = tokio::task::spawn_blocking(move || {
+        let timeout = std::time::Duration::from_millis(500);
+        vec![rx.recv_timeout(timeout).expect("timed out")]
+    })
+    .await
+    .unwrap();
+
+    assert_eq!(msgs, vec![Msg::B(42)], "extract_expr should double the value");
+
+    for h in handles {
+        h.abort();
+    }
+}

@@ -23,8 +23,7 @@ impl InputTree {
             transition_command,
             actuator_command,
             telemetry_health,
-            boards_health,
-            rfs_computer_status,
+            boards_status,
             recovery_armed,
             ecu_armed,
             motors_position,
@@ -235,37 +234,7 @@ impl InputTree {
             }),
             time.watched(),
         );
-        // Log board last healths to a single columns, or empty if unhealthy
-        spawn_board_health_logger!(
-            "boards_health_sensor_carrier",
-            boards_health.sensor_carrier,
-            "sensor carrier last healthy [unix ms?]",
-        );
-        spawn_board_health_logger!(
-            "boards_health_power_board",
-            boards_health.power_board,
-            "power board last healthy [unix ms?]",
-        );
-        spawn_board_health_logger!(
-            "boards_health_recovery_board",
-            boards_health.recovery_board,
-            "recovery board last healthy [unix ms?]",
-        );
-        spawn_board_health_logger!(
-            "boards_health_fuel_control_board",
-            boards_health.fuel_control_board,
-            "fuel control board last healthy [unix ms?]",
-        );
-        spawn_board_health_logger!(
-            "boards_health_oxidizer_control_board",
-            boards_health.oxidizer_control_board,
-            "oxidizer control board last healthy [unix ms?]",
-        );
-        spawn_board_health_logger!(
-            "boards_health_engine_control_board",
-            boards_health.engine_control_board,
-            "engine control board last healthy [unix ms?]",
-        );
+        // TODO: Log board last healths
         // Log RFS computer status
         spawn_watchable_logger(
             make_timeseries_writer(
@@ -279,7 +248,7 @@ impl InputTree {
                 ],
             )
             .await?,
-            rfs_computer_status.watched().map(|(s, _)| {
+            boards_status.rfs_computer.watched().map(|(_, s)| {
                 (
                     s.common.errors,
                     s.common.micros_since_restart,

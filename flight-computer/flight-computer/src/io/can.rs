@@ -5,7 +5,6 @@ use tokio::task::AbortHandle;
 
 use crate::config::CANConfig;
 
-use super::input::InputTree;
 use super::output::OutputTree;
 
 mod output_drivers;
