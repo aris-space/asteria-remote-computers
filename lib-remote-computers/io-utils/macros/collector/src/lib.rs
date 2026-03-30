@@ -13,6 +13,17 @@
 //! enum TelemetryMessage {
 //!     Temperature(f32),
 //!     Pressure(f32),
+//!     Humidity(f32),
+//! }
+//!
+//! #[derive(Collector)]
+//! #[collector(
+//!     message_type = "TelemetryMessage",
+//!     update_expr = "let _ = #field.update(#value);"
+//! )]
+//! struct HumiditySensor {
+//!     #[datapoint(pattern = "TelemetryMessage::Humidity(#value)")]
+//!     humidity: Watchable<f32>,
 //! }
 //!
 //! #[derive(Collector)]
@@ -26,10 +37,14 @@
 //!
 //!     #[datapoint(pattern = "TelemetryMessage::Pressure(#value)")]
 //!     pressure: Watchable<f32>,
+//!
+//!     // Also match on the datapoints in `HumiditySensor`.
+//!     #[collector(flatten)]
+//!     humidity_sensor: HumiditySensor,
 //! }
 //!
 //! // Usage:
-//! let msg = TelemetryMessage::Temperature(25.0);
+//! let msg = TelemetryMessage::Humidity(65.0);
 //! sensors.update_from(msg).expect("matched");
 //! ```
 //!
@@ -38,34 +53,43 @@
 //! ```rust,ignore
 //! impl Collector<TelemetryMessage> for Sensors {
 //!     fn update_from(&mut self, msg: TelemetryMessage) -> Result<(), TelemetryMessage> {
-//!         match msg {
+//!         let msg = match msg {
 //!             TelemetryMessage::Temperature(__value) => {
-//!                 { let _ = self.temperature.update(__value); }
-//!                 Ok(())
+//!                 let _ = self.temperature.update(__value);
+//!                 return Ok(());
 //!             }
 //!             TelemetryMessage::Pressure(__value) => {
-//!                 { let _ = self.pressure.update(__value); }
-//!                 Ok(())
+//!                 let _ = self.pressure.update(__value);
+//!                 return Ok(());
 //!             }
-//!             _ => Err(msg),
-//!         }
+//!             msg => msg,
+//!         };
+//!         let msg = match <HumiditySensor as Collector<TelemetryMessage>>::update_from(
+//!             &mut self.humidity_sensor, msg,
+//!         ) {
+//!             Ok(()) => return Ok(()),
+//!             Err(msg) => msg,
+//!         };
+//!         Err(msg)
 //!     }
 //! }
 //! ```
 //!
 //! ## Explanation
 //!
-//! Each field with a `datapoint` generates a match arm. The `#value` placeholder in the pattern
-//! is replaced with `__value` which captures the matched value and makes it available in `update_expr`.
-//! Match arms are generated in the order fields are declared in the struct.
-//! The last arm always includes `_ => Err(msg)` to return unmatched messages for composability.
+//! Each field with `#[datapoint(pattern = ...)]` generates a match arm. The `#value` placeholder
+//! is replaced with `__value` which captures the matched value and makes it available in
+//! `update_expr`. Match arms are generated in the order fields are declared in the struct.
+//! Fields with `#[collector(flatten)]` are tried after all direct patterns, in declaration order.
+//! Unmatched messages fall through to the final `Err(msg)` for composability.
 //!
 //! ## Struct Attributes
 //!
 //! `#[collector(message_type = ..., update_expr = "...")]`
 //!
 //! - `message_type` (required): The enum type to match against. Must be a valid type path.
-//! - `update_expr` (required): A template expression executed when a match occurs.
+//! - `update_expr` (required when direct `#[datapoint(pattern = ...)]` fields are present):
+//!   A template expression executed when a match occurs.
 //!   - `#field`: Replaced with `self.<field_name>`
 //!   - `#value`: Replaced with the extracted value from the datapoint pattern
 //!
@@ -90,15 +114,12 @@
 //!
 //! ## Field Attributes
 //!
-//! `#[datapoint(pattern = "...")]`
+//! ### `#[datapoint(pattern = "...")]`
 //!
-//! Maps an enum variant to a field update.
-//! At most one per field, but at least one field must have an attribute (otherwise the derive is useless).
+//! Maps an enum variant to a field update. The pattern must contain `#value`,
+//! whose captured value becomes available in `update_expr`.
 //!
-//! The pattern must contain `#value` which will be replaced with `__value` to capture the matched value.
-//! This captured value becomes available in `update_expr`.
-//!
-//! ### Examples:
+//! #### Examples:
 //!
 //! ```rust,ignore
 //! // Simple extraction
@@ -108,6 +129,12 @@
 //! #[datapoint(pattern = "Msg::SystemA(system_a::Msg::Foo(#value))")]
 //! ```
 //!
+//! ### `#[collector(flatten)]`
+//!
+//! Delegates unmatched messages to a nested field that itself implements `Collector<T>`.
+//! After all direct patterns fail to match, flatten delegates are tried in field declaration
+//! order. Must not be combined with `#[datapoint(pattern = ...)]` on the same field.
+//!
 //! ## Hygiene
 //!
 //! The macro generates a single impl block for `io_utils::Collector<{message_type}>`.
@@ -115,10 +142,10 @@
 // The [`darling::FromVariant`] macro seems to have needless continues
 #![allow(clippy::needless_continue)]
 
-use darling::{FromDeriveInput, FromField, ast};
+use darling::{FromDeriveInput, FromField, ast, util::Flag};
 use proc_macro::TokenStream;
 use quote::quote;
-use syn::parse_macro_input;
+use syn::{parse_macro_input, spanned::Spanned};
 
 /// Struct-level attributes parsed from `#[collector(...)]`.
 #[derive(Debug, FromDeriveInput)]
@@ -132,17 +159,25 @@ struct CollectorInput {
 
     /// Template expression executed when a match occurs.
     /// Use `#field` for `self.<field_name>` and `#value` for the captured value.
-    update_expr: String,
+    /// Required when any direct `#[datapoint(pattern = ...)]` fields are present.
+    #[darling(default)]
+    update_expr: Option<String>,
 }
 
-/// Field-level attributes parsed from `#[datapoint(pattern = "...")]`.
+/// Field-level attributes parsed from `#[datapoint(...)]` and `#[collector(...)]`.
 #[derive(Debug, FromField)]
-#[darling(attributes(datapoint))]
+#[darling(attributes(datapoint, collector))]
 struct CollectorField {
     ident: Option<syn::Ident>,
-    /// The match pattern containing `#value` placeholder.
+    ty: syn::Type,
+
+    /// The match pattern containing `#value` placeholder, from `#[datapoint(pattern = "...")]`.
     #[darling(default)]
     pattern: Option<String>,
+
+    /// If true, delegate unmatched messages to this field's own `Collector` impl,
+    /// from `#[collector(flatten)]`.
+    flatten: Flag,
 }
 
 /// Derive macro for implementing the `Collector` trait.
@@ -155,6 +190,7 @@ pub fn derive_collector(input: TokenStream) -> TokenStream {
 }
 
 /// Inner implementation using proc_macro2 types (testable).
+#[allow(clippy::too_many_lines)] // meep
 fn derive_collector_impl(raw_input: &syn::DeriveInput) -> proc_macro2::TokenStream {
     let collector_input = match CollectorInput::from_derive_input(raw_input) {
         Ok(v) => v,
@@ -172,33 +208,79 @@ fn derive_collector_impl(raw_input: &syn::DeriveInput) -> proc_macro2::TokenStre
         .expect("darling restricted to struct_named")
         .fields;
 
-    let mut match_arms = Vec::new();
+    let has_direct = fields
+        .iter()
+        .any(|f| !f.flatten.is_present() && f.pattern.is_some());
+    let has_flatten = fields.iter().any(|f| f.flatten.is_present());
 
-    for field in fields {
+    if !has_direct && !has_flatten {
+        return darling::Error::custom(
+            "at least one field must have a #[datapoint(pattern = ...)] or #[collector(flatten)] attribute",
+        )
+        .write_errors();
+    }
+
+    let mut error = darling::Error::accumulator();
+
+    // Validate: flatten must not also carry a pattern.
+    for field in &fields {
+        if field.flatten.is_present() && field.pattern.is_some() {
+            let field_name = field
+                .ident
+                .as_ref()
+                .expect("darling restricted to struct_named");
+            error.push(
+                darling::Error::custom(format!(
+                    "field `{field_name}` has #[collector(flatten)] and must not also have a #[datapoint(pattern = ...)]"
+                ))
+                .with_span(&field.ident.span()),
+            );
+        }
+    }
+
+    // Validate: update_expr required when direct pattern fields exist.
+    if has_direct && collector_input.update_expr.is_none() {
+        error.push(darling::Error::custom(
+            "struct has fields with #[datapoint(pattern = ...)] but is missing \
+             `update_expr` in #[collector(...)]",
+        ));
+    }
+
+    if let Err(e) = error.finish() {
+        return e.write_errors();
+    }
+
+    // --- Build direct match arms ---
+    let mut match_arms: Vec<proc_macro2::TokenStream> = Vec::new();
+    for field in &fields {
+        if field.flatten.is_present() {
+            continue;
+        }
+        let Some(datapoint_pattern) = &field.pattern else {
+            continue;
+        };
         let field_name = field
             .ident
             .as_ref()
             .expect("darling restricted to struct_named");
-        let Some(ref datapoint_pattern) = field.pattern else {
-            // Field without #[datapoint(...)] - skip it
-            continue;
-        };
 
-        // Replace #value with __value in the pattern
         let pattern: proc_macro2::TokenStream =
             match datapoint_pattern.replace("#value", "__value").parse() {
                 Ok(t) => t,
                 Err(e) => {
-                    return darling::Error::custom(format!("invalid pattern: {e}")).write_errors();
+                    return darling::Error::custom(format!("invalid pattern: {e}"))
+                        .with_span(&field.ident.span())
+                        .write_errors();
                 }
             };
 
-        // Generate the update expression with substitutions
-        let update_code = collector_input
+        let expr_template = collector_input
             .update_expr
+            .as_ref()
+            .expect("validated above to be Some");
+        let update_code = expr_template
             .replace("#field", &format!("self.{field_name}"))
             .replace("#value", "__value");
-
         let update_tokens: proc_macro2::TokenStream = match update_code.parse() {
             Ok(t) => t,
             Err(e) => {
@@ -209,136 +291,56 @@ fn derive_collector_impl(raw_input: &syn::DeriveInput) -> proc_macro2::TokenStre
         match_arms.push(quote! {
             #pattern => {
                 #update_tokens
-                Ok(())
+                return Ok(());
             }
         });
     }
 
-    if match_arms.is_empty() {
-        return darling::Error::custom(
-            "at least one field must have a #[datapoint(...)] attribute",
-        )
-        .write_errors();
+    // --- Build body statements ---
+    let mut stmts: Vec<proc_macro2::TokenStream> = Vec::new();
+
+    if !match_arms.is_empty() {
+        stmts.push(quote! {
+            let msg = match msg {
+                #(#match_arms)*
+                msg => msg,
+            };
+        });
+    }
+
+    for field in fields.iter().filter(|f| f.flatten.is_present()) {
+        let field_name = field
+            .ident
+            .as_ref()
+            .expect("darling restricted to struct_named");
+        let field_ty = &field.ty;
+        stmts.push(quote! {
+            let msg = match <#field_ty as io_utils::Collector<#message_type>>::update_from(
+                &mut self.#field_name,
+                msg,
+            ) {
+                Ok(()) => return Ok(()),
+                Err(msg) => msg,
+            };
+        });
     }
 
     quote! {
         impl io_utils::Collector<#message_type> for #struct_name {
             fn update_from(&mut self, msg: #message_type) -> Result<(), #message_type> {
-                match msg {
-                    #(#match_arms)*
-                    _ => Err(msg),
-                }
+                #(#stmts)*
+                Err(msg)
             }
         }
     }
 }
 
+/// Tests the error cases in the outputted source.
+/// Functional tests live in an integration test.
 #[cfg(test)]
 mod tests {
     use super::*;
-    use quote::{ToTokens, quote};
-
-    #[test]
-    fn test_darling_parsing() {
-        let input = quote! {
-            #[collector(
-                message_type = "TelemetryMessage",
-                update_expr = "let _ = #field.update(#value);"
-            )]
-            struct Sensors {
-                #[datapoint(pattern = "TelemetryMessage::Temperature(#value)")]
-                temperature: f32,
-
-                #[datapoint(pattern = "TelemetryMessage::Pressure(#value)")]
-                pressure: f32,
-
-                // Field without datapoint should be skipped
-                other: String,
-            }
-        };
-
-        let parsed: syn::DeriveInput = syn::parse2(input).expect("failed to parse input");
-        let collector_input =
-            CollectorInput::from_derive_input(&parsed).expect("darling parsing failed");
-
-        assert_eq!(
-            collector_input.message_type.to_token_stream().to_string(),
-            "TelemetryMessage"
-        );
-        assert_eq!(
-            collector_input.update_expr,
-            "let _ = #field.update(#value);"
-        );
-
-        let fields = collector_input
-            .data
-            .as_ref()
-            .take_struct()
-            .expect("should be struct")
-            .fields;
-
-        assert_eq!(fields.len(), 3);
-        assert_eq!(
-            fields[0].pattern,
-            Some("TelemetryMessage::Temperature(#value)".to_string())
-        );
-        assert_eq!(
-            fields[1].pattern,
-            Some("TelemetryMessage::Pressure(#value)".to_string())
-        );
-        assert_eq!(fields[2].pattern, None);
-    }
-
-    #[test]
-    fn test_code_generation() {
-        let input = quote! {
-            #[collector(
-                message_type = "Msg",
-                update_expr = "#field = #value;"
-            )]
-            struct Data {
-                #[datapoint(pattern = "Msg::A(#value)")]
-                a: i32,
-
-                #[datapoint(pattern = "Msg::B(#value)")]
-                b: String,
-            }
-        };
-
-        let parsed: syn::DeriveInput = syn::parse2(input).expect("failed to parse input");
-        let output = derive_collector_impl(&parsed);
-        let output_str = output.to_string();
-
-        // Verify the generated code contains expected elements
-        assert!(
-            output_str.contains("impl io_utils :: Collector < Msg > for Data"),
-            "missing impl header in: {output_str}"
-        );
-        assert!(
-            output_str.contains("fn update_from"),
-            "missing update_from in: {output_str}"
-        );
-        assert!(
-            output_str.contains("Msg :: A (__value)"),
-            "missing pattern A in: {output_str}"
-        );
-        assert!(
-            output_str.contains("Msg :: B (__value)"),
-            "missing pattern B in: {output_str}"
-        );
-        assert!(
-            output_str.contains("self . a = __value"),
-            "missing field a assignment in: {output_str}"
-        );
-        assert!(
-            output_str.contains("self . b = __value"),
-            "missing field b assignment in: {output_str}"
-        );
-        assert!(
-            output_str.contains("Err (msg)"),
-            "missing fallback arm in: {output_str}"
-        );
-    }
+    use quote::quote;
 
     #[test]
     fn test_error_on_no_datapoints() {
@@ -356,9 +358,49 @@ mod tests {
         let output = derive_collector_impl(&parsed);
         let output_str = output.to_string();
 
-        // Should contain a compile error
         assert!(
-            output_str.contains("error"),
+            output_str.contains("at least one field must have"),
+            "expected error in: {output_str}"
+        );
+    }
+
+    #[test]
+    fn test_error_on_flatten_with_pattern() {
+        let input = quote! {
+            #[collector(message_type = "Msg", update_expr = "#field = #value;")]
+            struct Data {
+                #[datapoint(pattern = "Msg::A(#value)")]
+                #[collector(flatten)]
+                inner: Inner,
+            }
+        };
+
+        let parsed: syn::DeriveInput = syn::parse2(input).expect("failed to parse input");
+        let output = derive_collector_impl(&parsed);
+        let output_str = output.to_string();
+
+        assert!(
+            output_str.contains("must not also have a #[datapoint(pattern"),
+            "expected error in: {output_str}"
+        );
+    }
+
+    #[test]
+    fn test_error_on_missing_update_expr() {
+        let input = quote! {
+            #[collector(message_type = "Msg")]
+            struct Data {
+                #[datapoint(pattern = "Msg::A(#value)")]
+                a: i32,
+            }
+        };
+
+        let parsed: syn::DeriveInput = syn::parse2(input).expect("failed to parse input");
+        let output = derive_collector_impl(&parsed);
+        let output_str = output.to_string();
+
+        assert!(
+            output_str.contains("missing `update_expr`"),
             "expected error in: {output_str}"
         );
     }

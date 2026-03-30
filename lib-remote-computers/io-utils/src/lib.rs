@@ -4,7 +4,7 @@
 ///
 /// ## Composable Message Handling
 ///
-/// The `Err(msg)` return allows chaining multiple collectors:
+/// The `Err(msg)` return allows chaining multiple collectors, which is used when using `#[collector(flatten)]`.
 ///
 /// ```rust,ignore
 /// #[derive(Collector, Default)]
