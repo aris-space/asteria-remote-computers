@@ -214,7 +214,11 @@ impl InputTree {
             transition_command.watched().map(|r| {
                 (
                     r.transition_index,
-                    Some(String::from_utf8_lossy(&r.state).trim_end_matches('\0').to_string()),
+                    Some(
+                        String::from_utf8_lossy(&r.state)
+                            .trim_end_matches('\0')
+                            .to_string(),
+                    ),
                 )
             }),
             time.watched(),

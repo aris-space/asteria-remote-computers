@@ -66,16 +66,23 @@ impl ManualTransitions {
         let next_index = (path.current_state().1 + 1) as usize;
 
         loop {
-            let ManualStateTransition { transition_index, state } = watcher.next().await;
-                
+            let ManualStateTransition {
+                transition_index,
+                state,
+            } = watcher.next().await;
+
             let len = state.iter().position(|&x| x == 0).unwrap_or(state.len());
             let Ok(state_str) = std::str::from_utf8(&state[..len]) else {
                 tracing::warn!("received invalid UTF-8 state name");
                 continue;
             };
             let target = StateName::new_unchecked(state_str).expect("valid state name");
-            let index = if transition_index == 0 { None } else { Some(transition_index as usize) };
-            
+            let index = if transition_index == 0 {
+                None
+            } else {
+                Some(transition_index as usize)
+            };
+
             match index {
                 None => {
                     if self.is_allowed_unvalidated_transition(&target) {
