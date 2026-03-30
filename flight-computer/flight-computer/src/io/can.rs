@@ -8,7 +8,6 @@ use crate::config::CANConfig;
 use super::input::InputTree;
 use super::output::OutputTree;
 
-mod input_drivers;
 mod output_drivers;
 
 /// Initializes CAN and its drivers
