@@ -68,40 +68,27 @@ fn init_input_drivers(
 ) -> Vec<AbortHandle> {
     // Register the consumers
     let InputTree {
-        time,
+        time: _,
         transition_command: _, // doesn't originate from CAN
         actuator_command: _,   // doesn't originate from CAN
         telemetry_health: _,   // doesn't originate from CAN
-        boards_health,
-        rfs_computer_status,
-        recovery_armed,
-        ecu_armed,
-        raw_unprocessed_data,
-        motors_position,
+        boards_health: _,
+        rfs_computer_status: _,
+        recovery_armed: _,
+        ecu_armed: _,
+        raw_unprocessed_data: _,
+        motors_position: _,
         cats_separation: _, // doesn't originate from CAN,
         cats_deployment: _, // doesn't originate from CAN,
-        location,
-        velocity,
-        acceleration,
-        orientation,
+        location: _,
+        velocity: _,
+        acceleration: _,
+        orientation: _,
         pss_valves,
         pss_sensors,
     } = input_tree;
 
-    let mut handles = vec![
-        input_drivers::spawn_and_register_board_health_driver(
-            consumers,
-            boards_health.clone(),
-            rfs_computer_status.clone(),
-            recovery_armed.clone(),
-            ecu_armed.clone(),
-            time.watched(),
-        ),
-        input_drivers::spawn_and_register_actual_steering_driver(
-            consumers,
-            motors_position.clone(),
-        ),
-    ];
+    let mut handles = vec![];
     handles.extend(
         pss_drivers::can_input_drivers::register_and_spawn_input_drivers(
             pss_valves,

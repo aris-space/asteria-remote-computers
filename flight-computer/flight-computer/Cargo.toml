@@ -8,7 +8,6 @@ workspace = true
 
 [dependencies]
 lib-mission = { path = "../../lib-remote-computers/lib-mission" }
-dp-recovery-board = { path = "../../data-definitions/datapoints/dp-recovery-board", features = ["mavlink"] }
 io-utils = { path = "../../lib-remote-computers/io-utils" }
 gnc_interface = { path = "../hermes-recovery-gnc/gnc_interface" }
 hermes_gnc = { path = "../hermes-recovery-gnc/hermes_gnc", optional = true }

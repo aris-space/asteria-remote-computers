@@ -1,7 +1,6 @@
 //! Contains [`InputTree`]
 
 use crate::io::types::{MainDeploymentState, SeparationState};
-use dp_recovery_board::SteeringPositions;
 
 use datatypes::status::{ArmingState, UplinkTelemetryHealth};
 use datatypes::units::RailStatus;
@@ -10,6 +9,8 @@ use lib_mission::util::time::MissionTime;
 use lib_mission::{actuator_control, transition};
 use messages::datapoints::dp_power_board::Message as PWBMessage;
 use messages::datapoints::dp_rfs_computer::RfsComputerStatus;
+use messages::datapoints::dp_recovery_board::Message as RCMessage;
+use messages::datapoints::dp_recovery_board::SteeringPositions;
 use messages::datapoints::dp_sensor_carrier::Message as SCMessage;
 use messages::datapoints::dp_sensor_carrier::{
     EnvironmentalData, ImuData, OrientationData, PositionData, VelocityData,
@@ -69,7 +70,9 @@ pub struct InputTree {
     pub raw_unprocessed_data: RawUnprocessedData,
 
     /// The most recently provided positions of the motors.
-    #[datapoint(pattern = "messages::Message::RecoveryBoard(dp_recovery_board::Message::SteeringActualPositions(#value))")]
+    #[datapoint(
+        pattern = "Message::RecoveryBoard(RCMessage::SteeringActualPositions(#value))"
+    )]
     #[broadcast(min_freq_hz = 10., max_freq_hz = 10.)]
     pub motors_position: Watchable<SteeringPositions>,
 
