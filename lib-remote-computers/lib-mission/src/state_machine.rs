@@ -1,4 +1,3 @@
-use crate::reactive::{Watched, WatchedWatchable};
 use crate::{Error, Result};
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
@@ -12,10 +11,10 @@ pub struct StateMachine<I, O, P> {
     /// All the state logic blocks in the state machine.
     pub(crate) states: HashMap<StateName, BoxedState<I, O, P>>,
 
-    /// The path through the state graph that will be taken.
-    /// `state_path[0]` is always the initial state, and `state_path.last()` the current state.
-    /// This is initialized here so we can extract it for logging.
-    pub(crate) state_path: watchable::Watchable<Vec<StateName>>,
+    /// The current position in the state graph: (path_index, current_state).
+    /// `path_index` is the number of transitions taken so far (0 for initial state).
+    /// *You must not write to this manually*! (it is exposed solely for broadcasting).
+    pub current_state: watchable::Watchable<(u32, StateName)>,
 }
 
 impl<I, O, P> StateMachine<I, O, P> {
@@ -52,14 +51,6 @@ pub trait StateLogic {
 
 /// The type of a dynamically dispatched state logic instance.
 pub type BoxedState<I, O, P = ()> = Box<dyn StateLogic<Input = I, Output = O, Parameter = P>>;
-
-impl<I, O, P> StateMachine<I, O, P> {
-    /// Watch the path the state machine takes.
-    /// Note: this will clone the path on every transition or inspection, but paths shouldn't be longer than ~200.
-    pub fn watch_state_path(&self) -> impl Watched<Vec<StateName>> + Send + 'static {
-        WatchedWatchable::new(self.state_path.watch())
-    }
-}
 
 /// The names of states in a mission profile.
 ///

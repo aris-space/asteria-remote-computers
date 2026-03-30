@@ -5,6 +5,8 @@ use lib_mission::util::log::{make_timeseries_writer, spawn_watchable_logger};
 use lib_mission::util::time::MissionTime;
 use watchable::Watchable;
 
+use crate::io::input::CurrentStateWrapper;
+
 use super::input::{InputTree, RawUnprocessedData};
 use super::output::OutputTree;
 
@@ -19,6 +21,7 @@ impl InputTree {
 
         // This destructure is used so that we don't forget later additions.
         let InputTree {
+            state: CurrentStateWrapper { current_state },
             time,
             transition_command,
             actuator_command,
@@ -57,6 +60,15 @@ impl InputTree {
         //     }),
         //     time.watched(),
         // );
+
+        spawn_watchable_logger(
+            make_timeseries_writer(folder, "current_state", &["index [int]", "state [string]"])
+                .await?,
+            current_state
+                .watched()
+                .map(|(index, state)| (index, Some(state.to_string()))),
+            time.watched(),
+        );
 
         //////////////////////// DATA STANDARDS ///////////////////////
         // Log location data to "timeseries-location.csv" with headers "timestamp [unix ms]", "location latitude [°]", "location longitude [°]", "location altitude [m above sea level]".

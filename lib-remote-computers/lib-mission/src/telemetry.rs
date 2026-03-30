@@ -11,6 +11,7 @@ use crate::util::time::MissionTime;
 
 use datatypes::status::ManualActuatorChange;
 use datatypes::status::ManualStateTransition;
+use datatypes::status::StateMachineState;
 use datatypes::status::UplinkTelemetryHealth;
 use mavio::Endpoint;
 use mavio::MavLinkId;
@@ -328,36 +329,6 @@ fn downlink_actor(
     tracing::warn!("Exiting downlink_actor, should only happen at shutdown");
 }
 
-// FIXME:
-// impl<I, O, P> StateMachine<I, O, P> {
-//     /// Spawn a thread to send the current state to the ground station at a rate of `rate_hz` Hz.
-//     pub fn start_streaming_state(
-//         &self,
-//         telemetry_sender: std::sync::mpsc::Sender<Message>,
-//         clock: impl Watched<MissionTime> + Send + 'static,
-//         rate_hz: f32,
-//     ) -> AbortHandle {
-//         let watched = self.watch_state_path();
-//         spawn_telemetry_streamer(
-//             Repeatedly::new(clock, Duration::from_secs_f32(1. / rate_hz)).map(move |t| {
-//                 let path = watched.current();
-//                 let current = path
-//                     .last()
-//                     .expect("state_path is initialized with one element and never shortened")
-//                     .clone();
-//                 MavMessage::CURRENT_STATE(hermes_mavlink::CURRENT_STATE_DATA {
-//                     time_unix_ms: t.as_ms_timestamp(),
-//                     path_index: u32::try_from(path.len())
-//                         .expect("We'll never have millions of transitions")
-//                         - 1,
-//                     state: current.to_array(),
-//                 })
-//             }),
-//             telemetry_sender,
-//         )
-//     }
-// }
-
 /// Encoding of `StateName` into/from Mavlink
 impl StateName {
     /// Create a `StateName` from a Mavlink `char[30]`.
@@ -392,6 +363,14 @@ impl StateName {
         char_array[..len].copy_from_slice(&bytes[..len]);
 
         char_array
+    }
+}
+
+/// Encodes the current rich state as a message
+pub fn encode_current_state((path_index, current_state): (u32, StateName)) -> StateMachineState {
+    StateMachineState {
+        path_index,
+        state: current_state.to_array(),
     }
 }
 

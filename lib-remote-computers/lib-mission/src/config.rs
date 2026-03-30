@@ -167,7 +167,7 @@ impl<I, O, P> StateMachine<I, O, P> {
         let initial_state = StateName::try_new(&config.initial_state, &state_names)?;
 
         Ok(Self {
-            state_path: watchable::Watchable::new(vec![initial_state.clone()]),
+            current_state: watchable::Watchable::new((0, initial_state.clone())),
             initial_state,
             states,
         })

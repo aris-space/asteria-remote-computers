@@ -61,7 +61,7 @@ impl ManualTransitions {
     ) -> StateName {
         let mut watcher = cmd.transition_cmd_watcher().watched();
 
-        let next_index = path.current_state().1 + 1;
+        let next_index = (path.current_state().1 + 1) as usize;
 
         loop {
             match watcher.next().await {

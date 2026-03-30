@@ -3,6 +3,7 @@
 use crate::io::types::{MainDeploymentState, SeparationState};
 
 use datapoints::dp_engine_control_board::Message as ECUMessage;
+use datapoints::dp_flight_computer::Message as FCMessage;
 use datapoints::dp_fuel_control_board::Message as FCBMessage;
 use datapoints::dp_oxidizer_control_board::Message as OCBMessage;
 use datapoints::dp_power_board::Message as PWBMessage;
@@ -16,6 +17,7 @@ use datapoints::dp_sensor_carrier::{
 use datatypes::status::{ArmingState, UplinkTelemetryHealth};
 use datatypes::units::RailStatus;
 use io_utils::{Broadcast, Collector};
+use lib_mission::state_machine::StateName;
 use lib_mission::util::time::MissionTime;
 use lib_mission::{actuator_control, transition};
 use messages::datapoints;
@@ -52,6 +54,11 @@ pub struct RawUnprocessedData {
     update_expr = "let _ = #field.update(#value);"
 )]
 pub struct InputTree {
+    /// The current state machine state.
+    /// TODO: this is maybe part of a larger "Self-State", not Input, but works for now.
+    #[broadcast(flatten)]
+    pub state: CurrentStateWrapper,
+
     /// The current time, as as unix timestamp wrapper.
     pub time: Watchable<MissionTime>,
     /// The newest command from the ground station.
@@ -105,6 +112,32 @@ pub struct InputTree {
     pub pss_valves: PSSValves,
     /// The sensor readings from the PSS.
     pub pss_sensors: PSSSensors,
+}
+
+/// The current state machine wrapped in a struct such that we can use `#[broadcast(extract_expr)]`,
+/// and it is not collected.
+#[derive(Debug, Clone, Broadcast)]
+#[broadcast(
+    message_type = "Message",
+    extract_expr = "lib_mission::telemetry::encode_current_state(#value)"
+)]
+pub struct CurrentStateWrapper {
+    /// *Do not write to this!* This is exposed only for `Broadcast`
+    #[datapoint(pattern = "Message::FlightComputer(FCMessage::StateMachineState(#value))")]
+    #[broadcast(min_freq_hz = 3., max_freq_hz = 10.)]
+    pub current_state: watchable::Watchable<(u32, StateName)>,
+}
+
+/// A temporary default constructor, will be overwritten in `main.rs`
+impl Default for CurrentStateWrapper {
+    fn default() -> Self {
+        Self {
+            current_state: Watchable::new((
+                0,
+                StateName::new_unchecked("TEMPORARY").expect("short enough"),
+            )),
+        }
+    }
 }
 
 /// A health report which also tracks the previous status, the time,

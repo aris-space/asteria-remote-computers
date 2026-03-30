@@ -67,6 +67,7 @@ fn init_input_drivers(
 ) -> Vec<AbortHandle> {
     // Register the consumers
     let InputTree {
+        state: _,
         time: _,
         transition_command: _,
         actuator_command: _,
