@@ -36,21 +36,21 @@ impl StateLogic for AwaitRFSModeWhileConnected {
         tracing::info!("Waiting for FC to be passive");
 
         // Waits for either a manual transition or a change in the rfs status that indicates it is now passive.
-        let mut rfs_status_watched = input.rfs_computer_status.watched();
+        let mut rfs_status_watched = input.boards_status.rfs_computer.watched();
         let mut clock = input.time.watched();
-        let rfs_status_watched_2 = input.rfs_computer_status.watched();
+        let rfs_status_watched_2 = input.boards_status.rfs_computer.watched();
         tokio::select! {
             next_state = self.manual_transitions.next(input, param) => next_state,
-            _ = rfs_status_watched.next_satisfying(|(s, t)|
+            _ = rfs_status_watched.next_satisfying(|rep|
                 // Wait for new messages with the expected PSS control
-                (input.time.get() < *t + std::time::Duration::from_secs(2)) // Should be sent every second
+                (input.time.get() < rep.timestamp + std::time::Duration::from_secs(2)) // Should be sent every second
                 && match &self.mode {
-                    RfsPSSMode::RFSPassive => !s.has_pss_control,
-                    RfsPSSMode::RFSActive => s.has_pss_control,
+                    RfsPSSMode::RFSPassive => !rep.current_status.has_pss_control,
+                    RfsPSSMode::RFSActive => rep.current_status.has_pss_control,
                 }
             ) => self.on_detected.clone(),
             _ = clock.next_satisfying(
-                move |t| *t >= rfs_status_watched_2.current().1 + self.rfs_can_timeout
+                move |t| *t >= rfs_status_watched_2.current().timestamp + self.rfs_can_timeout
             ) => self.on_timeout.clone(),
         }
     }

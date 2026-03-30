@@ -22,7 +22,9 @@ impl StateLogic for ReadRFSArming {
         _output: &Self::Output,
         param: &AdditionalState<Self::Parameter>,
     ) -> StateName {
-        let (status, time) = input.rfs_computer_status.get();
+        let report = input.boards_status.rfs_computer.get();
+        let status = report.current_status;
+        let time = report.timestamp;
 
         if input.time.get() > time + std::time::Duration::from_secs(2) {
             // Should be sent every second

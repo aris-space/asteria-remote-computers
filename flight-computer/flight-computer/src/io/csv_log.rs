@@ -248,12 +248,12 @@ impl InputTree {
                 ],
             )
             .await?,
-            boards_status.rfs_computer.watched().map(|(_, s)| {
+            boards_status.rfs_computer.watched().map(|rep| {
                 (
-                    s.common.errors,
-                    s.common.micros_since_restart,
-                    s.has_pss_control,
-                    s.is_ignition_armed == datatypes::status::ArmingState::Armed,
+                    rep.current_status.common.errors,
+                    rep.current_status.common.micros_since_restart,
+                    rep.current_status.has_pss_control,
+                    rep.current_status.is_ignition_armed == datatypes::status::ArmingState::Armed,
                 )
             }),
             time.watched(),
@@ -288,9 +288,7 @@ impl InputTree {
                 &["actual left [steps]", "actual right [steps]"],
             )
             .await?,
-            motors_position
-                .watched()
-                .map(|r| (r.left_pos, r.right_pos)),
+            motors_position.watched().map(|r| (r.left_pos, r.right_pos)),
             time.watched(),
         );
 

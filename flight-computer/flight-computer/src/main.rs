@@ -26,7 +26,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     >(build_info::THIS_BUILD, config_path)
     .await?;
 
-    let input_tree = InputTree::default();
+    let mut input_tree = InputTree::default();
     input_tree.boards_status.time = input_tree.time.clone();
 
     let output_tree = OutputTree::default();

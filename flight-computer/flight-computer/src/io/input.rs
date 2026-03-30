@@ -107,14 +107,37 @@ pub struct InputTree {
     pub pss_sensors: PSSSensors,
 }
 
+/// A health report which also tracks the previous status, the time,
+/// and if it was default constructed.
+#[derive(Debug, Default, Clone)]
+pub struct StatusReport<T> {
+    pub fresh: bool,
+    pub timestamp: MissionTime,
+    pub current_status: T,
+    pub previous_status: T,
+}
+
+/// Pushes a new status update to the report.
+fn update_status_report<T>(report: &Watchable<StatusReport<T>>, time: MissionTime, new_status: T) {
+    use std::ops::DerefMut;
+
+    let mut report = report.write();
+    let report = report.deref_mut();
+    report.fresh = true;
+    report.timestamp = time;
+    std::mem::swap(&mut report.previous_status, &mut report.current_status);
+    report.current_status = new_status;
+}
+
 /// The health report for the avionics boards.
 ///
-/// In addition to the status, this also keeps track of the time when the status was received
+/// This keeps track of two reports and the time, to see changes in the error count,
+/// as well a stale reports.
 #[derive(Debug, Default, Clone, Broadcast, Collector)]
-#[broadcast(message_type = "Message", extract_expr = "#value.1")]
+#[broadcast(message_type = "Message", extract_expr = "#value.current_status")]
 #[collector(
     message_type = "Message",
-    update_expr = "let _ = #field.update((self.time.get(), #value));"
+    update_expr = "let _ = update_status_report(&#field, self.time.get(), #value);"
 )]
 pub struct BoardsStatus {
     /// The current time, as as unix timestamp wrapper.
@@ -123,46 +146,34 @@ pub struct BoardsStatus {
 
     #[datapoint(pattern = "Message::RfsComputer(RFSCMessage::Status(#value))")]
     #[broadcast(min_freq_hz = 0.5, max_freq_hz = 2.)]
-    pub rfs_computer: Watchable<(MissionTime, datapoints::dp_rfs_computer::RfsComputerStatus)>,
+    pub rfs_computer: Watchable<StatusReport<datapoints::dp_rfs_computer::RfsComputerStatus>>,
 
     #[datapoint(pattern = "Message::SensorCarrier(SCMessage::BoardStatus(#value))")]
     #[broadcast(min_freq_hz = 0.5, max_freq_hz = 2.)]
-    pub sensor_carrier: Watchable<(
-        MissionTime,
-        datapoints::dp_sensor_carrier::SensorCarrierStatus,
-    )>,
+    pub sensor_carrier: Watchable<StatusReport<datapoints::dp_sensor_carrier::SensorCarrierStatus>>,
 
     #[datapoint(pattern = "Message::PowerBoard(PWBMessage::BoardStatus(#value))")]
     #[broadcast(min_freq_hz = 0.5, max_freq_hz = 2.)]
-    pub power_board: Watchable<(MissionTime, datatypes::status::StatusCommonMessage)>,
+    pub power_board: Watchable<StatusReport<datatypes::status::StatusCommonMessage>>,
 
     #[datapoint(pattern = "Message::RecoveryBoard(RECMessage::BoardStatus(#value))")]
     #[broadcast(min_freq_hz = 0.5, max_freq_hz = 2.)]
-    pub recovery_board: Watchable<(
-        MissionTime,
-        datapoints::dp_recovery_board::RecoveryBoardStatus,
-    )>,
+    pub recovery_board: Watchable<StatusReport<datapoints::dp_recovery_board::RecoveryBoardStatus>>,
 
     #[datapoint(pattern = "Message::FuelControlBoard(FCBMessage::BoardStatus(#value))")]
     #[broadcast(min_freq_hz = 0.5, max_freq_hz = 2.)]
-    pub fuel_control_board: Watchable<(
-        MissionTime,
-        datapoints::dp_fuel_control_board::FuelControlBoardStatus,
-    )>,
+    pub fuel_control_board:
+        Watchable<StatusReport<datapoints::dp_fuel_control_board::FuelControlBoardStatus>>,
 
     #[datapoint(pattern = "Message::OxidizerControlBoard(OCBMessage::BoardStatus(#value))")]
     #[broadcast(min_freq_hz = 0.5, max_freq_hz = 2.)]
-    pub oxidizer_control_board: Watchable<(
-        MissionTime,
-        datapoints::dp_oxidizer_control_board::OxidizerControlBoardStatus,
-    )>,
+    pub oxidizer_control_board:
+        Watchable<StatusReport<datapoints::dp_oxidizer_control_board::OxidizerControlBoardStatus>>,
 
     #[datapoint(pattern = "Message::EngineControlBoard(ECUMessage::BoardStatus(#value))")]
     #[broadcast(min_freq_hz = 0.5, max_freq_hz = 2.)]
-    pub engine_control_board: Watchable<(
-        MissionTime,
-        datapoints::dp_engine_control_board::EngineControlBoardStatus,
-    )>,
+    pub engine_control_board:
+        Watchable<StatusReport<datapoints::dp_engine_control_board::EngineControlBoardStatus>>,
 }
 
 /// Allow common code to read the ground station transition command.
