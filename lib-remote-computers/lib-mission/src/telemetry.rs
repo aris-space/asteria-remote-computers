@@ -514,7 +514,7 @@ mod tests {
         assert_eq!(
             transition_command,
             ManualStateTransition {
-                transition_index: 1,
+                transition_index: 0,
                 state: *b"Idle\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0",
             }
         );
@@ -536,7 +536,7 @@ mod tests {
         assert_eq!(
             transition_command,
             ManualStateTransition {
-                transition_index: 1,
+                transition_index: 0,
                 state: *b"Idle\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0",
             }
         );
