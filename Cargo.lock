@@ -807,7 +807,6 @@ dependencies = [
  "async-trait",
  "built",
  "datatypes",
- "dp-recovery-board",
  "glob",
  "gnc_interface",
  "hermes_gnc",
