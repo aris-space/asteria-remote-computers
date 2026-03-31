@@ -1,5 +1,6 @@
 use crate::state_machine::{BoxedState, StateMachine, StateName};
 use crate::{Error, Result};
+use std::collections::HashSet;
 use std::convert::Infallible;
 use watchable::Watchable;
 
@@ -10,7 +11,8 @@ impl<I, O, P> StateMachine<I, O, P> {
     #[tracing::instrument(name = "StateMachine::run", skip(self, input, output, param))]
     pub async fn run(self, input: &I, output: &O, param: P) -> Result<Infallible> {
         let mut state = self.get_state(&self.initial_state)?;
-        let additional_state = AdditionalState::new(param, self.current_state.clone());
+        let additional_state =
+            AdditionalState::new(param, self.current_state.clone(), self.state_names());
 
         loop {
             let next_state = state.run(input, output, &additional_state).await;
@@ -35,6 +37,8 @@ pub struct AdditionalState<P> {
     current_state: Watchable<(u32, StateName)>,
     /// Other parameters of the mission.
     pub parameters: P,
+    /// All states that exist
+    pub states: HashSet<StateName>,
 }
 
 impl<P> AdditionalState<P> {
@@ -46,10 +50,15 @@ impl<P> AdditionalState<P> {
     }
 
     /// Create the state and make sure we initialize the path with the inital element.
-    fn new(parameters: P, current_state: Watchable<(u32, StateName)>) -> Self {
+    fn new(
+        parameters: P,
+        current_state: Watchable<(u32, StateName)>,
+        states: HashSet<StateName>,
+    ) -> Self {
         Self {
             current_state,
             parameters,
+            states,
         }
     }
 

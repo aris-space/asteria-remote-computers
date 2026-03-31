@@ -335,7 +335,7 @@ impl StateName {
     ///
     /// Fails if the bytes are not valid utf8 until the first null byte or this substring doesn't denote a valid state name.
     /// Will not fail for a safely constructed `StateName` passed to [`StateName::to_array`].
-    fn try_from_array(
+    pub fn try_from_array(
         raw: &[u8; StateName::MAX_LEN],
         states: &HashSet<StateName>,
     ) -> Result<StateName> {

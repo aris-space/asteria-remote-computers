@@ -67,6 +67,7 @@ pub struct InputTree {
     /// The newest actuator command from the ground station.
     pub actuator_command:
         Watchable<Option<actuator_control::Command<pss_drivers::output::ValveName>>>,
+
     /// Statistics about the health of the telemetry uplink.
     pub telemetry_health: Watchable<UplinkTelemetryHealth>,
     /// The health report for the avionics boards.

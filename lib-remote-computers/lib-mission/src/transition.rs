@@ -70,13 +70,10 @@ impl ManualTransitions {
                 transition_index,
                 state,
             } = watcher.next().await;
-
-            let len = state.iter().position(|&x| x == 0).unwrap_or(state.len());
-            let Ok(state_str) = std::str::from_utf8(&state[..len]) else {
-                tracing::warn!("received invalid UTF-8 state name");
+            let Ok(target) = StateName::try_from_array(&state, &path.states) else {
+                tracing::warn!("received invalid state name in command");
                 continue;
             };
-            let target = StateName::new_unchecked(state_str).expect("valid state name");
             let index = if transition_index == 0 {
                 None
             } else {
