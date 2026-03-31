@@ -8,8 +8,6 @@ workspace = true
 
 [dependencies]
 lib-mission = { path = "../../lib-remote-computers/lib-mission" }
-gnc_interface = { path = "../hermes-recovery-gnc/gnc_interface" }
-hermes_gnc = { path = "../hermes-recovery-gnc/hermes_gnc", optional = true }
 datatypes = { path = "../../data-definitions/datatypes", features = [
     "std",
     "watchable_settable",
@@ -18,6 +16,13 @@ messages = { path = "../../data-definitions/messages", features = [
     "derive_debug",
     "derive_serde",
 ], default-features = false }
+gnc_interface = { path = "../asteria-gnc/gnc-interface" }
+gnc-configurations = { path = "../asteria-gnc/gnc-configurations", optional = true }
+gnc-algorithms = { path = "../asteria-gnc/gnc-algorithms", optional = true }
+hermes-can = { path = "../../data-definitions/can", features = [
+    "all",
+    "serde",
+], version = "0.3.2" }
 pss-drivers = { path = "../../lib-remote-computers/pss-drivers" }
 tokio = { version = "1.37.0", features = ["full"] }
 watchable = "1.1.2"
@@ -38,7 +43,7 @@ built = { version = "0.7.7", features = ["git2"] }
 
 [features]
 default = ["gnc"]
-gnc = ["dep:hermes_gnc"]
+gnc = ["dep:gnc-configurations", "dep:gnc-algorithms"]
 
 [dev-dependencies]
 glob = "0.3.2"
