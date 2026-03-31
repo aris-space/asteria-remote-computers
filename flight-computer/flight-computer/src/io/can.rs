@@ -79,7 +79,7 @@ where
         valves,
     } = output_tree;
     // Register the emitters
-    let mut handles = vec![
+    let handles = vec![
         output_drivers::spawn_flight_computer_status_driver(
             valves.watch_active(),
             recovery_actuators_armed.watched(),
@@ -111,6 +111,6 @@ where
             tx.clone(),
         ),
     ];
-    handles.extend(valves.spawn_output_drivers_fc(tx));
+    // TODO: PSS Stuff
     handles
 }
