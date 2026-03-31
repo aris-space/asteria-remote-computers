@@ -681,8 +681,11 @@ dependencies = [
 name = "dp-system-management"
 version = "0.3.0"
 dependencies = [
+ "arbitrary",
+ "bincode",
  "data-core",
  "datatypes",
+ "defmt",
  "gated-derive",
  "serde",
  "utoipa",
