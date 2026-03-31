@@ -16,7 +16,7 @@ messages = { path = "../../data-definitions/messages", features = [
     "derive_debug",
     "derive_serde",
 ], default-features = false }
-gnc_interface = { path = "../asteria-gnc/gnc-interface" }
+gnc-interface = { path = "../asteria-gnc/gnc-interface" }
 gnc-configurations = { path = "../asteria-gnc/gnc-configurations", optional = true }
 gnc-algorithms = { path = "../asteria-gnc/gnc-algorithms", optional = true }
 hermes-can = { path = "../../data-definitions/can", features = [
