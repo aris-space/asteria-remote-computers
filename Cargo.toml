@@ -33,6 +33,8 @@ must_use_candidate = "allow"         # Not all `new` calls are problematic to no
 implicit_hasher = "allow"            # We'll only ever use the default hasher
 doc_markdown = "allow"               # Too many false positives for acronymes I can't bother to whitelist
 duration-suboptimal-units = "allow"  # Don't want to bump MSRV yet
+[workspace.lints.rustdoc]
+private_intra_doc_links = "allow"    # We don't export our docs
 
 [workspace.dependencies]
 serde = { version = "1.0.228", features = ["derive"], default-features = false }
