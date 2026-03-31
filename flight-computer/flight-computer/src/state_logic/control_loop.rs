@@ -71,7 +71,7 @@ where
                         input.time.get().into(),
                         conv_loc(&input.location.get()),
                         conv_vel(&input.velocity.get()),
-                        conv_accl(&input.acceleration.get()),
+                        conv_accl(&input.imu.get()),
                         quat_to_angles(&input.orientation.get()),
                     )
                 },

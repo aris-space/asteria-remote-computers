@@ -34,7 +34,7 @@ impl InputTree {
             cats_deployment,
             location,
             velocity,
-            acceleration,
+            imu,
             orientation,
             raw_unprocessed_data,
             pss_valves,
@@ -113,7 +113,7 @@ impl InputTree {
                 ],
             )
             .await?,
-            acceleration.watched().map(|a| {
+            imu.watched().map(|a| {
                 (
                     a.acceleration_north,
                     a.acceleration_east,

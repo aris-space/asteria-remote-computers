@@ -96,7 +96,6 @@ pub struct InputTree {
     pub cats_deployment: Watchable<MainDeploymentState>,
 
     // GNC fields, see the types for documentation.
-    // TODO: add the angular velocity
     #[datapoint(pattern = "Message::SensorCarrier(SCMessage::PositionData(#value))")]
     #[broadcast(min_freq_hz = 5., max_freq_hz = 15.)]
     pub location: Watchable<PositionData>,
@@ -105,7 +104,7 @@ pub struct InputTree {
     pub velocity: Watchable<VelocityData>,
     #[datapoint(pattern = "Message::SensorCarrier(SCMessage::ImuData(#value))")]
     #[broadcast(min_freq_hz = 5., max_freq_hz = 10.)]
-    pub acceleration: Watchable<ImuData>,
+    pub imu: Watchable<ImuData>,
     #[datapoint(pattern = "Message::SensorCarrier(SCMessage::OrientationData(#value))")]
     #[broadcast(min_freq_hz = 5., max_freq_hz = 10.)]
     pub orientation: Watchable<OrientationData>,
