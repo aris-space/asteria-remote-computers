@@ -19,10 +19,6 @@ messages = { path = "../../data-definitions/messages", features = [
 gnc-interface = { path = "../asteria-gnc/gnc-interface" }
 gnc-configurations = { path = "../asteria-gnc/gnc-configurations", optional = true }
 gnc-algorithms = { path = "../asteria-gnc/gnc-algorithms", optional = true }
-hermes-can = { path = "../../data-definitions/can", features = [
-    "all",
-    "serde",
-], version = "0.3.2" }
 pss-drivers = { path = "../../lib-remote-computers/pss-drivers" }
 tokio = { version = "1.37.0", features = ["full"] }
 watchable = "1.1.2"
