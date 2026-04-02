@@ -750,7 +750,6 @@ dependencies = [
  "gnc-configurations",
  "gnc-interface",
  "gnc_interface",
- "hermes_gnc",
  "io-utils",
  "lib-mission",
  "mavio",
@@ -1220,34 +1219,10 @@ dependencies = [
 ]
 
 [[package]]
-name = "hermes-mavlink"
-version = "0.1.0"
-dependencies = [
- "bitflags 2.10.0",
- "mavlink-bindgen",
- "mavlink-core",
- "num-derive",
- "num-traits",
- "serde",
- "serde_arrays",
-]
-
-[[package]]
 name = "hex"
 version = "0.4.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7f24254aa9a54b5c858eaee2f5bccdb46aaf0e486a595ed5fd8f86ba55232a70"
-
-[[package]]
-name = "i_float"
-version = "1.15.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "010025c2c532c8d82e42d0b8bb5184afa449fa6f06c709ea9adcb16c49ae405b"
-name = "hermes_gnc"
-version = "0.1.0"
-dependencies = [
- "libm",
-]
 
 [[package]]
 name = "i_key_sort"
