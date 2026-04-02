@@ -154,7 +154,7 @@ pub struct StatusReport<T> {
 /// Pushes a new status update to the report.
 fn update_status_report<T>(report: &Watchable<StatusReport<T>>, time: MissionTime, new_status: T) {
     let mut report = report.write();
-    let report = &mut *report; // deref st we can split the borrow for `swap`.
+    let report = &mut *report; // deref such that we can split the borrow for `swap`.
     report.fresh = true;
     report.timestamp = time;
     std::mem::swap(&mut report.previous_status, &mut report.current_status);

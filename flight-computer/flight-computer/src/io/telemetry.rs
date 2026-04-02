@@ -58,7 +58,7 @@ pub fn init_telemetry(
     // spawns tokio tasks which send mavlink messages periodically to the channel.
     let input_streamers = input_tree.start_broadcasting::<PeriodicLoop>(tx.clone());
 
-    // TODO: current state and FC status
+    // TODO: FC status
 
     Ok(Handles {
         uplink,

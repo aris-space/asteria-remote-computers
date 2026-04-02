@@ -153,12 +153,13 @@ fn read_uplink_once(
 
     tracing::debug!(?msg, "received MavLink message"); // fixme: csv logging
 
+    let good = processor(msg);
     // Critical Section:
     let mut health = telemetry_health.write();
     health.time_of_last_msg = time;
     health.num_msg_lost += lost;
     health.num_msg_received += 1;
-    if processor(msg) {
+    if good {
         health.time_of_last_processed_msg = time;
         health.num_msg_processed += 1;
     }
@@ -179,14 +180,8 @@ where
     ActuatorName: std::str::FromStr + std::fmt::Debug + PartialEq,
 {
     match msg {
-        Message::FlightComputer(FCMessage::ManualStateTransition(ManualStateTransition {
-            transition_index,
-            state,
-        }))
-        | Message::RfsComputer(RFSCMessage::ManualStateTransition(ManualStateTransition {
-            transition_index,
-            state,
-        })) => {
+        Message::FlightComputer(FCMessage::ManualStateTransition(cmd))
+        | Message::RfsComputer(RFSCMessage::ManualStateTransition(cmd)) => {
             if matches!(msg, Message::FlightComputer(_))
                 != matches!(this_system, RemoteSystem::FlightComputer)
             {
@@ -194,24 +189,16 @@ where
                 return false;
             }
 
-            let Ok(_) = StateName::try_from_array(state, states) else {
+            let Ok(_) = StateName::try_from_array(&cmd.state, states) else {
                 tracing::warn!(
-                    received = %String::from_utf8_lossy(state),
+                    received = %String::from_utf8_lossy(&cmd.state),
                     "skipping transition command to unknown state"
                 );
                 return false;
             };
-            if *transition_index == 0 {
-                None
-            } else {
-                Some(*transition_index as usize)
-            };
 
             // we don't care about the old value or whether they were equal
-            let _ = transition_command.update(ManualStateTransition {
-                transition_index: *transition_index,
-                state: *state,
-            });
+            let _ = transition_command.update(cmd.clone());
 
             true
         }

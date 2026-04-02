@@ -44,6 +44,7 @@ pub enum MainDeploymentState {
     Deployed,
 }
 
+// TODO: replace with REC datapoint type
 /// Steps of the steering motor, starting from 0 each during power-up
 /// and increasing by 1 for pulling the line a 1/4096th of a full rotation,
 /// decreasing analogously for relaxing the line.
