@@ -6,6 +6,7 @@ use messages::datapoints::dp_sensor_carrier as sensor_types;
 use nalgebra::{Quaternion, UnitQuaternion};
 use std::sync::Mutex;
 use std::time::Duration;
+use gnc_interface::adapter::CompatAdapter;
 
 use crate::io::types;
 
@@ -154,6 +155,8 @@ fn quat_to_angles(orient: &sensor_types::OrientationData) -> gnc_interface::Orie
     );
     let unitq = UnitQuaternion::from_quaternion(quat);
     let (roll, pitch, yaw) = unitq.euler_angles();
+    
+    
 
     tracing::trace!(
         quat_w = orient.orientation_w,
@@ -166,7 +169,12 @@ fn quat_to_angles(orient: &sensor_types::OrientationData) -> gnc_interface::Orie
         "quat_to_angles"
     );
 
-    gnc_interface::Orientation { roll, pitch, yaw }
+    gnc_interface::Orientation { 
+        w: f64::from(orient.orientation_w), 
+        x: f64::from(orient.orientation_x), 
+        y: f64::from(orient.orientation_y),
+        z: f64::from(orient.orientation_z) 
+    }
 }
 
 /// Conversion from internal type to GNC type.
@@ -281,7 +289,7 @@ pub enum AnyGncController {
     #[cfg(feature = "gnc")]
     AsteriaExperiment(
         Box<
-            gnc_interface::adapt::CompatAdapter<
+            gnc_interface::adapter::CompatAdapter<
                 gnc_algorithms::CompositeController<
                     gnc_algorithms::guidance::o_approach::ImprovedOApproachGuidance,
                     gnc_algorithms::controller::p_controller::PController,
@@ -292,7 +300,7 @@ pub enum AnyGncController {
     #[cfg(feature = "gnc")]
     HILTest {
         gnc: Box<
-            gnc_interface::adapt::CompatAdapter<
+            gnc_interface::adapter::CompatAdapter<
                 gnc_algorithms::CompositeController<
                     gnc_algorithms::guidance::o_approach::ImprovedOApproachGuidance,
                     gnc_algorithms::controller::p_controller::PController,
@@ -314,7 +322,7 @@ pub enum AnyGncControllerConfig {
     SelfTest,
     #[cfg(feature = "gnc")]
     AsteriaExperiment(
-        <gnc_interface::CompatAdapter<
+        <gnc_interface::adapter::CompatAdapter<
             gnc_algorithms::CompositeController<
                 gnc_algorithms::guidance::o_approach::ImprovedOApproachGuidance,
                 gnc_algorithms::PController,
@@ -323,7 +331,7 @@ pub enum AnyGncControllerConfig {
     ),
     #[cfg(feature = "gnc")]
     HILTest {
-        gnc: <gnc_interface::CompatAdapter<
+        gnc: <gnc_interface::adapter::CompatAdapter<
             gnc_algorithms::CompositeController<
                 gnc_algorithms::guidance::o_approach::ImprovedOApproachGuidance,
                 gnc_algorithms::PController,
@@ -343,7 +351,7 @@ impl gnc_interface::CompatGuidanceController for AnyGncController {
             AnyGncControllerConfig::SelfTest => Ok(Self::SelfTest(SelfTestGncController(None))),
             #[cfg(feature = "gnc")]
             AnyGncControllerConfig::AsteriaExperiment(c) => Ok(Self::AsteriaExperiment(Box::new(
-                gnc_interface::adapt::CompatAdapter::<
+                gnc_interface::adapter::CompatAdapter::<
                     gnc_algorithms::CompositeController<
                         gnc_algorithms::guidance::o_approach::ImprovedOApproachGuidance,
                         gnc_algorithms::controller::p_controller::PController,
@@ -356,7 +364,7 @@ impl gnc_interface::CompatGuidanceController for AnyGncController {
                 initial_height,
                 descent_per_tick,
             } => Ok(Self::HILTest {
-                gnc: Box::new(gnc_interface::adapt::CompatAdapter::<
+                gnc: Box::new(gnc_interface::adapter::CompatAdapter::<
                     gnc_algorithms::CompositeController<
                         gnc_algorithms::guidance::o_approach::ImprovedOApproachGuidance,
                         gnc_algorithms::controller::p_controller::PController,
