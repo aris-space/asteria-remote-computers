@@ -294,6 +294,19 @@ pub enum AnyGncController {
             >,
         >,
     ),
+    #[cfg(feature = "gnc")]
+    HILTest {
+        gnc: Box<
+            gnc_interface::adapt::CompatAdapter<
+                gnc_algorithms::CompositeController<
+                    gnc_algorithms::guidance::o_approach::ImprovedOApproachGuidance,
+                    gnc_algorithms::controller::p_controller::PController,
+                >,
+            >,
+        >,
+        height: f32,
+        descent_per_tick: f32,
+    },
 }
 
 /// The config for any of the implemented GNC controllers.
@@ -313,6 +326,17 @@ pub enum AnyGncControllerConfig {
             >,
         > as gnc_interface::CompatGuidanceController>::Config,
     ),
+    #[cfg(feature = "gnc")]
+    HILTest {
+        gnc: <gnc_interface::CompatAdapter<
+            gnc_algorithms::CompositeController<
+                gnc_algorithms::guidance::o_approach::ImprovedOApproachGuidance,
+                gnc_algorithms::PController,
+            >,
+        > as gnc_interface::CompatGuidanceController>::Config,
+        initial_height: f32,
+        descent_per_tick: f32,
+    },
 }
 
 impl gnc_interface::CompatGuidanceController for AnyGncController {
@@ -331,13 +355,28 @@ impl gnc_interface::CompatGuidanceController for AnyGncController {
                     >,
                 >::new(c)?,
             ))),
+            #[cfg(feature = "gnc")]
+            AnyGncControllerConfig::HILTest {
+                gnc,
+                initial_height,
+                descent_per_tick,
+            } => Ok(Self::HILTest {
+                gnc: Box::new(gnc_interface::adapt::CompatAdapter::<
+                    gnc_algorithms::CompositeController<
+                        gnc_algorithms::guidance::o_approach::ImprovedOApproachGuidance,
+                        gnc_algorithms::controller::p_controller::PController,
+                    >,
+                >::new(gnc)?),
+                height: initial_height,
+                descent_per_tick,
+            }),
         }
     }
 
     fn step(
         &mut self,
         time_unix: std::time::Duration,
-        position: gnc_interface::Position,
+        mut position: gnc_interface::Position,
         velocity: gnc_interface::Velocity,
         acceleration: gnc_interface::Acceleration,
         orientation: gnc_interface::Orientation,
@@ -351,6 +390,20 @@ impl gnc_interface::CompatGuidanceController for AnyGncController {
             }
             #[cfg(feature = "gnc")]
             AnyGncController::AsteriaExperiment(gnc) => {
+                gnc.step(time_unix, position, velocity, acceleration, orientation)
+            }
+            #[cfg(feature = "gnc")]
+            AnyGncController::HILTest {
+                gnc,
+                height,
+                descent_per_tick,
+            } => {
+                let prev_height = *height;
+                *height -= *descent_per_tick;
+                if (prev_height / 100.).round() != height.round() {
+                    tracing::info!("Simulating at {height}m");
+                }
+                position.altitude = *height as f64;
                 gnc.step(time_unix, position, velocity, acceleration, orientation)
             }
         }
