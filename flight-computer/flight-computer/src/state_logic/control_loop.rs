@@ -6,7 +6,6 @@ use messages::datapoints::dp_sensor_carrier as sensor_types;
 use nalgebra::{Quaternion, UnitQuaternion};
 use std::sync::Mutex;
 use std::time::Duration;
-use gnc_interface::adapter::CompatAdapter;
 
 use crate::io::types;
 
@@ -155,8 +154,6 @@ fn quat_to_angles(orient: &sensor_types::OrientationData) -> gnc_interface::Orie
     );
     let unitq = UnitQuaternion::from_quaternion(quat);
     let (roll, pitch, yaw) = unitq.euler_angles();
-    
-    
 
     tracing::trace!(
         quat_w = orient.orientation_w,
@@ -169,11 +166,11 @@ fn quat_to_angles(orient: &sensor_types::OrientationData) -> gnc_interface::Orie
         "quat_to_angles"
     );
 
-    gnc_interface::Orientation { 
-        w: f64::from(orient.orientation_w), 
-        x: f64::from(orient.orientation_x), 
+    gnc_interface::Orientation {
+        w: f64::from(orient.orientation_w),
+        x: f64::from(orient.orientation_x),
         y: f64::from(orient.orientation_y),
-        z: f64::from(orient.orientation_z) 
+        z: f64::from(orient.orientation_z),
     }
 }
 
@@ -403,10 +400,11 @@ impl gnc_interface::CompatGuidanceController for AnyGncController {
             } => {
                 let prev_height = *height;
                 *height -= *descent_per_tick;
+                #[allow(clippy::float_cmp)] // fine for integers
                 if (prev_height / 100.).round() != height.round() {
                     tracing::info!("Simulating at {height}m");
                 }
-                position.altitude = *height as f64;
+                position.altitude = f64::from(*height);
                 gnc.step(time_unix, position, velocity, acceleration, orientation)
             }
         }

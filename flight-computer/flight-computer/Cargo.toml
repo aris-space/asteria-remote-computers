@@ -8,6 +8,7 @@ workspace = true
 
 [dependencies]
 lib-mission = { path = "../../lib-remote-computers/lib-mission" }
+io-utils = { path = "../../lib-remote-computers/io-utils" }
 datatypes = { path = "../../data-definitions/datatypes", features = [
     "std",
     "watchable_settable",
