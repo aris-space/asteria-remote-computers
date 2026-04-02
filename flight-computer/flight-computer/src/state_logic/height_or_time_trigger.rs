@@ -40,7 +40,7 @@ impl StateLogic for HeightOrTimeTrigger {
                 tracing::info!(cause = "manual", "transitioning");
                 return next;
             },
-            _ = height_watcher.next_satisfying(|h| h.altitude <= self.height_limit) => {
+            _ = height_watcher.next_satisfying(|h| h.location_hamsl <= self.height_limit) => {
                 tracing::info!(cause = "height trigger", "transitioning");
                 return self.on_height_limit_reached.clone();
             },

@@ -15,6 +15,7 @@ datatypes = { path = "../../data-definitions/datatypes", features = [
 messages = { path = "../../data-definitions/messages", features = [
     "derive_debug",
     "derive_serde",
+    "mavlink",
 ], default-features = false }
 gnc-interface = { path = "../asteria-gnc/gnc-interface" }
 gnc-configurations = { path = "../asteria-gnc/gnc-configurations", optional = true }
@@ -27,8 +28,8 @@ toml = "0.8.19"
 thiserror = "1.0.64"
 async-trait = "0.1.83"
 tracing = "0.1.41"
-mavlink-core = { version = "0.13.1" }
 nalgebra = "0.33.2"
+mavio = { version = "0.5.10", features = ["std", "tokio"] }
 
 [target.'cfg(target_os = "linux")'.dependencies]
 socketcan = "3.5.0"

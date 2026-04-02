@@ -1,5 +1,6 @@
 use crate::state_machine::{BoxedState, StateMachine, StateName};
 use crate::{Error, Result};
+use std::collections::HashSet;
 use std::convert::Infallible;
 use watchable::Watchable;
 
@@ -10,7 +11,8 @@ impl<I, O, P> StateMachine<I, O, P> {
     #[tracing::instrument(name = "StateMachine::run", skip(self, input, output, param))]
     pub async fn run(self, input: &I, output: &O, param: P) -> Result<Infallible> {
         let mut state = self.get_state(&self.initial_state)?;
-        let additional_state = AdditionalState::new(param, self.state_path.clone());
+        let additional_state =
+            AdditionalState::new(param, self.current_state.clone(), self.state_names());
 
         loop {
             let next_state = state.run(input, output, &additional_state).await;
@@ -31,45 +33,39 @@ impl<I, O, P> StateMachine<I, O, P> {
 
 /// All the internal state of the state machine.
 pub struct AdditionalState<P> {
-    /// The path through the state graph that has been taken.
-    /// `state_path[0]` is always the initial state, and `state_path.last()` the current state.
-    state_path: Watchable<Vec<StateName>>,
+    /// The current state: (path_index, current_state).
+    current_state: Watchable<(u32, StateName)>,
     /// Other parameters of the mission.
     pub parameters: P,
+    /// All states that exist
+    pub states: HashSet<StateName>,
 }
 
 impl<P> AdditionalState<P> {
-    /// Gets the state path by cloning it. Prefer [`Self::current_state`] if you only need the current state and length.
-    pub fn clone_state_path(&self) -> Vec<StateName> {
-        self.state_path.get()
-    }
-
     /// Returns both the current state as well as the index in the state path,
     /// which corresponds to the number of transitions taken so far.
-    pub fn current_state(&self) -> (StateName, usize) {
-        let p = self.state_path.read();
-        let current = p
-            .last()
-            .expect("state_path is initialized with one element and never shortened")
-            .clone();
-        (current, p.len() - 1)
+    pub fn current_state(&self) -> (StateName, u32) {
+        let (index, state) = self.current_state.get();
+        (state, index)
     }
 
     /// Create the state and make sure we initialize the path with the inital element.
-    fn new(parameters: P, state_path: Watchable<Vec<StateName>>) -> Self {
-        debug_assert_eq!(
-            state_path.get().len(),
-            1,
-            "initialize AdditionalState with non-singleton state path"
-        );
+    fn new(
+        parameters: P,
+        current_state: Watchable<(u32, StateName)>,
+        states: HashSet<StateName>,
+    ) -> Self {
         Self {
-            state_path,
+            current_state,
             parameters,
+            states,
         }
     }
 
-    /// Appends a state to the path.
+    /// Advances to the next state.
     fn push_state_transition(&self, state_name: StateName) {
-        self.state_path.write().push(state_name);
+        let (idx, state) = &mut *self.current_state.write();
+        *idx += 1;
+        *state = state_name;
     }
 }

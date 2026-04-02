@@ -1,5 +1,5 @@
 [telemetry]
-mavlink_address = "udpout:127.0.0.1:5760"
+mavlink_address = "127.0.0.1:5760"
 
 [telemetry.downlink_rates]
 state_hz = 5

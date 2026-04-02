@@ -8,8 +8,7 @@ use tokio::io;
 use tokio::task::AbortHandle;
 use tokio_util::compat::{Compat, TokioAsyncReadCompatExt};
 
-use crate::reactive::{Watched, WatchedChannel, WatchedExt as _};
-use crate::state_machine::StateMachine;
+use crate::reactive::{Watched, WatchedChannel};
 use crate::util::time::MissionTime;
 
 pub const LOGS_PATH: &str = "./logs/";
@@ -103,24 +102,6 @@ pub fn spawn_watchable_logger<T: serde::Serialize + Clone + Send>(
         }
     })
     .abort_handle()
-}
-
-impl<I, O, P> StateMachine<I, O, P> {
-    /// Spawn a thread to log the current state to csv.
-    pub async fn start_logging_state(
-        &self,
-        folder: &Path,
-        clock: impl Watched<MissionTime> + Send + 'static,
-    ) -> io::Result<()> {
-        let watched = self.watch_state_path();
-        spawn_watchable_logger(
-            make_timeseries_writer(folder, "current_state", &["index [int]", "state [string]"])
-                .await?,
-            watched.map(|p| (p.len() - 1, p.last().map(ToString::to_string))),
-            clock,
-        );
-        Ok(())
-    }
 }
 
 #[cfg(test)]

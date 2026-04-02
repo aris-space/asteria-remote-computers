@@ -52,7 +52,7 @@ impl BroadcastLoop<Msg> for TestLoop {
 // ---------------------------------------------------------------------------
 
 #[derive(Broadcast)]
-#[broadcast(message_type = "Msg", loop_type = "TestLoop")]
+#[broadcast(message_type = "Msg")]
 struct Inner {
     #[datapoint(pattern = "Msg::A(#value)")]
     #[broadcast(min_freq_hz = 1., max_freq_hz = 10.)]
@@ -60,7 +60,7 @@ struct Inner {
 }
 
 #[derive(Broadcast)]
-#[broadcast(message_type = "Msg", loop_type = "TestLoop")]
+#[broadcast(message_type = "Msg")]
 struct Outer {
     #[broadcast(flatten)]
     inner: Inner,
@@ -88,7 +88,7 @@ async fn smoke() {
     };
     let (tx, rx) = mpsc::channel::<Msg>();
 
-    let handles = outer.start_broadcasting(tx);
+    let handles = outer.start_broadcasting::<TestLoop>(tx);
 
     // Flatten contributes Inner's handles; Outer adds its own — 2 total.
     assert_eq!(handles.len(), 2);
@@ -108,6 +108,47 @@ async fn smoke() {
     assert!(
         msgs.contains(&Msg::B(42)),
         "expected Msg::B(42) from Outer::b; got {msgs:?}"
+    );
+
+    for h in handles {
+        h.abort();
+    }
+}
+
+// ---------------------------------------------------------------------------
+// extract_expr test
+// ---------------------------------------------------------------------------
+
+/// struct_level extract_expr wraps every field value before putting it in
+/// the variant. Here `extract_expr = "#value * 2"` doubles the stored value.
+#[derive(Broadcast)]
+#[broadcast(message_type = "Msg", extract_expr = "#value * 2")]
+struct Doubled {
+    #[datapoint(pattern = "Msg::B(#value)")]
+    #[broadcast(min_freq_hz = 2., max_freq_hz = 20.)]
+    b: Watchable<u32>,
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn extract_expr_transforms_value() {
+    let doubled = Doubled {
+        b: Watchable::new(21),
+    };
+    let (tx, rx) = mpsc::channel::<Msg>();
+
+    let handles = doubled.start_broadcasting::<TestLoop>(tx);
+
+    let msgs = tokio::task::spawn_blocking(move || {
+        let timeout = std::time::Duration::from_millis(500);
+        vec![rx.recv_timeout(timeout).expect("timed out")]
+    })
+    .await
+    .expect("must be able await channel for test");
+
+    assert_eq!(
+        msgs,
+        vec![Msg::B(42)],
+        "extract_expr should double the value"
     );
 
     for h in handles {

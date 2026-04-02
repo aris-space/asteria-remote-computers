@@ -10,7 +10,6 @@ use flight_computer::io::input::InputTree;
 use flight_computer::io::output::OutputTree;
 use flight_computer::io::telemetry::init_telemetry;
 use flight_computer::state_logic::control_loop::AnyGncController;
-use lib_mission::reactive::IntoWatched;
 use lib_mission::state_machine::StateMachine;
 use lib_mission::util::init::init_binary;
 
@@ -26,10 +25,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     >(build_info::THIS_BUILD, config_path)
     .await?;
 
-    let input_tree = InputTree::default();
+    let mut input_tree = InputTree::default();
+    input_tree.boards_status.time = input_tree.time.clone(); // synchronize shared variable
 
     let output_tree = OutputTree::default();
     let state_machine = StateMachine::new(config_file.state_machine)?;
+    input_tree.state.current_state = state_machine.current_state.clone(); // synchronize shared variable
 
     flight_computer::io::spawn_system_time_driver(
         input_tree.time.clone(),
@@ -39,9 +40,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     input_tree.start_logging(&log_folder).await?;
     output_tree
         .start_logging(&log_folder, input_tree.time.clone())
-        .await?;
-    state_machine
-        .start_logging_state(&log_folder, input_tree.time.watched())
         .await?;
 
     init_telemetry(
