@@ -5,6 +5,8 @@ use lib_mission::util::log::{make_timeseries_writer, spawn_watchable_logger};
 use lib_mission::util::time::MissionTime;
 use watchable::Watchable;
 
+use crate::io::input::CurrentStateWrapper;
+
 use super::input::{InputTree, RawUnprocessedData};
 use super::output::OutputTree;
 
@@ -19,12 +21,12 @@ impl InputTree {
 
         // This destructure is used so that we don't forget later additions.
         let InputTree {
+            state: CurrentStateWrapper { current_state },
             time,
             transition_command,
             actuator_command,
             telemetry_health,
-            boards_health,
-            rfs_computer_status,
+            boards_status,
             recovery_armed,
             ecu_armed,
             motors_position,
@@ -32,7 +34,7 @@ impl InputTree {
             cats_deployment,
             location,
             velocity,
-            acceleration,
+            imu,
             orientation,
             raw_unprocessed_data,
             pss_valves,
@@ -43,19 +45,6 @@ impl InputTree {
             rail_status_24v,
             rail_status_5v,
         } = raw_unprocessed_data;
-
-        /// A macro which captures `time` and `folder` to spawn a logger for the board health.
-        /// Probably could also be a closure.
-        macro_rules! spawn_board_health_logger {
-            ($name:literal, $e:expr, $header:expr,) => {
-                lib_mission::util::log::spawn_watchable_logger(
-                    lib_mission::util::log::make_timeseries_writer(folder, $name, &[$header])
-                        .await?,
-                    $e.watched().map(|h| h.map(|t| t.as_ms_timestamp())),
-                    time.watched(),
-                )
-            };
-        }
 
         // Log real time to "timeseries-realtime.csv" with headers "timestamp [unix ms]", "real time [unix ms]".
         // Disabled for now, since we use realtime to set the mission time.
@@ -71,6 +60,15 @@ impl InputTree {
         //     }),
         //     time.watched(),
         // );
+
+        spawn_watchable_logger(
+            make_timeseries_writer(folder, "current_state", &["index [int]", "state [string]"])
+                .await?,
+            current_state
+                .watched()
+                .map(|(index, state)| (index, Some(state.to_string()))),
+            time.watched(),
+        );
 
         //////////////////////// DATA STANDARDS ///////////////////////
         // Log location data to "timeseries-location.csv" with headers "timestamp [unix ms]", "location latitude [°]", "location longitude [°]", "location altitude [m above sea level]".
@@ -90,9 +88,9 @@ impl InputTree {
             .await?,
             location.watched().map(|l| {
                 (
-                    l.latitude,
-                    l.longitude,
-                    l.altitude,
+                    l.location_latitude,
+                    l.location_longitude,
+                    l.location_hamsl,
                     l.horizontal_accuracy,
                     l.vertical_accuracy,
                 )
@@ -115,9 +113,16 @@ impl InputTree {
                 ],
             )
             .await?,
-            acceleration
-                .watched()
-                .map(|a| (a.north, a.east, a.down, a.x, a.y, a.z)),
+            imu.watched().map(|a| {
+                (
+                    a.acceleration_north,
+                    a.acceleration_east,
+                    a.acceleration_down,
+                    a.acceleration_x,
+                    a.acceleration_y,
+                    a.acceleration_z,
+                )
+            }),
             time.watched(),
         );
         // Log velocity data to "timeseries-velocity.csv" with headers "timestamp [unix ms]", "velocity north [m/s]", "velocity east [m/s]", "velocity down [m/s]".
@@ -136,9 +141,16 @@ impl InputTree {
                 ],
             )
             .await?,
-            velocity
-                .watched()
-                .map(|v| (v.north, v.east, v.down, v.x, v.y, v.z)),
+            velocity.watched().map(|v| {
+                (
+                    v.velocity_north,
+                    v.velocity_east,
+                    v.velocity_down,
+                    v.velocity_x,
+                    v.velocity_y,
+                    v.velocity_z,
+                )
+            }),
             time.watched(),
         );
         // Log orientation data as NED quaternion to "timeseries-orientation.csv" with headers "timestamp [unix ms]", "orientation W", "orientation X", "orientation Y", "orientation Z".
@@ -172,18 +184,20 @@ impl InputTree {
                 folder,
                 "telemetry_health",
                 &[
-                    "time_of_last_msg [unix ms]",
+                    "time_of_last_msg [unix us]",
                     "num_msg_received",
-                    "time_of_last_processed_msg [unix ms]",
+                    "num_msg_lost",
+                    "time_of_last_processed_msg [unix us]",
                     "num_msg_processed",
                 ],
             )
             .await?,
             telemetry_health.watched().map(|h| {
                 (
-                    h.time_of_last_msg.as_ms_timestamp(),
+                    h.time_of_last_msg.0,
                     h.num_msg_received,
-                    h.time_of_last_processed_msg.as_ms_timestamp(),
+                    h.num_msg_lost,
+                    h.time_of_last_processed_msg.0,
                     h.num_msg_processed,
                 )
             }),
@@ -198,8 +212,14 @@ impl InputTree {
             )
             .await?,
             transition_command.watched().map(|r| {
-                // Propagate the Noneness to each field
-                r.map_or((None, None), |(i, s)| (i, Some(s.to_string())))
+                (
+                    r.transition_index,
+                    Some(
+                        String::from_utf8_lossy(&r.state)
+                            .trim_end_matches('\0')
+                            .to_string(),
+                    ),
+                )
             }),
             time.watched(),
         );
@@ -219,37 +239,7 @@ impl InputTree {
             }),
             time.watched(),
         );
-        // Log board last healths to a single columns, or empty if unhealthy
-        spawn_board_health_logger!(
-            "boards_health_sensor_carrier",
-            boards_health.sensor_carrier,
-            "sensor carrier last healthy [unix ms?]",
-        );
-        spawn_board_health_logger!(
-            "boards_health_power_board",
-            boards_health.power_board,
-            "power board last healthy [unix ms?]",
-        );
-        spawn_board_health_logger!(
-            "boards_health_recovery_board",
-            boards_health.recovery_board,
-            "recovery board last healthy [unix ms?]",
-        );
-        spawn_board_health_logger!(
-            "boards_health_fuel_control_board",
-            boards_health.fuel_control_board,
-            "fuel control board last healthy [unix ms?]",
-        );
-        spawn_board_health_logger!(
-            "boards_health_oxidizer_control_board",
-            boards_health.oxidizer_control_board,
-            "oxidizer control board last healthy [unix ms?]",
-        );
-        spawn_board_health_logger!(
-            "boards_health_engine_control_board",
-            boards_health.engine_control_board,
-            "engine control board last healthy [unix ms?]",
-        );
+        // TODO: Log board last healths
         // Log RFS computer status
         spawn_watchable_logger(
             make_timeseries_writer(
@@ -263,7 +253,14 @@ impl InputTree {
                 ],
             )
             .await?,
-            rfs_computer_status.watched().map(|(s, _)| s),
+            boards_status.rfs_computer.watched().map(|rep| {
+                (
+                    rep.current_status.common.errors,
+                    rep.current_status.common.micros_since_restart,
+                    rep.current_status.has_pss_control,
+                    rep.current_status.is_ignition_armed == datatypes::status::ArmingState::Armed,
+                )
+            }),
             time.watched(),
         );
         // Log arming states
@@ -296,9 +293,7 @@ impl InputTree {
                 &["actual left [steps]", "actual right [steps]"],
             )
             .await?,
-            motors_position
-                .watched()
-                .map(|r| (r.left_motor_steps, r.right_motor_steps)),
+            motors_position.watched().map(|r| (r.left_pos, r.right_pos)),
             time.watched(),
         );
 

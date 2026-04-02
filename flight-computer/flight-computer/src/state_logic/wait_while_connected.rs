@@ -31,11 +31,11 @@ impl StateLogic for WaitWhileConnected {
 
         // Waits for either a manual transition or a the timeout.
         let mut clock = input.time.watched();
-        let rfs_status_watched = input.rfs_computer_status.watched();
+        let rfs_status_watched = input.boards_status.rfs_computer.watched();
         tokio::select! {
             next_state = self.manual_transitions.next(input, param) => next_state,
             _ = clock.next_satisfying(
-                move |t| *t >= rfs_status_watched.current().1 + self.rfs_can_timeout
+                move |t| *t >= rfs_status_watched.current().timestamp + self.rfs_can_timeout
             ) => self.on_timeout.clone(),
         }
     }

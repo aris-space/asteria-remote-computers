@@ -36,7 +36,10 @@ impl StateLogic for HookRelease {
             next = self.manual_transitions.next(input, param) => {
                 return next;
             },
-            _ = motor_position_watcher.next_satisfying(|pos| pos.both_greater_equal(&self.motors_ok_threshold)) => {
+            _ = motor_position_watcher.next_satisfying(|pos| {
+                pos.left_pos >= self.motors_ok_threshold.left_motor_steps
+                    && pos.right_pos >= self.motors_ok_threshold.right_motor_steps
+            }) => {
                 return self.on_motors_ok_threshhold_reached.clone();
             },
         }

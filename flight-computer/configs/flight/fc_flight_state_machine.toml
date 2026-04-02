@@ -3,17 +3,7 @@
 # ======================================= System configuration =======================================
 system_time_rate_hz = 100
 [telemetry]
-mavlink_address = "udpout:127.0.0.1:5760"
-# Some random fractions to make it spaced more evenly
-[telemetry.downlink_rates]
-state_hz = 4.03
-kinematics_hz = 10.01
-av_stack_data_hz = 1
-steering_data_hz = 8.03
-actuator_feedback_hz = 3.1
-temperature_sensors_hz = 3.03
-pressure_sensors_hz = 15.03
-fill_levels_hz = 0.6
+mavlink_address = "127.0.0.1:5760"
 [can]
 socket_address = "can0"
 [state_machine]

@@ -4,7 +4,7 @@
 ///
 /// ## Composable Message Handling
 ///
-/// The `Err(msg)` return allows chaining multiple collectors:
+/// The `Err(msg)` return allows chaining multiple collectors, which is used when using `#[collector(flatten)]`.
 ///
 /// ```rust,ignore
 /// #[derive(Collector, Default)]
@@ -56,7 +56,7 @@ pub use collector_derive::Collector;
 ///
 /// ```rust,ignore
 /// #[derive(Broadcast)]
-/// #[broadcast(message_type = "CanMessage", loop_type = "PeriodicLoop")]
+/// #[broadcast(message_type = "CanMessage")]
 /// struct ValveState {
 ///     #[datapoint(pattern = "CanMessage::FuelValve(#value)")]
 ///     #[broadcast(min_freq_hz = 1., max_freq_hz = 10.)]
@@ -65,7 +65,7 @@ pub use collector_derive::Collector;
 ///
 /// let state = ValveState { ... };
 /// let (tx, rx) = std::sync::mpsc::channel();
-/// let handles: Vec<tokio::task::AbortHandle> = state.start_broadcasting(tx);
+/// let handles: Vec<tokio::task::AbortHandle> = state.start_broadcasting::<PeriodicLoop>(tx);
 ///
 /// // Later, to stop broadcasting:
 /// for handle in handles {
@@ -77,7 +77,7 @@ pub trait Broadcast<T> {
     /// Each task reads updates from the field's [`Watchable`][watchable::Watchable]
     /// and forwards them to `channel` in a time aware fashion,
     /// depending on the [`BroadcastLoop`] implementation given to a macro attribute.
-    fn start_broadcasting(
+    fn start_broadcasting<L: BroadcastLoop<T>>(
         &self,
         channel: std::sync::mpsc::Sender<T>,
     ) -> Vec<tokio::task::AbortHandle>;
@@ -119,7 +119,7 @@ pub use broadcast_derive::Broadcast;
 ///
 /// `min_freq_hz` and `max_freq_hz` are hints for implementations that want to
 /// throttle or coalesce updates; a simple change-driven loop may ignore them.
-pub trait BroadcastLoop<M> {
+pub trait BroadcastLoop<M>: 'static {
     fn broadcast_loop<T: Send + Sync + 'static + Clone>(
         field: watchable::Watchable<T>,
         map: impl FnMut(T) -> M + Send + 'static,

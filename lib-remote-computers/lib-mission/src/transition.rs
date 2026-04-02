@@ -7,6 +7,8 @@
 //! If it isn't, these `unvalidated` transitions can be used to abort to an abort scenario,
 //! independently of whether some other transitions have triggered in the meantime.
 
+use datatypes::status::ManualStateTransition;
+
 use crate::reactive::{IntoWatched, Watched};
 use crate::state_machine::{AdditionalState, StateName};
 
@@ -20,7 +22,7 @@ pub type Command = Option<(Option<usize>, StateName)>;
 /// or `Some((precondition, target))`, as explained in [`crate::transition`].
 pub trait GetTransitionCommand {
     /// Implementations must ensure this Watched is "reset", i.e. the next read will instantly return.
-    fn transition_cmd_watcher(&self) -> impl IntoWatched<Command> + Send;
+    fn transition_cmd_watcher(&self) -> impl IntoWatched<ManualStateTransition> + Send;
 }
 
 #[derive(Debug, Default)]
@@ -61,18 +63,32 @@ impl ManualTransitions {
     ) -> StateName {
         let mut watcher = cmd.transition_cmd_watcher().watched();
 
-        let next_index = path.current_state().1 + 1;
+        let next_index = (path.current_state().1 + 1) as usize;
 
         loop {
-            match watcher.next().await {
-                Some((None, target)) => {
+            let ManualStateTransition {
+                transition_index,
+                state,
+            } = watcher.next().await;
+            let Ok(target) = StateName::try_from_array(&state, &path.states) else {
+                tracing::warn!("received invalid state name in command");
+                continue;
+            };
+            let index = if transition_index == 0 {
+                None
+            } else {
+                Some(transition_index as usize)
+            };
+
+            match index {
+                None => {
                     if self.is_allowed_unvalidated_transition(&target) {
                         tracing::info!(%target, "Manual unvalidated transition");
                         return target;
                     }
                     tracing::warn!("attempted unvalidated transition to unconfigured state");
                 }
-                Some((Some(idx), target)) => {
+                Some(idx) => {
                     if self.is_allowed_transition(&target) && idx == next_index {
                         tracing::info!(%target, "Manual validated transition");
                         return target;
@@ -84,7 +100,6 @@ impl ManualTransitions {
                         // ignore old transitions
                     }
                 }
-                None => {}
             }
         }
     }

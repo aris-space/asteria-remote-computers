@@ -4,11 +4,10 @@ use lib_mission::util::time::MissionTime;
 use tokio::task::AbortHandle;
 
 use crate::config::CANConfig;
+use crate::io::input::InputTree;
 
-use super::input::InputTree;
 use super::output::OutputTree;
 
-mod input_drivers;
 mod output_drivers;
 
 /// Initializes CAN and its drivers
@@ -41,15 +40,14 @@ pub fn init_can_drivers(
     };
 
     // Initialize the driver tasks
-    let mut consumers = ConsumerRegistry::new();
-    let input_handles = init_input_drivers(input_tree, &mut consumers);
     let (tx, rx) = std::sync::mpsc::channel();
     let output_handles = init_output_drivers(&input_tree.time, output_tree, &tx);
+    let mut consumers = ConsumerRegistry::new().with_collector(input_tree.clone());
 
     // Spawn the receiving thread
     std::thread::spawn(move || {
         let mut receiver = receiver;
-        read_can(&mut receiver, &consumers);
+        read_can(&mut receiver, &mut consumers);
     });
     // Spawn the transmitting thread
     std::thread::spawn(move || {
@@ -57,71 +55,7 @@ pub fn init_can_drivers(
         run_can_transmit_actor(&mut transmitter, rx);
     });
 
-    Ok([input_handles, output_handles].concat())
-}
-
-/// Initializes all the drivers writing to the input tree by spawning tasks to consume CAN messages.
-fn init_input_drivers(
-    input_tree: &InputTree,
-    consumers: &mut ConsumerRegistry,
-) -> Vec<AbortHandle> {
-    // Register the consumers
-    let InputTree {
-        time,
-        transition_command: _, // doesn't originate from CAN
-        actuator_command: _,   // doesn't originate from CAN
-        telemetry_health: _,   // doesn't originate from CAN
-        boards_health,
-        rfs_computer_status,
-        recovery_armed,
-        ecu_armed,
-        raw_unprocessed_data,
-        motors_position,
-        cats_separation: _, // doesn't originate from CAN,
-        cats_deployment: _, // doesn't originate from CAN,
-        location,
-        velocity,
-        acceleration,
-        orientation,
-        pss_valves,
-        pss_sensors,
-    } = input_tree;
-
-    let mut handles = vec![
-        input_drivers::spawn_and_register_board_health_driver(
-            consumers,
-            boards_health.clone(),
-            rfs_computer_status.clone(),
-            recovery_armed.clone(),
-            ecu_armed.clone(),
-            time.watched(),
-        ),
-        input_drivers::spawn_and_register_kinematics_driver(
-            consumers,
-            location.clone(),
-            velocity.clone(),
-            acceleration.clone(),
-            orientation.clone(),
-        ),
-        input_drivers::spawn_and_register_raw_unprocessed_data_driver(
-            consumers,
-            raw_unprocessed_data.environmental_data.clone(),
-            raw_unprocessed_data.rail_status_24v.clone(),
-            raw_unprocessed_data.rail_status_5v.clone(),
-        ),
-        input_drivers::spawn_and_register_actual_steering_driver(
-            consumers,
-            motors_position.clone(),
-        ),
-    ];
-    handles.extend(
-        pss_drivers::can_input_drivers::register_and_spawn_input_drivers(
-            pss_valves,
-            pss_sensors,
-            consumers,
-        ),
-    );
-    handles
+    Ok(output_handles)
 }
 
 /// Initializes all the drivers reading from the output tree by spawning tasks to produce CAN messages.
@@ -145,7 +79,7 @@ where
         valves,
     } = output_tree;
     // Register the emitters
-    let mut handles = vec![
+    let handles = vec![
         output_drivers::spawn_flight_computer_status_driver(
             valves.watch_active(),
             recovery_actuators_armed.watched(),
@@ -177,6 +111,6 @@ where
             tx.clone(),
         ),
     ];
-    handles.extend(valves.spawn_output_drivers_fc(tx));
+    // TODO: PSS Stuff
     handles
 }

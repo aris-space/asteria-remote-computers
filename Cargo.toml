@@ -1,26 +1,26 @@
 [workspace]
 resolver = "3"
-
 members = [
-    "lib-remote-computers/lib-mission",
-    "lib-remote-computers/dummy-controller",
-    "lib-remote-computers/pss-drivers",
     "lib-remote-computers/io-utils",
     "lib-remote-computers/io-utils/macros/*",
+    "lib-remote-computers/lib-mission",
+    "lib-remote-computers/pss-drivers",
     # "rfs-computer/rfs-computer",
     # "rfs-computer/uremote-electronics",
     "rfs-computer/keller23sx",
-    "rfs-computer/tokio-modbus-shared",
     "rfs-computer/lox-fill-valve",
+    "rfs-computer/tokio-modbus-shared",
     "flight-computer/flight-computer",
     "flight-computer/hermes-recovery-gnc/gnc_interface",
     "flight-computer/hermes-recovery-gnc/hermes_gnc",
-    "data-definitions/mavlink",
-    "data-definitions/can",
     "data-definitions/can-hal",
-    "data-definitions/datatypes",
-    "data-definitions/messages",
+    "data-definitions/core",
     "data-definitions/datapoints/*",
+    "data-definitions/datatypes",
+    "data-definitions/macro-gated-derive",
+    "data-definitions/macros",
+    "data-definitions/mavlink-hal",
+    "data-definitions/messages",
 ]
 
 [workspace.lints.clippy]
@@ -33,6 +33,8 @@ must_use_candidate = "allow"         # Not all `new` calls are problematic to no
 implicit_hasher = "allow"            # We'll only ever use the default hasher
 doc_markdown = "allow"               # Too many false positives for acronymes I can't bother to whitelist
 duration-suboptimal-units = "allow"  # Don't want to bump MSRV yet
+[workspace.lints.rustdoc]
+private_intra_doc_links = "allow"    # We don't export our docs
 
 [workspace.dependencies]
 serde = { version = "1.0.228", features = ["derive"], default-features = false }

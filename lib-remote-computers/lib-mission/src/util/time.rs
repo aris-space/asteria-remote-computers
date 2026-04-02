@@ -1,5 +1,7 @@
 use std::time::Duration;
 
+use datatypes::units::InstantUs;
+
 /// A unix timestamp.
 #[derive(Default, Debug, Clone, Copy, PartialOrd, Ord, PartialEq, Eq)]
 pub struct MissionTime(Duration);
@@ -10,6 +12,15 @@ impl MissionTime {
             .as_millis()
             .try_into()
             .expect("this will take millions of years")
+    }
+
+    pub fn as_instant_us(&self) -> InstantUs {
+        InstantUs(
+            self.0
+                .as_micros()
+                .try_into()
+                .expect("this will take thousands of years"),
+        )
     }
 }
 

@@ -34,7 +34,7 @@ impl StateLogic for ManualControl {
 
         // Prepares a background task to listen for (and act upon) manual actuator inputs.
         let actuator_future = self.actuator_control.act(
-            param.current_state().1,
+            input.state.current_state.get().0 as usize,
             &input.actuator_command,
             output.valves.as_settables(),
         );

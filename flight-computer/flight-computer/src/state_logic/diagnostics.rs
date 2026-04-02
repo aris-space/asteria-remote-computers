@@ -1,3 +1,4 @@
+use crate::io::input::StatusReport;
 use lib_mission::state_machine::{AdditionalState, StateLogic, StateName};
 use lib_mission::util::time::MissionTime;
 use std::time::Duration;
@@ -31,46 +32,172 @@ impl StateLogic for Diagnostics {
         _: &Self::Output,
         _p: &AdditionalState<Self::Parameter>,
     ) -> StateName {
-        let check = |health: &Watchable<Option<MissionTime>>, name: &str| {
-            if let Some(t) = health.get() {
-                if input.time.get() > t + self.outdated_threshold {
-                    tracing::warn!("Failing Diagnostics: {name} hasn't responded lately");
-                    false
-                } else {
-                    true
-                }
-            } else {
-                tracing::warn!("Failing Diagnostics: Last response from {name} was unhealthy");
-                false
-            }
-        };
-
         tracing::info!("Entered the Diagnostics state...");
 
+        let now = input.time.get();
+
         let healths = [
-            check(&input.boards_health.sensor_carrier, "sensor carrier"),
-            check(&input.boards_health.power_board, "power board"),
-            check(&input.boards_health.recovery_board, "recovery board"),
+            check_board(
+                &input.boards_status.sensor_carrier,
+                "sensor carrier",
+                now,
+                self.outdated_threshold,
+                is_sensor_carrier_healthy,
+            ),
+            check_board(
+                &input.boards_status.power_board,
+                "power board",
+                now,
+                self.outdated_threshold,
+                is_power_board_healthy,
+            ),
+            check_board(
+                &input.boards_status.recovery_board,
+                "recovery board",
+                now,
+                self.outdated_threshold,
+                is_recovery_board_healthy,
+            ),
             self.check_pss_boards
-                && check(
-                    &input.boards_health.fuel_control_board,
+                && check_board(
+                    &input.boards_status.fuel_control_board,
                     "fuel control board",
+                    now,
+                    self.outdated_threshold,
+                    is_fuel_control_board_healthy,
                 ),
             self.check_pss_boards
-                && check(
-                    &input.boards_health.oxidizer_control_board,
+                && check_board(
+                    &input.boards_status.oxidizer_control_board,
                     "oxidizer control board",
+                    now,
+                    self.outdated_threshold,
+                    is_oxidizer_control_board_healthy,
                 ),
             self.check_pss_boards
-                && check(
-                    &input.boards_health.engine_control_board,
+                && check_board(
+                    &input.boards_status.engine_control_board,
                     "engine control board",
+                    now,
+                    self.outdated_threshold,
+                    is_engine_control_board_healthy,
                 ),
         ];
+
         if healths.iter().all(|&x| x) {
             self.on_tests_pass.clone()
         } else {
             self.on_tests_fail.clone()
         }
     }
+}
+
+fn check_board<T: Clone + Default>(
+    report: &Watchable<StatusReport<T>>,
+    name: &str,
+    now: MissionTime,
+    outdated_threshold: Duration,
+    is_healthy: impl Fn(&T, &T) -> bool,
+) -> bool {
+    let report = report.read();
+    if !report.fresh {
+        tracing::warn!("Failing Diagnostics: {name} hasn't sent a report yet");
+        return false;
+    }
+    if now > report.timestamp + outdated_threshold {
+        tracing::warn!("Failing Diagnostics: {name} hasn't responded lately");
+        return false;
+    }
+    if !is_healthy(&report.current_status, &report.previous_status) {
+        tracing::warn!("Failing Diagnostics: Last response from {name} was unhealthy");
+        return false;
+    }
+    true
+}
+
+fn is_sensor_carrier_healthy(
+    current: &messages::datapoints::dp_sensor_carrier::SensorCarrierStatus,
+    prev: &messages::datapoints::dp_sensor_carrier::SensorCarrierStatus,
+) -> bool {
+    use datatypes::status::SensorStatus;
+    let sensors = &current.sensor_health;
+    (sensors.gps_1 == SensorStatus::Online || sensors.gps_2 == SensorStatus::Online)
+        && (sensors.imu_1 == SensorStatus::Online || sensors.imu_2 == SensorStatus::Online)
+        && current.common.errors == prev.common.errors
+}
+
+fn is_engine_control_board_healthy(
+    current: &messages::datapoints::dp_engine_control_board::EngineControlBoardStatus,
+    _prev: &messages::datapoints::dp_engine_control_board::EngineControlBoardStatus,
+) -> bool {
+    current.common.errors == 0
+}
+
+fn is_power_board_healthy(
+    current: &datatypes::status::StatusCommonMessage,
+    prev: &datatypes::status::StatusCommonMessage,
+) -> bool {
+    current.errors == prev.errors
+}
+
+fn is_fuel_control_board_healthy(
+    current: &messages::datapoints::dp_fuel_control_board::FuelControlBoardStatus,
+    _prev: &messages::datapoints::dp_fuel_control_board::FuelControlBoardStatus,
+) -> bool {
+    use datatypes::status::SensorStatus;
+    current.common.errors == 0
+        && current.thermocouple_status == SensorStatus::Online
+        && current.pressure_bus == SensorStatus::Online
+}
+
+fn is_oxidizer_control_board_healthy(
+    current: &messages::datapoints::dp_oxidizer_control_board::OxidizerControlBoardStatus,
+    _prev: &messages::datapoints::dp_oxidizer_control_board::OxidizerControlBoardStatus,
+) -> bool {
+    use datatypes::status::SensorStatus;
+    current.common.errors == 0
+        && current.thermocouple_status == SensorStatus::Online
+        && current.pressure_bus == SensorStatus::Online
+}
+
+/// Checks the recovery board status for a simple healthy / unhealthy state.
+/// Does not do any error reporting, will only return `false` if *something* is unhealthy.
+fn is_recovery_board_healthy(
+    current: &messages::datapoints::dp_recovery_board::RecoveryBoardStatus,
+    _prev: &messages::datapoints::dp_recovery_board::RecoveryBoardStatus,
+) -> bool {
+    use messages::datapoints::dp_recovery_board::{ActuatorStatus, WatchdogState};
+
+    current.common.errors == 0
+        && matches!(
+            current.steering_watchdog_status,
+            WatchdogState::Disabled | WatchdogState::Active
+        )
+        && matches!(
+            current.steering_general,
+            ActuatorStatus::Connected | ActuatorStatus::PowerOn
+        )
+        // FIXME: for REC board V2 this should be enabled again, but only if steering has power.
+        // && current.steering_left_connected
+        // && current.steering_right_connected
+        && (
+            // Only one of the separation servos need to be connected, the other is at the CATS.
+            matches!(
+                current.sep1_status,
+                ActuatorStatus::Connected | ActuatorStatus::PowerOn
+            ) || matches!(
+                current.sep2_status,
+                ActuatorStatus::Connected | ActuatorStatus::PowerOn
+            )
+        )
+        && (
+            // Only one of the deployment servos need to be connected, the other is at the CATS.
+            matches!(
+                current.depl1_status,
+                ActuatorStatus::Connected | ActuatorStatus::PowerOn
+            ) || matches!(
+                current.depl2_status,
+                ActuatorStatus::Connected | ActuatorStatus::PowerOn
+            )
+        )
 }
