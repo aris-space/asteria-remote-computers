@@ -13,8 +13,6 @@ members = [
     "flight-computer/flight-computer",
     "flight-computer/asteria-gnc/gnc-interface",
     "flight-computer/asteria-gnc/gnc-configurations",
-    "data-definitions/mavlink",
-    "data-definitions/can",
     "data-definitions/can-hal",
     "data-definitions/core",
     "data-definitions/datapoints/*",
