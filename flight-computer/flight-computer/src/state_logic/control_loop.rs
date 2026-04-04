@@ -291,7 +291,7 @@ pub enum AnyGncController {
     SelfTest(SelfTestGncController),
     #[cfg(feature = "gnc")]
     SysIDHIL {
-        gnc: Box<gnc_interface::adapter::CompatAdapter<SafetySpiralGuidance::<SysIdGuidance>>>,
+        gnc: Box<gnc_interface::adapter::CompatAdapter<SafetySpiralGuidance<SysIdGuidance>>>,
         height: f32,
         descent_per_tick: f32,
     },
@@ -327,7 +327,9 @@ impl gnc_interface::CompatGuidanceController for AnyGncController {
                 initial_height,
                 descent_per_tick,
             } => Ok(Self::SysIDHIL {
-                gnc: Box::new(CompatAdapter::<SafetySpiralGuidance::<SysIdGuidance>>::new(gnc)?),
+                gnc: Box::new(CompatAdapter::<SafetySpiralGuidance<SysIdGuidance>>::new(
+                    gnc,
+                )?),
                 height: initial_height,
                 descent_per_tick,
             }),
