@@ -3,8 +3,6 @@ use crate::util::timer::Timer;
 use gnc_algorithms::guidance::sysid_flight::SysIdGuidance;
 #[cfg(feature = "gnc")]
 use gnc_algorithms::SafetySpiralGuidance;
-#[cfg(feature = "gnc")]
-use gnc_interface::adapter::CompatAdapter;
 use lib_mission::reactive::{IntoWatched, Repeatedly, Watched};
 use lib_mission::state_machine::{AdditionalState, StateLogic, StateName};
 use lib_mission::transition::ManualTransitions;
@@ -306,9 +304,9 @@ impl gnc_interface::CompatGuidanceController for AnyGncController {
                 initial_height,
                 descent_per_tick,
             } => Ok(Self::SysIDHIL {
-                gnc: Box::new(CompatAdapter::<SafetySpiralGuidance<SysIdGuidance>>::new(
-                    gnc,
-                )?),
+                gnc: Box::new(gnc_interface::adapter::CompatAdapter::<
+                    SafetySpiralGuidance<SysIdGuidance>,
+                >::new(gnc)?),
                 height: initial_height,
                 descent_per_tick,
             }),
