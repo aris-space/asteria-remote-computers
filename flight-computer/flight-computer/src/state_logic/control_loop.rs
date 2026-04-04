@@ -9,7 +9,6 @@ use lib_mission::reactive::{IntoWatched, Repeatedly, Watched};
 use lib_mission::state_machine::{AdditionalState, StateLogic, StateName};
 use lib_mission::transition::ManualTransitions;
 use messages::datapoints::dp_sensor_carrier as sensor_types;
-use nalgebra::{Quaternion, UnitQuaternion};
 use std::sync::Mutex;
 use std::time::Duration;
 
@@ -77,7 +76,7 @@ where
                         conv_loc(&input.location.get()),
                         conv_vel(&input.velocity.get()),
                         conv_accl(&input.imu.get()),
-                        quat_to_angles(&input.orientation.get()),
+                        conv_orient(&input.orientation.get()),
                     )
                 },
                 _ = timer.wait() => {
@@ -151,27 +150,7 @@ impl<Gnc> ControlLoop<Gnc> {
 }
 
 #[allow(clippy::similar_names)]
-fn quat_to_angles(orient: &sensor_types::OrientationData) -> gnc_interface::Orientation {
-    let quat = Quaternion::new(
-        f64::from(orient.orientation_w),
-        f64::from(orient.orientation_x),
-        f64::from(orient.orientation_y),
-        f64::from(orient.orientation_z),
-    );
-    let unitq = UnitQuaternion::from_quaternion(quat);
-    let (roll, pitch, yaw) = unitq.euler_angles();
-
-    tracing::trace!(
-        quat_w = orient.orientation_w,
-        quat_x = orient.orientation_x,
-        quat_y = orient.orientation_y,
-        quat_z = orient.orientation_z,
-        roll,
-        pitch,
-        yaw,
-        "quat_to_angles"
-    );
-
+fn conv_orient(orient: &sensor_types::OrientationData) -> gnc_interface::Orientation {
     gnc_interface::Orientation {
         w: f64::from(orient.orientation_w),
         x: f64::from(orient.orientation_x),

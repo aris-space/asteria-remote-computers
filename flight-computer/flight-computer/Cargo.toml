@@ -29,7 +29,6 @@ toml = "0.8.19"
 thiserror = "1.0.64"
 async-trait = "0.1.83"
 tracing = "0.1.41"
-nalgebra = "0.33.2"
 mavio = { version = "0.5.10", features = ["std", "tokio"] }
 
 [target.'cfg(target_os = "linux")'.dependencies]
