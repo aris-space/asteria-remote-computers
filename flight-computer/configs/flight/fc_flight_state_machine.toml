@@ -427,29 +427,8 @@ manual_transitions = [
     { target = "Safety Spiral", display = "Manual Safety Spiral", abort = true },
 ]
 [state_machine.states."Control Loop".gnc_config]
-controller_type = "ImprovedOApproach"
-# Taken from fixed_point::OApproachPControllerConfig::test_data
-gain = 0.6
-steady_state_braking = 0.6
-holding_radius = 100.0
-# FIXME: Set WGS84 origin (currently Dübendorf)
-origin_ned = [47.04878, 8.644847, 437.0]
-flare_height = 10.0
-ipi = [-250.0, -115.0, 0.0]
-emp = [-385.0, 0.0]
-glide_ratio_turn = 2.2
-glide_ratio = 1.5
-turning_radius = 50.0
-ramp_time = 15.0
-landing_distance = 100.0
-landing_direction_angle = 3.141592653589793
-# FIXME: define bounding polygon
-[state_machine.states."Control Loop".gnc_config.bounding_polygon_automatic]
-interiors = []
-exterior = []
-[state_machine.states."Control Loop".gnc_config.bounding_polygon_manual]
-interiors = []
-exterior = []
+controller_type = "Mock"
+# FIXME: to insert the actual control loop configurations
 
 [state_machine.states."Safety Spiral"]
 type = "SafetySpiral"

@@ -1,4 +1,10 @@
 use crate::util::timer::Timer;
+#[cfg(feature = "gnc")]
+use gnc_algorithms::guidance::sysid_flight::SysIdGuidance;
+#[cfg(feature = "gnc")]
+use gnc_algorithms::SafetySpiralGuidance;
+#[cfg(feature = "gnc")]
+use gnc_interface::adapter::CompatAdapter;
 use lib_mission::reactive::{IntoWatched, Repeatedly, Watched};
 use lib_mission::state_machine::{AdditionalState, StateLogic, StateName};
 use lib_mission::transition::ManualTransitions;
@@ -284,26 +290,8 @@ pub enum AnyGncController {
     Mock(MockGncController),
     SelfTest(SelfTestGncController),
     #[cfg(feature = "gnc")]
-    AsteriaExperiment(
-        Box<
-            gnc_interface::adapter::CompatAdapter<
-                gnc_algorithms::CompositeController<
-                    gnc_algorithms::guidance::o_approach::ImprovedOApproachGuidance,
-                    gnc_algorithms::controller::p_controller::PController,
-                >,
-            >,
-        >,
-    ),
-    #[cfg(feature = "gnc")]
-    HILTest {
-        gnc: Box<
-            gnc_interface::adapter::CompatAdapter<
-                gnc_algorithms::CompositeController<
-                    gnc_algorithms::guidance::o_approach::ImprovedOApproachGuidance,
-                    gnc_algorithms::controller::p_controller::PController,
-                >,
-            >,
-        >,
+    SysIDHIL {
+        gnc: Box<gnc_interface::adapter::CompatAdapter<SafetySpiralGuidance::<SysIdGuidance>>>,
         height: f32,
         descent_per_tick: f32,
     },
@@ -318,22 +306,9 @@ pub enum AnyGncControllerConfig {
     Mock,
     SelfTest,
     #[cfg(feature = "gnc")]
-    AsteriaExperiment(
-        <gnc_interface::adapter::CompatAdapter<
-            gnc_algorithms::CompositeController<
-                gnc_algorithms::guidance::o_approach::ImprovedOApproachGuidance,
-                gnc_algorithms::PController,
-            >,
-        > as gnc_interface::CompatGuidanceController>::Config,
-    ),
-    #[cfg(feature = "gnc")]
-    HILTest {
-        gnc: <gnc_interface::adapter::CompatAdapter<
-            gnc_algorithms::CompositeController<
-                gnc_algorithms::guidance::o_approach::ImprovedOApproachGuidance,
-                gnc_algorithms::PController,
-            >,
-        > as gnc_interface::CompatGuidanceController>::Config,
+    SysIdHIL {
+        gnc: <gnc_interface::adapter::CompatAdapter<SafetySpiralGuidance<SysIdGuidance>>
+        as gnc_interface::CompatGuidanceController>::Config,
         initial_height: f32,
         descent_per_tick: f32,
     },
@@ -347,26 +322,12 @@ impl gnc_interface::CompatGuidanceController for AnyGncController {
             AnyGncControllerConfig::Mock => Ok(Self::Mock(MockGncController)),
             AnyGncControllerConfig::SelfTest => Ok(Self::SelfTest(SelfTestGncController(None))),
             #[cfg(feature = "gnc")]
-            AnyGncControllerConfig::AsteriaExperiment(c) => Ok(Self::AsteriaExperiment(Box::new(
-                gnc_interface::adapter::CompatAdapter::<
-                    gnc_algorithms::CompositeController<
-                        gnc_algorithms::guidance::o_approach::ImprovedOApproachGuidance,
-                        gnc_algorithms::controller::p_controller::PController,
-                    >,
-                >::new(c)?,
-            ))),
-            #[cfg(feature = "gnc")]
-            AnyGncControllerConfig::HILTest {
+            AnyGncControllerConfig::SysIdHIL {
                 gnc,
                 initial_height,
                 descent_per_tick,
-            } => Ok(Self::HILTest {
-                gnc: Box::new(gnc_interface::adapter::CompatAdapter::<
-                    gnc_algorithms::CompositeController<
-                        gnc_algorithms::guidance::o_approach::ImprovedOApproachGuidance,
-                        gnc_algorithms::controller::p_controller::PController,
-                    >,
-                >::new(gnc)?),
+            } => Ok(Self::SysIDHIL {
+                gnc: Box::new(CompatAdapter::<SafetySpiralGuidance::<SysIdGuidance>>::new(gnc)?),
                 height: initial_height,
                 descent_per_tick,
             }),
@@ -389,11 +350,7 @@ impl gnc_interface::CompatGuidanceController for AnyGncController {
                 gnc.step(time_unix, position, velocity, acceleration, orientation)
             }
             #[cfg(feature = "gnc")]
-            AnyGncController::AsteriaExperiment(gnc) => {
-                gnc.step(time_unix, position, velocity, acceleration, orientation)
-            }
-            #[cfg(feature = "gnc")]
-            AnyGncController::HILTest {
+            AnyGncController::SysIDHIL {
                 gnc,
                 height,
                 descent_per_tick,
