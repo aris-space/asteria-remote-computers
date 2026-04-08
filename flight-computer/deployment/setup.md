@@ -41,6 +41,17 @@ sudo apt-get update
 sudo apt-get install vim git tmux can-utils gpiod
 ```
 
+## Build the mavlink heartbeat service.
+
+Setup `cargo-zigbuild` and then run
+
+```bash
+cd flight-computer/deployment/mavlink-heartbeat
+cargo zigbuild --target aarch64-unknown-linux-gnu --release
+```
+
+and copy the binary into `$REMOTE:/usr/local/bin/mavlink-led`
+
 ## Upload Files
 
 Transfer the necessary files (from your dev machine in the `files` directory):
@@ -50,7 +61,7 @@ export REMOTE = asteria@asteria-fc-<nr>.local
 scp start_fc.sh $REMOTE:
 rsync -r --rsync-path="sudo rsync" mavlink-config.conf $REMOTE:/etc/mavlink-router/main.conf
 rsync -r --rsync-path="sudo rsync" cm-config.txt $REMOTE:/boot/firmware/config.txt
-rsync -r --rsync-path="sudo rsync" systemd/wifi-led.service $REMOTE:/etc/systemd/system/wifi-led.service
+rsync -r --rsync-path="sudo rsync" systemd/ $REMOTE:/etc/systemd/system/
 rsync -r --rsync-path="sudo rsync" wifi-led.sh $REMOTE:/usr/local/bin/wifi-led.sh
 ```
 
