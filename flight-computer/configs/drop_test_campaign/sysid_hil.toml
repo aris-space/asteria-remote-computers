@@ -113,9 +113,9 @@ manual_transitions = [
     { target = "Safety Spiral", display = "Manual Safety Spiral", abort = true },
 ]
 [state_machine.states."Control Loop".gnc_config]
-controller_type = "HILTest"
-initial_height = 3000
-descent_per_tick = 0.5
+controller_type = "SysIdHIL"
+initial_height = 1432
+descent_per_tick = 0.6
 [state_machine.states."Control Loop".gnc_config.gnc]
 # Taken from gnc_configurations::sysid_hil_duebendorf::hil_sysid_compat_adapter_config_with_safety_spiral()
 # Dübendorf
@@ -124,6 +124,7 @@ ned_origin_lon = 8.63092
 ned_origin_alt = 435.0
 dt_hint = 0.01
 [state_machine.states."Control Loop".gnc_config.gnc.inner]
+bounding_polygon = [[47.4038, 8.6293], [47.4038, 8.6333], [47.407, 8.6333], [47.407, 8.6293], [47.4038, 8.6293]]
 safety_spiral_timeout = 5.0
 safety_spiral_deflection_left = 0.6
 safety_spiral_deflection_right = 0.95
@@ -131,12 +132,12 @@ safety_spiral_deflection_right = 0.95
 spiral_steps = [[0.6, 0.15], [0.6, 0.1], [0.6, 0.05]]
 alignment_trigger_altitude = -600.0
 min_spiral_turns = 2.0
-valley_direction_angle = 1.1
-alignment_tolerance = 0.2
-alignment_inner_turn = 0.4
+alignment_target_ned = [191.247898, 294.455103]
+alignment_tolerance = 0.1
+alignment_inner_turn = 0.6
 alignment_outer_turn = 0.2
-min_alignment_time = 5.0
-max_alignment_duration = 60.0
+min_alignment_duration_secs = 5.0
+max_alignment_duration_secs = 60.0
 braking_steps = [0.0, 0.25, 0.5, 0.75, 1.0]
 braking_step_duration = 3.0
 
