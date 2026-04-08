@@ -124,7 +124,7 @@ ned_origin_lon = 8.63092
 ned_origin_alt = 435.0
 dt_hint = 0.01
 [state_machine.states."Control Loop".gnc_config.gnc.inner]
-bounding_polygon = [[47.4038, 8.6293], [47.4038, 8.6333], [47.407, 8.6333], [47.407, 8.6293], [47.4038, 8.6293]]
+bounding_polygon = [[-141.427725, -122.28769], [-141.426251, 179.657224], [214.37003, 179.646344], [214.368556, -122.280285], [-141.427725, -122.28769]]
 safety_spiral_timeout = 5.0
 safety_spiral_deflection_left = 0.6
 safety_spiral_deflection_right = 0.95
