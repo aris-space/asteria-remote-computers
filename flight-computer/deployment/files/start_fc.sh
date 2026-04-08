@@ -38,9 +38,10 @@ echo "CAN BUS started!"
 echo "Resetting the boards..."  
 sleep 2  
 # Send the reset signal to all boards,. This should later be sent from the fc.  
-cansend can0 00A##0  
+cansend can0 010##0  
 sleep 1  
   
 echo -e "\n${CYAN}Starting Flight Computer...\n"   
     
 # Run flight computer with state machine config file as first argument   
+RUST_LOG="info" $FC_BINARY $CONFIG_FILE
