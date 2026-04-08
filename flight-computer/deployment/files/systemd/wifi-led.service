@@ -1,0 +1,12 @@
+[Unit]
+Description=Blue WiFi status LED
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/wifi-led.sh
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
