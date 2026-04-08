@@ -129,9 +129,9 @@ safety_spiral_timeout = 5.0
 safety_spiral_deflection_left = 0.6
 safety_spiral_deflection_right = 0.95
 [state_machine.states."Control Loop".gnc_config.gnc.inner.inner_config]
-spiral_steps = [[0.6, 0.15], [0.6, 0.1], [0.6, 0.05]]
+spiral_steps = [[0.7, 0.4], [0.7, 0.2], [0.7, 0.0]]
+spiral_step_duration = 10.0
 alignment_trigger_altitude = -600.0
-min_spiral_turns = 2.0
 alignment_target_ned = [191.247898, 294.455103]
 alignment_tolerance = 0.1
 alignment_inner_turn = 0.6
