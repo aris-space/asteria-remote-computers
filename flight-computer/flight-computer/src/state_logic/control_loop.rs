@@ -1,10 +1,12 @@
 use crate::util::timer::Timer;
-use gnc_interface::MotorDeflections;
+#[cfg(feature = "gnc")]
+use gnc_algorithms::guidance::sysid_flight::SysIdGuidance;
+#[cfg(feature = "gnc")]
+use gnc_algorithms::SafetySpiralGuidance;
 use lib_mission::reactive::{IntoWatched, Repeatedly, Watched};
 use lib_mission::state_machine::{AdditionalState, StateLogic, StateName};
 use lib_mission::transition::ManualTransitions;
 use messages::datapoints::dp_sensor_carrier as sensor_types;
-use nalgebra::{Quaternion, UnitQuaternion};
 use std::sync::Mutex;
 use std::time::Duration;
 
@@ -40,7 +42,7 @@ pub struct ControlLoop<Gnc> {
 #[async_trait::async_trait]
 impl<Gnc> StateLogic for ControlLoop<Gnc>
 where
-    Gnc: gnc_interface::GuidanceController,
+    Gnc: gnc_interface::CompatGuidanceController,
 {
     type Input = super::Input;
     type Output = super::Output;
@@ -72,7 +74,7 @@ where
                         conv_loc(&input.location.get()),
                         conv_vel(&input.velocity.get()),
                         conv_accl(&input.imu.get()),
-                        quat_to_angles(&input.orientation.get()),
+                        conv_orient(&input.orientation.get()),
                     )
                 },
                 _ = timer.wait() => {
@@ -113,7 +115,7 @@ enum Error {
 impl<Gnc> ControlLoop<Gnc> {
     fn convert_gnc_output(
         &self,
-        motor: &MotorDeflections,
+        motor: &gnc_interface::MotorDeflections,
     ) -> Result<types::SteeringMotorRevolutions, Error> {
         // Convert the GNC output first to revolutions by linear interpolation and then to steps.
         let (l, r) = (motor.motor_left, motor.motor_right);
@@ -146,28 +148,13 @@ impl<Gnc> ControlLoop<Gnc> {
 }
 
 #[allow(clippy::similar_names)]
-fn quat_to_angles(orient: &sensor_types::OrientationData) -> gnc_interface::Orientation {
-    let quat = Quaternion::new(
-        f64::from(orient.orientation_w),
-        f64::from(orient.orientation_x),
-        f64::from(orient.orientation_y),
-        f64::from(orient.orientation_z),
-    );
-    let unitq = UnitQuaternion::from_quaternion(quat);
-    let (roll, pitch, yaw) = unitq.euler_angles();
-
-    tracing::trace!(
-        quat_w = orient.orientation_w,
-        quat_x = orient.orientation_x,
-        quat_y = orient.orientation_y,
-        quat_z = orient.orientation_z,
-        roll,
-        pitch,
-        yaw,
-        "quat_to_angles"
-    );
-
-    gnc_interface::Orientation { roll, pitch, yaw }
+fn conv_orient(orient: &sensor_types::OrientationData) -> gnc_interface::Orientation {
+    gnc_interface::Orientation {
+        w: f64::from(orient.orientation_w),
+        x: f64::from(orient.orientation_x),
+        y: f64::from(orient.orientation_y),
+        z: f64::from(orient.orientation_z),
+    }
 }
 
 /// Conversion from internal type to GNC type.
@@ -197,11 +184,11 @@ fn conv_accl(accl: &sensor_types::ImuData) -> gnc_interface::Acceleration {
     }
 }
 
-/// A [`gnc_interface::GuidanceController`] implementor that moves the motors in sine waves. Used for testing.
+/// A [`gnc_interface::CompatGuidanceController`] implementor that moves the motors in sine waves. Used for testing.
 #[derive(Debug)]
 pub struct MockGncController;
 
-impl gnc_interface::GuidanceController for MockGncController {
+impl gnc_interface::CompatGuidanceController for MockGncController {
     type Config = ();
 
     fn new((): Self::Config) -> Result<Self, Box<dyn std::error::Error>> {
@@ -224,7 +211,7 @@ impl gnc_interface::GuidanceController for MockGncController {
     }
 }
 
-/// A [`gnc_interface::GuidanceController`] implementor that moves the motors in known patterns. Used for testing.
+/// A [`gnc_interface::CompatGuidanceController`] implementor that moves the motors in known patterns. Used for testing.
 /// The pattern is:
 /// - Move left motor to 0 for 5 sec
 /// - Move left motor to 1 for 5 sec
@@ -236,7 +223,7 @@ impl gnc_interface::GuidanceController for MockGncController {
 #[derive(Debug)]
 pub struct SelfTestGncController(Option<std::time::Duration>);
 
-impl gnc_interface::GuidanceController for SelfTestGncController {
+impl gnc_interface::CompatGuidanceController for SelfTestGncController {
     type Config = ();
 
     fn new((): Self::Config) -> Result<Self, Box<dyn std::error::Error>> {
@@ -280,25 +267,31 @@ pub enum AnyGncController {
     Mock(MockGncController),
     SelfTest(SelfTestGncController),
     #[cfg(feature = "gnc")]
-    ImprovedOApproach(Box<hermes_gnc::guidance_controller::improved_o_approach_pconttroler::ImprovedOApproachPController>),
-    #[cfg(feature = "gnc")]
-    SysId(Box<hermes_gnc::guidance_controller::sys_id_sys_id_controller::SysIDSysIDController>),
+    SysIDHIL {
+        gnc: Box<gnc_interface::adapter::CompatAdapter<SafetySpiralGuidance<SysIdGuidance>>>,
+        height: f32,
+        descent_per_tick: f32,
+    },
 }
 
 /// The config for any of the implemented GNC controllers.
 /// The variant is given by the `controller_type` field and other fields are flattened.
 #[derive(Debug, serde::Deserialize, serde::Serialize)]
 #[serde(tag = "controller_type")]
+#[allow(clippy::large_enum_variant)] // expected and fine since usually the big variant
 pub enum AnyGncControllerConfig {
     Mock,
     SelfTest,
     #[cfg(feature = "gnc")]
-    ImprovedOApproach(<hermes_gnc::guidance_controller::improved_o_approach_pconttroler::ImprovedOApproachPController as gnc_interface::GuidanceController>::Config),
-    #[cfg(feature = "gnc")]
-    SysId(<hermes_gnc::guidance_controller::sys_id_sys_id_controller::SysIDSysIDController as gnc_interface::GuidanceController>::Config),
+    SysIdHIL {
+        gnc: <gnc_interface::adapter::CompatAdapter<SafetySpiralGuidance<SysIdGuidance>>
+        as gnc_interface::CompatGuidanceController>::Config,
+        initial_height: f32,
+        descent_per_tick: f32,
+    },
 }
 
-impl gnc_interface::GuidanceController for AnyGncController {
+impl gnc_interface::CompatGuidanceController for AnyGncController {
     type Config = AnyGncControllerConfig;
 
     fn new(config: Self::Config) -> Result<Self, Box<dyn std::error::Error>> {
@@ -306,24 +299,28 @@ impl gnc_interface::GuidanceController for AnyGncController {
             AnyGncControllerConfig::Mock => Ok(Self::Mock(MockGncController)),
             AnyGncControllerConfig::SelfTest => Ok(Self::SelfTest(SelfTestGncController(None))),
             #[cfg(feature = "gnc")]
-            AnyGncControllerConfig::ImprovedOApproach(c) => Ok(Self::ImprovedOApproach(Box::new(
-                hermes_gnc::guidance_controller::improved_o_approach_pconttroler::ImprovedOApproachPController::new(c)?,
-            ))),
-            #[cfg(feature = "gnc")]
-            AnyGncControllerConfig::SysId(c) => Ok(Self::SysId(Box::new(
-                <hermes_gnc::guidance_controller::sys_id_sys_id_controller::SysIDSysIDController as gnc_interface::GuidanceController>::new(c)?,
-            ))),
+            AnyGncControllerConfig::SysIdHIL {
+                gnc,
+                initial_height,
+                descent_per_tick,
+            } => Ok(Self::SysIDHIL {
+                gnc: Box::new(gnc_interface::adapter::CompatAdapter::<
+                    SafetySpiralGuidance<SysIdGuidance>,
+                >::new(gnc)?),
+                height: initial_height,
+                descent_per_tick,
+            }),
         }
     }
 
     fn step(
         &mut self,
         time_unix: std::time::Duration,
-        position: gnc_interface::Position,
+        mut position: gnc_interface::Position,
         velocity: gnc_interface::Velocity,
         acceleration: gnc_interface::Acceleration,
         orientation: gnc_interface::Orientation,
-    ) -> Result<MotorDeflections, gnc_interface::GuidanceControllerError> {
+    ) -> Result<gnc_interface::MotorDeflections, gnc_interface::GuidanceControllerError> {
         match self {
             AnyGncController::Mock(gnc) => {
                 gnc.step(time_unix, position, velocity, acceleration, orientation)
@@ -332,11 +329,18 @@ impl gnc_interface::GuidanceController for AnyGncController {
                 gnc.step(time_unix, position, velocity, acceleration, orientation)
             }
             #[cfg(feature = "gnc")]
-            AnyGncController::ImprovedOApproach(gnc) => {
-                gnc.step(time_unix, position, velocity, acceleration, orientation)
-            }
-            #[cfg(feature = "gnc")]
-            AnyGncController::SysId(gnc) => {
+            AnyGncController::SysIDHIL {
+                gnc,
+                height,
+                descent_per_tick,
+            } => {
+                let prev_height = *height;
+                *height -= *descent_per_tick;
+                #[allow(clippy::float_cmp)] // fine for integers
+                if (prev_height / 100.).round() != height.round() {
+                    tracing::info!("Simulating at {height}m");
+                }
+                position.altitude = f64::from(*height);
                 gnc.step(time_unix, position, velocity, acceleration, orientation)
             }
         }
@@ -346,6 +350,7 @@ impl gnc_interface::GuidanceController for AnyGncController {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use gnc_interface::MotorDeflections;
 
     fn create_control_loop(
         left_map: (f64, f64),

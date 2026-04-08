@@ -9,8 +9,6 @@ workspace = true
 [dependencies]
 lib-mission = { path = "../../lib-remote-computers/lib-mission" }
 io-utils = { path = "../../lib-remote-computers/io-utils" }
-gnc_interface = { path = "../hermes-recovery-gnc/gnc_interface" }
-hermes_gnc = { path = "../hermes-recovery-gnc/hermes_gnc", optional = true }
 datatypes = { path = "../../data-definitions/datatypes", features = [
     "std",
     "watchable_settable",
@@ -20,6 +18,9 @@ messages = { path = "../../data-definitions/messages", features = [
     "derive_serde",
     "mavlink",
 ], default-features = false }
+gnc-interface = { path = "../asteria-gnc/gnc-interface" }
+gnc-configurations = { path = "../asteria-gnc/gnc-configurations", optional = true }
+gnc-algorithms = { path = "../asteria-gnc/gnc-algorithms", optional = true }
 pss-drivers = { path = "../../lib-remote-computers/pss-drivers" }
 tokio = { version = "1.37.0", features = ["full"] }
 watchable = "1.1.2"
@@ -28,7 +29,6 @@ toml = "0.8.19"
 thiserror = "1.0.64"
 async-trait = "0.1.83"
 tracing = "0.1.41"
-nalgebra = "0.33.2"
 mavio = { version = "0.5.10", features = ["std", "tokio"] }
 
 [target.'cfg(target_os = "linux")'.dependencies]
@@ -40,7 +40,7 @@ built = { version = "0.7.7", features = ["git2"] }
 
 [features]
 default = ["gnc"]
-gnc = ["dep:hermes_gnc"]
+gnc = ["dep:gnc-configurations", "dep:gnc-algorithms"]
 
 [dev-dependencies]
 glob = "0.3.2"

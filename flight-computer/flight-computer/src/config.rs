@@ -2,7 +2,7 @@ use std::collections::HashSet;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-use gnc_interface::GuidanceController;
+use gnc_interface::CompatGuidanceController;
 use lib_mission::actuator_control::command::ActuatorControl;
 use lib_mission::common_states;
 use lib_mission::config::{BoxableState, MakeState};
@@ -52,7 +52,7 @@ pub type MissionProfile<Gnc> = lib_mission::config::MissionProfile<StateLogicCon
 /// The logic of a state.
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(tag = "type")]
-pub enum StateLogicConfig<Gnc: GuidanceController> {
+pub enum StateLogicConfig<Gnc: CompatGuidanceController> {
     /// Describes a [`common_states::Waiting`].
     Waiting,
     /// Describes a [`state_logic::AwaitTimer`].
@@ -287,7 +287,7 @@ pub enum StateLogicConfig<Gnc: GuidanceController> {
 }
 
 #[allow(clippy::too_many_lines)]
-impl<Gnc: GuidanceController> MakeState for StateLogicConfig<Gnc> {
+impl<Gnc: CompatGuidanceController> MakeState for StateLogicConfig<Gnc> {
     type State = BoxedState<InputTree, OutputTree, ()>;
 
     fn make(
