@@ -40,7 +40,7 @@ pub struct RunInfo {
     pub build: BuildInfo,
     /// The filename of the config file.
     pub config_filename: String,
-    /// The blob sha1 hash of the config file contents.
+    /// The git object hash of the config file.
     pub config_hash: String,
 }
 
@@ -64,7 +64,7 @@ pub async fn init_binary<C: serde::de::DeserializeOwned + std::fmt::Debug>(
     let config_content = tokio::fs::read_to_string(&config_path).await?;
     let config_hash = {
         let blob = format!("blob {}\0{config_content}", config_content.len());
-        hex::encode(sha1::Sha1::digest(blob.as_bytes()))
+        format!("O-{}", hex::encode(sha1::Sha1::digest(blob.as_bytes())))
     };
     let config_file: C = toml::from_str(&config_content)?;
 

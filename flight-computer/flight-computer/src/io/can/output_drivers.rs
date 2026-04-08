@@ -1,7 +1,7 @@
 use std::time::Duration;
 
 use datatypes::actuator::CameraPowerStatus;
-use datatypes::status::{ArmingState, BuildInformationCommon, StatusCommonMessage};
+use datatypes::status::{ArmingState, BuildInformationCommon, ConfigHash, StatusCommonMessage};
 use dp_flight_computer::FlightComputerStatus;
 use dp_recovery_board::{RecoveryPowerConfig, SteeringPositions};
 use lib_mission::reactive::{Repeatedly, Watched, WatchedExt};
@@ -282,6 +282,31 @@ pub fn spawn_flight_computer_debug_driver(
             }
         }
         .instrument(tracing::info_span!("drivers::FlightComputerBuild")),
+    )
+    .abort_handle()
+}
+
+/// Sends [`dp_flight_computer::Message::ConfigHash`] at 0.2Hz.
+pub fn spawn_flight_computer_config_driver(
+    config_hash: ConfigHash,
+    tx: std::sync::mpsc::Sender<messages::Message>,
+) -> AbortHandle {
+    tokio::spawn(
+        async move {
+            let mut interval = tokio::time::interval(Duration::from_secs(5));
+            loop {
+                interval.tick().await;
+                let msg = messages::Message::FlightComputer(
+                    dp_flight_computer::Message::ConfigHash(config_hash.clone()),
+                );
+
+                if tx.send(msg).is_err() {
+                    tracing::warn!("CAN channel was closed. Shutting down!");
+                    break;
+                }
+            }
+        }
+        .instrument(tracing::info_span!("drivers::FlightComputerConfigHash")),
     )
     .abort_handle()
 }
