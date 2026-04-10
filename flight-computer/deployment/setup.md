@@ -70,6 +70,16 @@ rsync -r --rsync-path="sudo rsync" wifi-led.sh $REMOTE:/usr/local/bin/wifi-led.s
 Follow the official instructions:  
 👉 [MAVLink Router GitHub](https://github.com/mavlink-router/mavlink-router)
 
+## Enable the systemd services
+
+On the FC run:
+
+```bash
+systemctl enable --now mavlink-router
+systemctl enable --now mavlink-led
+systemctl enable --now wifi-led
+```
+
 ## Build the Flight Computer
 
 Follow your project’s `build_fc` procedure and use the PAT previously generated as a password.
