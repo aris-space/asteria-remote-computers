@@ -22,21 +22,20 @@ read -s -n 1
 
 echo -e "\n${NC}Binary path: ${PURPLE}$FC_BINARY${GREY}"
 file "$FC_BINARY"
-echo "${NC}Config file: ${PURPLE}$CONFIG_FILE${GREY}"
-head "$CONFIG_FILE"
+echo -e "${NC}Config file: ${PURPLE}$CONFIG_FILE${GREY}"
+head -n 5 "$CONFIG_FILE"
+echo "..."
 echo -e "\n${YELLOW}Check path to flight-computer executable and state machine config file ${NC}(press any key to continue)"
 
 read -s -n 1
 
-echo -e "${GREY}\nStarting CAN BUS..."
+echo "Starting CAN BUS..."
 sudo ip link set can0 down
 # `restart-ms 50` is a hotfix because CAN often dies (SPI problem??). `ip -details -statistics link show can0` shows the number of restarts.
 sudo ip link set can0 up type can bitrate 1000000 dbitrate 1000000 fd on restart-ms 50
 
-echo "CAN BUS started!"
-
-echo "Resetting the boards..."
 sleep 2
+echo "Resetting the boards..."
 # Send the reset signal to all boards.
 cansend can0 010##0
 sleep 1
