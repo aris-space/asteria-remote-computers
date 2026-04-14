@@ -1,0 +1,8 @@
+[package]
+name = "mavlink-led"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+mavio = { version = "0.5", features = ["std", "dlct-minimal"] }
+rppal = "0.22"

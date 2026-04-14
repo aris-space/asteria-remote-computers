@@ -54,6 +54,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         input_tree.cats_separation.clone(),
         input_tree.cats_deployment.clone(),
     );
+    flight_computer::io::gpio::start_status_led(
+        build_info::THIS_BUILD.is_release,
+        build_info::THIS_BUILD.git_dirty,
+    );
 
     tokio::select! {
         _ = tokio::signal::ctrl_c() => {

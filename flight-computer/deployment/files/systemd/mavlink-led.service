@@ -1,0 +1,12 @@
+[Unit]
+Description=MAVLink heartbeat + status LED (green)
+After=network.target mavlink-router.service
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/mavlink-led
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
