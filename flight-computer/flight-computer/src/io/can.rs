@@ -1,4 +1,3 @@
-use datatypes::status::ConfigHash;
 use lib_mission::can::{read_can, run_can_transmit_actor, ConsumerRegistry};
 use lib_mission::reactive::IntoWatched;
 use lib_mission::util::time::MissionTime;
@@ -14,7 +13,6 @@ mod output_drivers;
 /// Initializes CAN and its drivers
 pub fn init_can_drivers(
     config: &CANConfig,
-    config_hash: ConfigHash,
     input_tree: &InputTree,
     output_tree: &OutputTree,
 ) -> Result<Vec<AbortHandle>, Box<dyn std::error::Error>> {
@@ -43,7 +41,7 @@ pub fn init_can_drivers(
 
     // Initialize the driver tasks
     let (tx, rx) = std::sync::mpsc::channel();
-    let output_handles = init_output_drivers(&input_tree.time, config_hash, output_tree, &tx);
+    let output_handles = init_output_drivers(&input_tree.time, output_tree, &tx);
     let mut consumers = ConsumerRegistry::new().with_collector(input_tree.clone());
 
     // Spawn the receiving thread
@@ -65,7 +63,6 @@ pub fn init_can_drivers(
 /// Additionally, `thrust_curve` is sent to the ECU after 5 seconds.
 fn init_output_drivers<C>(
     clock: C,
-    config_hash: ConfigHash,
     output_tree: &OutputTree,
     tx: &std::sync::mpsc::Sender<messages::Message>,
 ) -> Vec<AbortHandle>
@@ -80,19 +77,21 @@ where
         recovery_actuators_armed,
         camera_powered_on,
         valves,
+        hash_config: _,
+        fc_status,
     } = output_tree;
     // Register the emitters
     let handles = vec![
         output_drivers::spawn_flight_computer_status_driver(
             valves.watch_active(),
             recovery_actuators_armed.watched(),
+            fc_status.clone(),
             tx.clone(),
         ),
         output_drivers::spawn_flight_computer_debug_driver(
             crate::build_info::THIS_BUILD,
             tx.clone(),
         ),
-        output_drivers::spawn_flight_computer_config_driver(config_hash, tx.clone()),
         output_drivers::spawn_steering_motor_driver(
             steering_motor_target_deflections.watched(),
             clock.watched(),

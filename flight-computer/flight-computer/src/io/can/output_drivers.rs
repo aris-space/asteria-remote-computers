@@ -1,7 +1,7 @@
 use std::time::Duration;
 
 use datatypes::actuator::CameraPowerStatus;
-use datatypes::status::{ArmingState, BuildInformationCommon, ConfigHash, StatusCommonMessage};
+use datatypes::status::{ArmingState, BuildInformationCommon, StatusCommonMessage};
 use dp_flight_computer::FlightComputerStatus;
 use dp_recovery_board::{RecoveryPowerConfig, SteeringPositions};
 use lib_mission::reactive::{Repeatedly, Watched, WatchedExt};
@@ -10,6 +10,7 @@ use lib_mission::util::time::MissionTime;
 use messages::datapoints::{dp_flight_computer, dp_power_board, dp_recovery_board};
 use tokio::task::AbortHandle;
 use tracing::Instrument;
+use watchable::Watchable;
 
 use crate::io::types::{
     CameraPowerState, MainDeploymentState, RecoveryArmingState, SeparationState,
@@ -211,6 +212,7 @@ pub fn spawn_deployment_driver(
 pub fn spawn_flight_computer_status_driver(
     has_pss_control: impl Watched<bool> + Send + 'static,
     is_software_armed: impl Watched<RecoveryArmingState> + Send + 'static,
+    fc_status: Watchable<FlightComputerStatus>,
     tx: std::sync::mpsc::Sender<messages::Message>,
 ) -> AbortHandle {
     tokio::spawn(
@@ -219,19 +221,20 @@ pub fn spawn_flight_computer_status_driver(
             let start_time = std::time::SystemTime::now();
             loop {
                 interval.tick().await;
-                let msg = messages::Message::FlightComputer(dp_flight_computer::Message::Status(
-                    FlightComputerStatus {
-                        common: StatusCommonMessage {
-                            errors: 0,
-                            micros_since_restart: std::time::SystemTime::now()
-                                .duration_since(start_time)
-                                .expect("Time moved backwards")
-                                .as_micros()
-                                as u64,
-                        },
-                        has_pss_control: has_pss_control.current(),
-                        is_software_armed: is_software_armed.current().into(),
+                let status = FlightComputerStatus {
+                    common: StatusCommonMessage {
+                        errors: 0,
+                        micros_since_restart: std::time::SystemTime::now()
+                            .duration_since(start_time)
+                            .expect("Time moved backwards")
+                            .as_micros() as u64,
                     },
+                    has_pss_control: has_pss_control.current(),
+                    is_software_armed: is_software_armed.current().into(),
+                };
+                let _ = fc_status.update(status.clone());
+                let msg = messages::Message::FlightComputer(dp_flight_computer::Message::Status(
+                    status,
                 ));
 
                 if tx.send(msg).is_err() {
@@ -282,31 +285,6 @@ pub fn spawn_flight_computer_debug_driver(
             }
         }
         .instrument(tracing::info_span!("drivers::FlightComputerBuild")),
-    )
-    .abort_handle()
-}
-
-/// Sends [`dp_flight_computer::Message::ConfigHash`] at 0.2Hz.
-pub fn spawn_flight_computer_config_driver(
-    config_hash: ConfigHash,
-    tx: std::sync::mpsc::Sender<messages::Message>,
-) -> AbortHandle {
-    tokio::spawn(
-        async move {
-            let mut interval = tokio::time::interval(Duration::from_secs(5));
-            loop {
-                interval.tick().await;
-                let msg = messages::Message::FlightComputer(
-                    dp_flight_computer::Message::ConfigHash(config_hash.clone()),
-                );
-
-                if tx.send(msg).is_err() {
-                    tracing::warn!("CAN channel was closed. Shutting down!");
-                    break;
-                }
-            }
-        }
-        .instrument(tracing::info_span!("drivers::FlightComputerConfigHash")),
     )
     .abort_handle()
 }

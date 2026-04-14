@@ -21,22 +21,21 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .ok_or("Not enought arguments. Usage: ./flight_computer <CONFIG>")?;
     println!("loading config from {config_path}");
 
-    let (config_file, log_folder, run_info) =
-        init_binary::<Config<MissionProfile<AnyGncController>>>(
-            build_info::THIS_BUILD,
-            config_path,
-        )
-        .await?;
-    let config_hash = ConfigHash {
-        hash: run_info.config_hash.as_bytes()[2..7]
-            .try_into()
-            .expect("config hash is hex SHA-1, always longer than 5 chars"),
-    };
+    let (config_file, log_folder, run_info) = init_binary::<
+        Config<MissionProfile<AnyGncController>>,
+    >(build_info::THIS_BUILD, config_path)
+    .await?;
 
     let mut input_tree = InputTree::default();
     input_tree.boards_status.time = input_tree.time.clone(); // synchronize shared variable
 
     let output_tree = OutputTree::default();
+    let config_hash = ConfigHash {
+        hash: run_info.config_hash.as_bytes()[..5]
+            .try_into()
+            .expect("config hash is hex SHA-1, longer than 5 chars"),
+    };
+    let _ = output_tree.hash_config.update(config_hash);
     let state_machine = StateMachine::new(config_file.state_machine)?;
     input_tree.state.current_state = state_machine.current_state.clone(); // synchronize shared variable
 
@@ -57,7 +56,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         &state_machine,
     )?;
 
-    init_can_drivers(&config_file.can, config_hash, &input_tree, &output_tree)?;
+    init_can_drivers(&config_file.can, &input_tree, &output_tree)?;
     start_cats_driver(
         input_tree.cats_separation.clone(),
         input_tree.cats_deployment.clone(),
