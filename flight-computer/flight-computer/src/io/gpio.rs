@@ -88,18 +88,25 @@ pub fn start_status_led(is_release: bool, git_dirty: bool) -> std::thread::JoinH
             }
         };
 
-        // 1Hz (500ms per half-period) for clean release, 2Hz (250ms) otherwise
-        let half_period = if is_release && !git_dirty {
-            std::time::Duration::from_millis(500)
+        // Clean release: 1Hz with 90/10 duty cycle (900ms on, 100ms off)
+        // Otherwise: 2Hz with 50/50 duty cycle (250ms per half-period)
+        let (on_duration, off_duration) = if is_release && !git_dirty {
+            (
+                std::time::Duration::from_millis(900),
+                std::time::Duration::from_millis(100),
+            )
         } else {
-            std::time::Duration::from_millis(250)
+            (
+                std::time::Duration::from_millis(250),
+                std::time::Duration::from_millis(250),
+            )
         };
 
         loop {
             pin.set_high();
-            std::thread::sleep(half_period);
+            std::thread::sleep(on_duration);
             pin.set_low();
-            std::thread::sleep(half_period);
+            std::thread::sleep(off_duration);
         }
     })
 }
