@@ -11,7 +11,7 @@ NC='\033[0m' # No Color
 FC_BINARY="$HOME/asteria/flight-computer"
 
 # Path to state machine config file
-CONFIG_FILE="$HOME/asteria/configs/sysid_hil.toml"
+CONFIG_FILE="$HOME/asteria/current-config.toml"
 
 # Flight computer startup procedure
 echo -e "${GREY}"
@@ -40,7 +40,7 @@ echo "Resetting the boards..."
 cansend can0 010##0
 sleep 1
 
-echo -e "\n${CYAN}Starting Flight Computer...\n"
+echo -e "\n${CYAN}Starting Flight Computer...${NC}\n"
 
 # Run flight computer with state machine config file as first argument
-RUST_LOG="info" $FC_BINARY $CONFIG_FILE
+tmux new-session -A -s "flight-computer" -c ~/asteria -e RUST_LOG="info" -- $FC_BINARY $CONFIG_FILE
