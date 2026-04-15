@@ -1,5 +1,5 @@
 [Unit]
-Description=MAVLink heartbeat + status LED (green)
+Description=Blinks the green status LED depending on mavlink router status
 After=network.target mavlink-router.service
 
 [Service]

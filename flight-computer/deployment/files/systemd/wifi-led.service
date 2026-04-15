@@ -1,5 +1,5 @@
 [Unit]
-Description=Blue WiFi status LED
+Description=Blinks the blue status LED depending on WiFi status
 After=network.target
 
 [Service]
