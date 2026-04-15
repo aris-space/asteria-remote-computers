@@ -50,7 +50,11 @@ cd flight-computer/deployment/mavlink-heartbeat
 cargo zigbuild --target aarch64-unknown-linux-gnu --release
 ```
 
-and copy the binary into `$REMOTE:/usr/local/bin/mavlink-led`
+and copy the binary into `/usr/local/bin/mavlink-led` on the flight computer:
+
+```bash
+rsync -r --rsync-path="sudo rsync" target/release/aarch64-unknown-linux-gnu/mavlink-led $REMOTE:/usr/local/bin/mavlink-led
+```
 
 ## Upload Files
 
@@ -68,7 +72,9 @@ rsync -r --rsync-path="sudo rsync" wifi-led.sh $REMOTE:/usr/local/bin/wifi-led.s
 ## Setup MAVLink Router
 
 Follow the official instructions:  
-👉 [MAVLink Router GitHub](https://github.com/mavlink-router/mavlink-router)
+👉 [MAVLink Router GitHub](https://github.com/mavlink-router/mavlink-router).
+
+This should also install a mavlink-router systemd service.
 
 ## Enable the systemd services
 
