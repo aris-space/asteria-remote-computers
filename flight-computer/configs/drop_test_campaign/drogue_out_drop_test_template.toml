@@ -12,6 +12,10 @@ ecu_thrust_curve = []
 name = "Hermes Drogue Out Drop Test"
 initial_state = "Idle"
 
+# Path to the state machine diagram SVG which is used by the mission control
+# **Note**: This path is relative to the location of this config file.
+diagram_path = "../../../state-machines/drogue-drop-test-state-machine.drawio.svg"
+
 # State machine's starting point. Simply waits for a manual command.
 [state_machine.states."Idle"]
 type = "Waiting"
