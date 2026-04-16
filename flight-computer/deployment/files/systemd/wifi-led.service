@@ -1,0 +1,12 @@
+[Unit]
+Description=Blinks the blue status LED depending on WiFi status
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/wifi-led.sh
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

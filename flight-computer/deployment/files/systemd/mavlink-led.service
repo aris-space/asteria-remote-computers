@@ -1,0 +1,12 @@
+[Unit]
+Description=Blinks the green status LED depending on mavlink router status
+After=network.target mavlink-router.service
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/mavlink-led
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
