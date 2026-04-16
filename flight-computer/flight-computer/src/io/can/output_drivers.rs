@@ -10,6 +10,7 @@ use lib_mission::util::time::MissionTime;
 use messages::datapoints::{dp_flight_computer, dp_power_board, dp_recovery_board};
 use tokio::task::AbortHandle;
 use tracing::Instrument;
+use watchable::Watchable;
 
 use crate::io::types::{
     CameraPowerState, MainDeploymentState, RecoveryArmingState, SeparationState,
@@ -211,6 +212,7 @@ pub fn spawn_deployment_driver(
 pub fn spawn_flight_computer_status_driver(
     has_pss_control: impl Watched<bool> + Send + 'static,
     is_software_armed: impl Watched<RecoveryArmingState> + Send + 'static,
+    fc_status: Watchable<FlightComputerStatus>,
     tx: std::sync::mpsc::Sender<messages::Message>,
 ) -> AbortHandle {
     tokio::spawn(
@@ -219,19 +221,20 @@ pub fn spawn_flight_computer_status_driver(
             let start_time = std::time::SystemTime::now();
             loop {
                 interval.tick().await;
-                let msg = messages::Message::FlightComputer(dp_flight_computer::Message::Status(
-                    FlightComputerStatus {
-                        common: StatusCommonMessage {
-                            errors: 0,
-                            micros_since_restart: std::time::SystemTime::now()
-                                .duration_since(start_time)
-                                .expect("Time moved backwards")
-                                .as_micros()
-                                as u64,
-                        },
-                        has_pss_control: has_pss_control.current(),
-                        is_software_armed: is_software_armed.current().into(),
+                let status = FlightComputerStatus {
+                    common: StatusCommonMessage {
+                        errors: 0,
+                        micros_since_restart: std::time::SystemTime::now()
+                            .duration_since(start_time)
+                            .expect("Time moved backwards")
+                            .as_micros() as u64,
                     },
+                    has_pss_control: has_pss_control.current(),
+                    is_software_armed: is_software_armed.current().into(),
+                };
+                let _ = fc_status.update(status.clone());
+                let msg = messages::Message::FlightComputer(dp_flight_computer::Message::Status(
+                    status,
                 ));
 
                 if tx.send(msg).is_err() {

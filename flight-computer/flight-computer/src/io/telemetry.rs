@@ -28,7 +28,7 @@ pub struct Handles {
 pub fn init_telemetry(
     config: &TelemetryConfig,
     input_tree: &InputTree,
-    _output_tree: &OutputTree,
+    output_tree: &OutputTree,
     state_machine: &StateMachine<InputTree, OutputTree, ()>,
 ) -> Result<Handles, Box<dyn std::error::Error>> {
     // Setup connection
@@ -57,12 +57,11 @@ pub fn init_telemetry(
 
     // spawns tokio tasks which send mavlink messages periodically to the channel.
     let input_streamers = input_tree.start_broadcasting::<PeriodicLoop>(tx.clone());
-
-    // TODO: FC status
+    let output_streamers = output_tree.start_broadcasting::<PeriodicLoop>(tx.clone());
 
     Ok(Handles {
         uplink,
         downlink,
-        streamers: input_streamers,
+        streamers: [input_streamers, output_streamers].concat(),
     })
 }

@@ -77,12 +77,15 @@ where
         recovery_actuators_armed,
         camera_powered_on,
         valves,
+        hash_config: _,
+        fc_status,
     } = output_tree;
     // Register the emitters
     let handles = vec![
         output_drivers::spawn_flight_computer_status_driver(
             valves.watch_active(),
             recovery_actuators_armed.watched(),
+            fc_status.clone(),
             tx.clone(),
         ),
         output_drivers::spawn_flight_computer_debug_driver(
