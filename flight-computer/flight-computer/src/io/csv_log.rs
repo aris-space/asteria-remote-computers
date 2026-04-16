@@ -26,6 +26,7 @@ impl InputTree {
             transition_command,
             actuator_command,
             telemetry_health,
+            downlink_telemetry_stats: _, // TODO: log
             boards_status,
             recovery_armed,
             ecu_armed,

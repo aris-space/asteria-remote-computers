@@ -8,6 +8,7 @@ use crate::reactive::{IntoWatched, Watched};
 use crate::state_machine::StateName;
 use crate::util::time::MissionTime;
 
+use datatypes::status::DownlinkTelemetryStats;
 use datatypes::status::ManualActuatorChange;
 use datatypes::status::ManualStateTransition;
 use datatypes::status::StateMachineState;
@@ -276,10 +277,13 @@ impl io_utils::BroadcastLoop<Message> for PeriodicLoop {
 }
 
 /// Starts a low priority thread to read from `channel` and send items as mavlink messages to `socket`.
+///
+/// `downlink_stats` is updated after every successful send with cumulative bytes and message counts.
 pub fn start_downlink_actor(
     socket: std::net::UdpSocket,
     channel: std::sync::mpsc::Receiver<Message>,
     this_system: RemoteSystem,
+    downlink_stats: Watchable<DownlinkTelemetryStats>,
 ) -> std::thread::JoinHandle<()> {
     std::thread::spawn(move || {
         if let Err(e) =
@@ -287,7 +291,7 @@ pub fn start_downlink_actor(
         {
             tracing::warn!("cannot set downlink actor to low priority: {e}");
         }
-        downlink_actor(&socket, channel, this_system);
+        downlink_actor(&socket, channel, this_system, &downlink_stats);
     })
 }
 
@@ -300,6 +304,7 @@ fn downlink_actor(
     socket: &std::net::UdpSocket,
     channel: std::sync::mpsc::Receiver<Message>,
     this_system: RemoteSystem,
+    downlink_stats: &Watchable<DownlinkTelemetryStats>,
 ) {
     let endpoint = Endpoint::v2(MavLinkId::new(
         RemoteSystem::mavlink_system_id(this_system),
@@ -308,9 +313,15 @@ fn downlink_actor(
 
     // Blocking iterator
     for msg in channel {
-        let res = mavlink_hal::transport::send_message(&msg, &endpoint, socket);
-        if let Err(err) = res {
-            tracing::error!(error = %err, "failed to send MAVLink message. Dropping it.");
+        match mavlink_hal::transport::send_message(&msg, &endpoint, socket) {
+            Ok(bytes_sent) => {
+                let mut stats = downlink_stats.write();
+                stats.num_bytes_sent += bytes_sent as u64;
+                stats.num_messages_sent += 1;
+            }
+            Err(err) => {
+                tracing::error!(error = %err, "failed to send MAVLink message. Dropping it.");
+            }
         }
     }
     tracing::warn!("Exiting downlink_actor, should only happen at shutdown");
