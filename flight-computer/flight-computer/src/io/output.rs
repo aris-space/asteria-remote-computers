@@ -1,5 +1,10 @@
 //! Contains [`OutputTree`].
 
+use datatypes::status::ConfigHash;
+use dp_flight_computer::FlightComputerStatus;
+use io_utils::Broadcast;
+use messages::datapoints::dp_flight_computer;
+use messages::Message;
 use pss_drivers::output::PSSValves;
 use watchable::Watchable;
 
@@ -9,7 +14,8 @@ use super::types::{
 };
 
 /// Holds the things we want to set
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, Broadcast)]
+#[broadcast(message_type = "messages::Message")]
 pub struct OutputTree {
     /// When turning [`SeparationState::Separated`], the drogue should be separated.
     pub separate_drogue: Watchable<SeparationState>,
@@ -28,4 +34,16 @@ pub struct OutputTree {
 
     /// The target states of the tank and engine valves.
     pub valves: PSSValves,
+
+    /// First 5 hex chars of the config file Git object hash. Set once at startup.
+    #[datapoint(
+        pattern = "Message::FlightComputer(dp_flight_computer::Message::ConfigHash(#value))"
+    )]
+    #[broadcast(min_freq_hz = 0.2, max_freq_hz = 0.2)]
+    pub hash_config: Watchable<ConfigHash>,
+
+    /// Aggregated FC status. Updated by the CAN status driver.
+    #[datapoint(pattern = "Message::FlightComputer(dp_flight_computer::Message::Status(#value))")]
+    #[broadcast(min_freq_hz = 1.0, max_freq_hz = 1.0)]
+    pub fc_status: Watchable<FlightComputerStatus>,
 }

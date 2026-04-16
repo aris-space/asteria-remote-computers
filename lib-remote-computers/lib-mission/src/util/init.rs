@@ -3,7 +3,7 @@
 use std::path::{Path, PathBuf};
 
 use fs4::fs_std::FileExt;
-use sha2::Digest as _;
+use sha1::Digest as _;
 use tracing::level_filters::LevelFilter;
 use tracing_subscriber::fmt::format::FmtSpan;
 use tracing_subscriber::{EnvFilter, prelude::*};
@@ -40,7 +40,7 @@ pub struct RunInfo {
     pub build: BuildInfo,
     /// The filename of the config file.
     pub config_filename: String,
-    /// The sha256 hash of the config file contents.
+    /// The blob sha1 hash of the config file contents.
     pub config_hash: String,
 }
 
@@ -63,9 +63,8 @@ pub async fn init_binary<C: serde::de::DeserializeOwned + std::fmt::Debug>(
     // Parse and hash the config
     let config_content = tokio::fs::read_to_string(&config_path).await?;
     let config_hash = {
-        let mut hasher = sha2::Sha256::new();
-        hasher.update(config_content.as_bytes());
-        hex::encode(hasher.finalize())
+        let blob = format!("blob {}\0{config_content}", config_content.len());
+        hex::encode(sha1::Sha1::digest(blob.as_bytes()))
     };
     let config_file: C = toml::from_str(&config_content)?;
 

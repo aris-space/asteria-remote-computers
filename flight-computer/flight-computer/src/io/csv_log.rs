@@ -374,6 +374,8 @@ impl OutputTree {
             recovery_actuators_armed,
             camera_powered_on,
             valves,
+            hash_config: _,
+            fc_status: _,
         } = self;
 
         // Log target steering motor positions
