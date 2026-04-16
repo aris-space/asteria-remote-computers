@@ -69,6 +69,8 @@ pub struct InputTree {
         Watchable<Option<actuator_control::Command<pss_drivers::output::ValveName>>>,
 
     /// Statistics about the health of the telemetry uplink.
+    #[datapoint(pattern = "Message::FlightComputer(FCMessage::UplinkTelemetryHealth(#value))")]
+    #[broadcast(min_freq_hz = 0.5, max_freq_hz = 1.)]
     pub telemetry_health: Watchable<UplinkTelemetryHealth>,
     /// The health report for the avionics boards.
     #[collector(flatten)]
