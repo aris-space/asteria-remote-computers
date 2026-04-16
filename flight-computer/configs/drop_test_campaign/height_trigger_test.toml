@@ -20,7 +20,10 @@ manual_transitions = [{ target = "Diagnostics", display = "Startup" }]
 # This state exists for recovering from failures that can happen before liftoff
 [state_machine.states."Soft Failure"]
 type = "Waiting"
-manual_transitions = [{ target = "Idle", display = "Restart" }]
+manual_transitions = [
+    { target = "Diagnostics", display = "Startup" },
+    {target = "Ready", display = "all boards healthy"},
+]
 
 # This state continues only when all boards have sent healthy reports
 [state_machine.states."Diagnostics"]
