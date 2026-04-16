@@ -61,7 +61,7 @@ on_state_set = "Helicopter Armed - W"
 type = "HeightOrTimeTrigger"
 on_time_limit_reached = "Live Helicopter"
 on_height_limit_reached = "Drogue Descent"
-time_limit_sec = 60
+time_limit_sec = 600
 # TODO Define height limit
 height_limit_m = 550
 manual_transitions = [
@@ -75,7 +75,7 @@ manual_transitions = [
 type = "HeightOrTimeTrigger"
 on_time_limit_reached = "Main Chute Deployment"
 on_height_limit_reached = "Main Chute Deployment"
-time_limit_sec = 60
+time_limit_sec = 600
 # TODO Define height limit
 height_limit_m = 470
 manual_transitions = [
