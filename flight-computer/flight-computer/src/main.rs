@@ -21,10 +21,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .ok_or("Not enought arguments. Usage: ./flight_computer <CONFIG>")?;
     println!("loading config from {config_path}");
 
-    let (config_file, log_folder, run_info) = init_binary::<
-        Config<MissionProfile<AnyGncController>>,
-    >(build_info::THIS_BUILD, config_path)
-    .await?;
+    let (config_file, log_folder, run_info) =
+        init_binary::<Config<MissionProfile<AnyGncController>>>(
+            build_info::THIS_BUILD,
+            config_path,
+        )
+        .await?;
 
     let mut input_tree = InputTree::default();
     input_tree.boards_status.time = input_tree.time.clone(); // synchronize shared variable

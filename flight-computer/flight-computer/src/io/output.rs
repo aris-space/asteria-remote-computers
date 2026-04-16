@@ -3,8 +3,8 @@
 use datatypes::status::ConfigHash;
 use dp_flight_computer::FlightComputerStatus;
 use io_utils::Broadcast;
-use messages::Message;
 use messages::datapoints::dp_flight_computer;
+use messages::Message;
 use pss_drivers::output::PSSValves;
 use watchable::Watchable;
 

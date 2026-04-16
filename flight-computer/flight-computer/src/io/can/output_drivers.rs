@@ -233,9 +233,8 @@ pub fn spawn_flight_computer_status_driver(
                     is_software_armed: is_software_armed.current().into(),
                 };
                 let _ = fc_status.update(status.clone());
-                let msg = messages::Message::FlightComputer(dp_flight_computer::Message::Status(
-                    status,
-                ));
+                let msg =
+                    messages::Message::FlightComputer(dp_flight_computer::Message::Status(status));
 
                 if tx.send(msg).is_err() {
                     tracing::warn!("CAN channel was closed. Shutting down!");
