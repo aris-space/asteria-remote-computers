@@ -50,7 +50,7 @@ fn derive_log_timeseries_impl(raw_input: &syn::DeriveInput) -> proc_macro2::Toke
     };
     
     let struct_name = &log_input.ident;
-    let (impl_generics, ty_generics, where_clause) = log_input.generics.split_for_impl();
+    let (impl_generics, _, _) = log_input.generics.split_for_impl();
      
     let fields = log_input
         .data
@@ -65,47 +65,42 @@ fn derive_log_timeseries_impl(raw_input: &syn::DeriveInput) -> proc_macro2::Toke
     let mut row_tys: Vec<&syn::Type> = Vec::new();
     let mut row_exprs: Vec<proc_macro2::TokenStream> = Vec::new();
     
-    let handle_stmts: Vec<_> = fields
-        .iter()
-        .filter_map(|field| {
-            let field_name = field
-                .ident
-                .as_ref()
-                .expect("darling restricted to struct_named");
-            
-            // TODO: get the various fields
-            if field.skip.is_present() && field.header.is_some() {
-                error.push(
-                    darling::Error::custom(
-                        "`#[log(skip)]` cannot be combined with `#[log(header = ...)]`",
-                    )
-                    .with_span(&field_name.span()),
-                );
-                return None;
-            }
+    for field in &fields {
+        let field_name = field
+            .ident
+            .as_ref()
+            .expect("darling restricted to struct_named");
         
-            if field.skip.is_present() {
-                return None;
-            }
+        if field.skip.is_present() {
+            continue;
+        }
             
-            let Some(header) = field.header.clone() else {
-                error.push(
-                    darling::Error::custom(
-                        "field needs `#[log(header = \"...\")]` or `#[log(skip)]`",
-                    )
-                    .with_span(&field_name.span()),
-                );
-                return None;
-            };
-            
-            header_strs.push(header);
-            row_tys.push(&field.ty);
-            row_exprs.push(quote_spanned! { field_name.span() =>
-                ::core::clone::Clone::clone(&self.#field_name)
-            });
-            // TODO: Option<Some...>
-            todo!()
-        }).collect();
+        if field.skip.is_present() && field.header.is_some() {
+            error.push(
+                darling::Error::custom(
+                    "`#[log(skip)]` cannot be combined with `#[log(header = ...)]`",
+                )
+                .with_span(&field_name.span()),
+            );
+            continue;
+        }
+        
+        let Some(header) = field.header.clone() else {
+            error.push(
+                darling::Error::custom(
+                    "field needs `#[log(header = \"...\")]` or `#[log(skip)]`",
+                )
+                .with_span(&field_name.span()),
+            );
+            continue;
+        };
+        
+        header_strs.push(header);
+        row_tys.push(&field.ty);
+        row_exprs.push(quote_spanned! { field_name.span() =>
+            ::core::clone::Clone::clone(&self.#field_name)
+        });
+    }
     
     if let Err(err) = error.finish() {
         return err.write_errors();
@@ -120,8 +115,15 @@ fn derive_log_timeseries_impl(raw_input: &syn::DeriveInput) -> proc_macro2::Toke
         .write_errors();
     }
     
-    // TODO: quote! 
-    // [...]
-    quote!{}
-    todo!()
+    quote!{
+        #[automatically_derived]
+        impl #impl_generics LogTimeseries for #struct_name {
+            const HEADERS: &'static [&'static str] = &["lat [°]", "lon [°]", "alt"];
+            type Row = ( #( #row_tys, )* );
+            fn to_row(&self) -> Self::Row {
+                ( #( #row_exprs, )* )
+            }
+        }
+    }
 }
+// TODO: tests
