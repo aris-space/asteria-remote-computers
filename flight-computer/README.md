@@ -1,11 +1,13 @@
-# Hermes-Flight-Computer
+# Asteria-Flight-Computer
 
 This is the software that will run on the Raspberry Pi compute module on the rocket.
-It includes the `hermes-lib-remote-computers` which is shared with the remote fueling station.
+It includes the `lib-remote-computers` which is shared with the remote fueling station.
 
 
 ## Usage
 
-Currently at <https://www.notion.so/aris-hermes/FC-Readme-RaspPi-setup-19d480c43fcd80a9924dd522b8bf0c7e?pvs=4>
+The updated procedures are on the AST Typst common project:
+<https://typst.app/project/pr2zEG0JNykbrOSYqBrQPP>
 
-Will be moved to procedure.
+A backup of the procedures is in the ARIS sharepoint folder:
+<https://arisswitzerland.sharepoint.com/03_Projects/Forms/AllItems.aspx?id=%2F03%5FProjects%2F2026%5FASTERIA%5FBiliquid%5FSounding%5FRocket%2F18%5FSoftware%2FProcedures%2FFlight%5FComputer&viewid=134083a6%2D333a%2D4349%2Dba82%2De94bf146e8d3>
