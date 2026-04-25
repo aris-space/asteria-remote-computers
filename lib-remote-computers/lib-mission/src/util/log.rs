@@ -8,7 +8,7 @@ use tokio::io;
 use tokio::task::AbortHandle;
 use tokio_util::compat::{Compat, TokioAsyncReadCompatExt};
 
-use crate::reactive::{Watched, WatchedChannel};
+use crate::reactive::{Watched, WatchedChannel, WatchedExt as _};
 use crate::util::time::MissionTime;
 
 pub const LOGS_PATH: &str = "./logs/";
@@ -54,6 +54,12 @@ impl<T: Clone + Send + serde::Serialize + 'static> SyncTimeseriesWriter<T> {
     pub fn write_record(&self, val: T) {
         let _ = self.0.send(val);
     }
+}
+
+pub trait LogTimeseries {
+    const HEADERS: &'static [&'static str];
+    type Row: serde::Serialize;
+    fn to_row(&self) -> Self::Row;
 }
 
 /// Creates a folder in [`LOGS_PATH`] with this name. It should already be unique, i.e. contain a timestamp.
@@ -102,6 +108,26 @@ pub fn spawn_watchable_logger<T: serde::Serialize + Clone + Send>(
         }
     })
     .abort_handle()
+}
+
+/// Spawns a logger that writes `timeseries-{name}.csv` in `folder`, driven by
+/// `T`'s [`LogTimeseries`] impl for headers and row format.
+pub async fn log_timeseries<T>(
+    folder: &Path,
+    name: &str,
+    watched: impl Watched<T> + Send + 'static,
+    clock: impl Watched<MissionTime> + Send + 'static,
+) -> io::Result<AbortHandle>
+where
+    T: LogTimeseries + Clone + Send + 'static,
+    T::Row: Clone + Send,
+{
+    let writer = make_timeseries_writer(folder, name, T::HEADERS).await?;
+    Ok(spawn_watchable_logger(
+        writer,
+        watched.map(|v| v.to_row()),
+        clock,
+    ))
 }
 
 #[cfg(test)]
@@ -232,11 +258,35 @@ mod tests {
         assert_eq!(
             csv,
             r"timestamp [unix ms],x [m],y [m]
-1000,0.0,1.0
-1000,2.0,1.0
-1000,3.0,1.0
-1000,4.0,1.0
-"
+            1000,0.0,1.0
+            1000,2.0,1.0
+            1000,3.0,1.0
+            1000,4.0,1.0
+            "
         );
+    }
+    
+    #[tokio::test]
+    async fn test_log_timeseries_helper() {
+        #[derive(Clone)]
+        struct Pos { x: f32, y: f32 }
+    
+        impl LogTimeseries for Pos {
+            const HEADERS: &'static [&'static str] = &["x [m]", "y [m]"];
+            type Row = (f32, f32);
+            fn to_row(&self) -> Self::Row { (self.x, self.y) }
+        }
+    
+        let pos = Watchable::new(Pos { x: 0.0, y: 1.0 });
+        let time = Watchable::new(MissionTime::from(Duration::from_millis(1000)));
+        let folder = make_test_log_folder("test_log_timeseries_helper").await;
+    
+        let task = log_timeseries(&folder, "position", pos.watched(), time.watched())
+            .await
+            .expect("helper should set up writer");
+        
+        pos.replace(Pos { x: 2.0, y: 1.0 });
+        tokio::time::sleep(Duration::from_millis(20)).await;
+        assert!(!task.is_finished());
     }
 }

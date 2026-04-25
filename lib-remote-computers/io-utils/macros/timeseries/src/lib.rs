@@ -1,7 +1,60 @@
 //! The 'Log_Timeseries' derive macro can be used to turn a struct into a 
 //! CSV row schema.
 //! 
-#![allow(clippy::needless_continue)]
+//! ## Basic Usage
+//! 
+//! ```rust,ignore
+//! #[derive(Clone, LogTimeseries)]
+//! pub struct PositionData {
+//!     #[log(header = "location latitude [°]")]
+//!     pub location_latitude: f64,
+//!     #[log(header = "location longitude [°]")]
+//!     pub location_longitude: f64,
+//!     #[log(header = "location altitude [m above sea level]")]
+//!     pub location_hamsl: f64,
+//!     #[log(header = "location horizontal accuracy [1-sigma]")]
+//!     pub horizontal_accuracy: f32,
+//!     #[log(header = "location vertical accuracy [1-sigma]")]
+//!     pub vertical_accuracy: f32,
+//!     /// Not logged.
+//!     #[log(skip)]
+//!     pub not_logged_field: u64,
+//! }
+//! ```
+//!
+//! This generates:
+//!
+//! ```rust,ignore
+//! impl ::lib_mission::util::log::LogTimeseries for PositionData {
+//!     const HEADERS: &'static [&'static str] = &[
+//!         "location latitude [°]",
+//!         "location longitude [°]",
+//!         "location altitude [m above sea level]",
+//!         "location horizontal accuracy [1-sigma]",
+//!         "location vertical accuracy [1-sigma]",
+//!     ];
+//!     type Row = (f64, f64, f64, f32, f32,);
+//!     fn to_row(&self) -> Self::Row {
+//!         (
+//!             ::core::clone::Clone::clone(&self.location_latitude),
+//!             ::core::clone::Clone::clone(&self.location_longitude),
+//!             ::core::clone::Clone::clone(&self.location_hamsl),
+//!             ::core::clone::Clone::clone(&self.horizontal_accuracy),
+//!             ::core::clone::Clone::clone(&self.vertical_accuracy),
+//!         )
+//!     }
+//! }
+//! ```
+//! 
+//! ## Field attributes
+//!
+//! - `#[log(header = "...")]`: is required for every logged field.
+//! - `#[log(skip)]`: omit this field from the CSV.
+//!
+//! Fields needing a transform (enum→bool, `Option` propagation, reaching into
+//! nested structs) should stay as manual `spawn_watchable_logger` calls.
+//
+//#![allow(clippy::needless_continue)]
 
 use darling::{ast, util::Flag,  FromDeriveInput, FromField};
 use proc_macro::TokenStream;
