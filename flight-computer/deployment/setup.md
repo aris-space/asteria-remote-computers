@@ -19,9 +19,10 @@ Follow this guide:
 
 After installation:
 
-1. **Power on** the Compute Module.
-2. **Turn on a hotspot** with password `123456u8`.
-3. SSH into the board:
+1. Make sure that the J2 jumper "Fit Jumper to disable eMMC Board" has been removed.
+2. **Power on** the Compute Module. 
+3. **Turn on a hotspot** with password `123456u8`.
+4. SSH into the board:
    ```bash
    ssh asteria@asteria-fc-<nr>.local
    ```
