@@ -53,7 +53,12 @@ pub fn init_telemetry(
 
     // Spawn downlink actor
     let (tx, rx) = std::sync::mpsc::channel::<messages::Message>();
-    let downlink = start_downlink_actor(socket, rx, RemoteSystem::FlightComputer);
+    let downlink = start_downlink_actor(
+        socket,
+        rx,
+        RemoteSystem::FlightComputer,
+        input_tree.downlink_telemetry_stats.clone(),
+    );
 
     // spawns tokio tasks which send mavlink messages periodically to the channel.
     let input_streamers = input_tree.start_broadcasting::<PeriodicLoop>(tx.clone());

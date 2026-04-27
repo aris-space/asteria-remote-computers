@@ -14,7 +14,7 @@ use datapoints::dp_sensor_carrier::Message as SCMessage;
 use datapoints::dp_sensor_carrier::{
     EnvironmentalData, ImuData, OrientationData, PositionData, VelocityData,
 };
-use datatypes::status::{ArmingState, UplinkTelemetryHealth};
+use datatypes::status::{ArmingState, DownlinkTelemetryStats, UplinkTelemetryHealth};
 use datatypes::units::RailStatus;
 use io_utils::{Broadcast, Collector};
 use lib_mission::state_machine::StateName;
@@ -69,7 +69,13 @@ pub struct InputTree {
         Watchable<Option<actuator_control::Command<pss_drivers::output::ValveName>>>,
 
     /// Statistics about the health of the telemetry uplink.
+    #[datapoint(pattern = "Message::FlightComputer(FCMessage::UplinkTelemetryHealth(#value))")]
+    #[broadcast(min_freq_hz = 0.5, max_freq_hz = 1.)]
     pub telemetry_health: Watchable<UplinkTelemetryHealth>,
+    /// Statistics about the telemetry downlink (bytes and messages sent).
+    #[datapoint(pattern = "Message::FlightComputer(FCMessage::DownlinkTelemetryStats(#value))")]
+    #[broadcast(min_freq_hz = 0.5, max_freq_hz = 1.)]
+    pub downlink_telemetry_stats: Watchable<DownlinkTelemetryStats>,
     /// The health report for the avionics boards.
     #[collector(flatten)]
     #[broadcast(flatten)]
