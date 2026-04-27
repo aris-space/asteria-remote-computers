@@ -213,6 +213,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1b1dc960ba75d543267db9254da8ec1cb318a037beb3f8d2497520e410096fab"
 
 [[package]]
+name = "collector-derive"
+version = "0.1.0"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.108",
+]
+
+[[package]]
 name = "concurrent-queue"
 version = "2.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1003,6 +1012,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "io-utils"
+version = "0.1.0"
+dependencies = [
+ "collector-derive",
+]
+
+[[package]]
 name = "ioctl-rs"
 version = "0.1.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1636,6 +1652,7 @@ name = "pss-drivers"
 version = "0.1.0"
 dependencies = [
  "hermes-can",
+ "io-utils",
  "lib-mission",
  "serde",
  "tokio",
