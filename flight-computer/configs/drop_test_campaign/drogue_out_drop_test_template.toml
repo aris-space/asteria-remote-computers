@@ -117,7 +117,7 @@ manual_transitions = [
     { target = "Safety Spiral", display = "Manual Safety Spiral", abort = true },
 ]
 [state_machine.states."Control Loop".gnc_config]
-controller_type = "Mock" # FIXME: correct gnc
+controller_type = "SelfTest" # FIXME: correct gnc
 
 [state_machine.states."Safety Spiral"]
 type = "SafetySpiral"
