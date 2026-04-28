@@ -2,7 +2,7 @@ use datatypes::actuator::DPRValve;
 use lib_mission::can::{read_can, run_can_transmit_actor, ConsumerRegistry};
 use lib_mission::reactive::IntoWatched;
 use lib_mission::util::time::MissionTime;
-use messages::datapoints::dp_fuel_control_board;
+use messages::datapoints::{dp_fuel_control_board, dp_oxidizer_control_board};
 use tokio::task::AbortHandle;
 
 use crate::config::CANConfig;
@@ -115,25 +115,6 @@ where
             clock.watched(),
             tx.clone(),
         ),
-        output_drivers::spawn_dpr_valve_driver(
-            "FSS_PRZ_VLV",
-            |state: DPRValve| messages::Message::FuelControlBoard(
-                dp_fuel_control_board::Message::FuelDprConfigFC(state)
-            ),
-            valves.fuel_pressurization_valve.watched(),
-            valves.watch_active(),
-            tx.clone(),
-        ),
-        output_drivers::spawn_dpr_valve_driver(
-            "OSS_PRZ_VLV",
-            |state: DPRValve| messages::Message::OxidizerControlBoard(
-                dp_oxidizer_control_board::Message::OxidizerDprConfigFC(state)
-            ),
-            valves.oxidizer_pressurization_valve.watched(),
-            valves.watch_active(),
-            tx.clone(),
-        ),
     ];
-    // TODO: PSS Stuff
     handles
 }

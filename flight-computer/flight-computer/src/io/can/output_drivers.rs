@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use datatypes::actuator::{CameraPowerStatus, DPRValve};
+use datatypes::actuator::{CameraPowerStatus};
 use datatypes::status::{ArmingState, BuildInformationCommon, StatusCommonMessage};
 use dp_flight_computer::FlightComputerStatus;
 use dp_recovery_board::{RecoveryPowerConfig, SteeringPositions};
@@ -287,45 +287,6 @@ pub fn spawn_flight_computer_debug_driver(
     )
     .abort_handle()
 }
-
-// TODO: spawn drivers for pss valves & actuators
-// Sends []
-pub fn spawn_dpr_valve_driver<F: Fn(DPRValve) -> messages::Message + Send + 'static>(
-    name: &'static str,
-        encode: F,
-        mut watched_state: impl Watched<DPRValve> + Send + 'static,
-        mut watched_active: impl Watched<bool> + Send + 'static,
-        tx: std::sync::mpsc::Sender<messages::Message>,
-) -> AbortHandle {
-        tokio::spawn(
-            async move {
-                loop {
-                    let state = tokio::select! {
-                        s = watched_state.next() => s,
-                        _ = watched_active.next() => watched_state.current(),
-                    };
-    
-                    if !watched_active.current() {
-                        continue;
-                    }
-    
-                    // Send it 2 times 100ms apart.
-                    for _ in 0..2 {   
-                        let msg = encode(state);
-        
-                        if tx.send(msg).is_err() {
-                            tracing::warn!("CAN channel was closed. Shutting down!");
-                            break;
-                        }
-                        
-                        tokio::time::sleep(Duration::from_millis(100)).await;
-                    }
-                }
-            }
-            .instrument(tracing::info_span!("drivers::DprValve", name = name)),
-        )
-        .abort_handle()
-} 
 
 /// Converts the more fined grained arming state into the software arming state necessary for the state machine.
 impl From<RecoveryArmingState> for ArmingState {
