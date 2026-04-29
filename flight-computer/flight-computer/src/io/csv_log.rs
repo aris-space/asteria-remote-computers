@@ -374,7 +374,7 @@ impl OutputTree {
             steering_motor_target_deflections,
             recovery_actuators_armed,
             camera_powered_on,
-            valves,
+            valves: _,
             hash_config: _,
             fc_status: _,
         } = self;

@@ -85,7 +85,6 @@ where
     // Register the emitters
     let handles = vec![
         output_drivers::spawn_flight_computer_status_driver(
-            valves.watch_active(),
             recovery_actuators_armed.watched(),
             fc_status.clone(),
             tx.clone(),

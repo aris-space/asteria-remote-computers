@@ -34,7 +34,7 @@ impl StateLogic for ManualControl {
         let actuator_future = self.actuator_control.act(
             input.state.current_state.get().0 as usize,
             &input.actuator_command,
-            output.valves.ok(),
+            output.valves.as_settables(),
         );
         assert_future::<NeverReturns>(&actuator_future);
 

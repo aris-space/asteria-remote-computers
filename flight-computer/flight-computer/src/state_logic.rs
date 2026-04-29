@@ -50,7 +50,6 @@ pub mod set_actuators;
 pub use set_actuators::SetActuators;
 
 pub mod set_pss_mode;
-pub use set_pss_mode::SetPSSMode;
 
 pub mod read_rfs_arming;
 pub use read_rfs_arming::ReadRFSArming;

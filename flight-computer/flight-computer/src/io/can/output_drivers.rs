@@ -210,7 +210,6 @@ pub fn spawn_deployment_driver(
 /// Sends [`dp_flight_computer::Message::Status`] at 1Hz.
 #[allow(clippy::cast_possible_truncation)] // u64 micros since start
 pub fn spawn_flight_computer_status_driver(
-    has_pss_control: impl Watched<bool> + Send + 'static,
     is_software_armed: impl Watched<RecoveryArmingState> + Send + 'static,
     fc_status: Watchable<FlightComputerStatus>,
     tx: std::sync::mpsc::Sender<messages::Message>,
@@ -229,7 +228,6 @@ pub fn spawn_flight_computer_status_driver(
                             .expect("Time moved backwards")
                             .as_micros() as u64,
                     },
-                    has_pss_control: has_pss_control.current(),
                     is_software_armed: is_software_armed.current().into(),
                 };
                 let _ = fc_status.update(status.clone());

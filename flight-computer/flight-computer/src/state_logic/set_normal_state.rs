@@ -29,25 +29,13 @@ impl StateLogic for SetNormalState {
     ) -> StateName {
         tracing::info!("Setting normal state of all valves");
 
-        let pss_drivers::output::PSSValves {
-            pressurization_vent_valve,
-            fuel_pressurization_valve,
-            fuel_vent_valve,
-            oxidizer_pressurization_valve,
-            oxidizer_vent_valve,
-            fuel_main_valve,
-            oxidizer_main_valve,
-            .. // catches the private `is_active` field
-        } = &output.valves;
-
-        // PSS, the OSS Vent is the only non inactive one.
-        oxidizer_vent_valve.replace(NormallyClosedValve::Open);
-        pressurization_vent_valve.replace(Default::default());
-        fuel_pressurization_valve.replace(Default::default());
-        fuel_vent_valve.replace(Default::default());
-        oxidizer_pressurization_valve.replace(Default::default());
-        fuel_main_valve.replace(Default::default());
-        oxidizer_main_valve.replace(Default::default());
+        output.valves.set_oxidizer_vent(NormallyClosedValve::Open);
+        output.valves.set_pressurization_vent(Default::default());
+        output.valves.set_fuel_pressurization(Default::default());
+        output.valves.set_fuel_vent(Default::default());
+        output.valves.set_oxidizer_pressurization(Default::default());
+        output.valves.set_fuel_main(Default::default());
+        output.valves.set_oxidizer_main(Default::default());
 
         self.on_done.clone()
     }

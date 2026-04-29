@@ -178,13 +178,6 @@ pub enum StateLogicConfig<Gnc: CompatGuidanceController> {
         /// The [names][pss_drivers::output::ValveName] of the actuators that are allowed to be activated in this state.
         allowed_actuators: Vec<String>,
     },
-    /// Describes a [`state_logic::SetPSSMode`].
-    SetPSSMode {
-        /// How the mode should be set
-        mode: state_logic::set_pss_mode::PSSMode,
-        /// The name of the state which to proceed to after setting the mode.
-        on_done: String,
-    },
     /// Describes a [`state_logic::SetNormalState`].
     SetNormalState {
         /// The name of the state which to proceed to after completing setting all valves.
@@ -479,11 +472,6 @@ impl<Gnc: CompatGuidanceController> MakeState for StateLogicConfig<Gnc> {
                     ActuatorControl::from_strings(allowed_actuators.iter().map(String::as_str))
                         .map_err(lib_mission::Error::malformed_config)?,
                 ),
-            }
-            .into_box(),
-            StateLogicConfig::SetPSSMode { mode, on_done } => state_logic::SetPSSMode {
-                mode,
-                on_done: StateName::try_new(&on_done, names)?,
             }
             .into_box(),
             StateLogicConfig::SetNormalState { on_done } => state_logic::SetNormalState {
