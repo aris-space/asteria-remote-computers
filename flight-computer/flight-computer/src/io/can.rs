@@ -10,12 +10,16 @@ use super::output::OutputTree;
 
 mod output_drivers;
 
-/// Initializes CAN and its drivers
+/// Initializes CAN and its drivers.
+/// Also returns a channel that could be used to send raw messages for testing if necessary.
 pub fn init_can_drivers(
     config: &CANConfig,
     input_tree: &InputTree,
     output_tree: &OutputTree,
-) -> Result<Vec<AbortHandle>, Box<dyn std::error::Error>> {
+) -> Result<
+    (std::sync::mpsc::Sender<messages::Message>, Vec<AbortHandle>),
+    Box<dyn std::error::Error>,
+> {
     // Setup actual receiver on linux
     #[cfg(target_os = "linux")]
     let (receiver, transmitter) = {
@@ -55,7 +59,7 @@ pub fn init_can_drivers(
         run_can_transmit_actor(&mut transmitter, rx);
     });
 
-    Ok(output_handles)
+    Ok((tx, output_handles))
 }
 
 /// Initializes all the drivers reading from the output tree by spawning tasks to produce CAN messages.
