@@ -8,12 +8,14 @@ use tokio::time::Duration;
 /// The valves in the propellant supply system.
 #[derive(Debug, Clone)]
 pub struct PSSValves {
-    /// tx for CAN messages.
+    /// Sender 
     tx: std::sync::mpsc::Sender<messages::Message>,
 }
 
 impl PSSValves {
-    // For the OutputTree constructor
+    /// This method is needed for the OutputTree constructor.
+    /// We cannot derive Default for PSSValves because channels do 
+    /// not have a sensible default value.
     pub fn new(
         tx: std::sync::mpsc::Sender<messages::Message>,
     ) -> Self {
@@ -22,7 +24,9 @@ impl PSSValves {
 }
 
 impl PSSValves {
-    // here a bunch of functions that just generates CAN messages and push them into the channel
+    /// Seven functions for the different PSSValves messages. 
+    /// The appropriate CAN message is generated 
+    /// and sent twice within an interval of 100ms.
     pub fn set_pressurization_vent(&self, state: NormallyOpenValve) {
         can_helper(self.tx.clone(), move || {
             messages::Message::FuelControlBoard(
@@ -80,8 +84,7 @@ impl PSSValves {
     }
 }
 
-// Helper function for sending CAN messages twice with interval of 100ms
-// TODO: use it
+/// Helper function for sending CAN messages twice with interval of 100ms
 fn can_helper<F>(tx: mpsc::Sender<messages::Message>, build_msg: F)
 where
     F: Fn() -> messages::Message + Send + 'static,
