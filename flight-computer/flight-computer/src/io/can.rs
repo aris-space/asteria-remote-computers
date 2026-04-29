@@ -1,8 +1,6 @@
-use datatypes::actuator::DPRValve;
 use lib_mission::can::{read_can, run_can_transmit_actor, ConsumerRegistry};
 use lib_mission::reactive::IntoWatched;
 use lib_mission::util::time::MissionTime;
-use messages::datapoints::{dp_fuel_control_board, dp_oxidizer_control_board};
 use tokio::task::AbortHandle;
 
 use crate::config::CANConfig;
@@ -17,6 +15,8 @@ pub fn init_can_drivers(
     config: &CANConfig,
     input_tree: &InputTree,
     output_tree: &OutputTree,
+    tx: std::sync::mpsc::Sender<messages::Message>,
+    rx: std::sync::mpsc::Receiver<messages::Message>,
 ) -> Result<Vec<AbortHandle>, Box<dyn std::error::Error>> {
     // Setup actual receiver on linux
     #[cfg(target_os = "linux")]
@@ -42,7 +42,6 @@ pub fn init_can_drivers(
     };
 
     // Initialize the driver tasks
-    let (tx, rx) = std::sync::mpsc::channel();
     let output_handles = init_output_drivers(&input_tree.time, output_tree, &tx);
     let mut consumers = ConsumerRegistry::new().with_collector(input_tree.clone());
 

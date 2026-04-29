@@ -31,7 +31,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut input_tree = InputTree::default();
     input_tree.boards_status.time = input_tree.time.clone(); // synchronize shared variable
 
-    let output_tree = OutputTree::default();
+    let (tx, rx) = std::sync::mpsc::channel();
+    let output_tree = OutputTree::new(tx.clone());
     let config_hash = ConfigHash {
         hash: run_info.config_hash.as_bytes()[..5]
             .try_into()
@@ -58,7 +59,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         &state_machine,
     )?;
 
-    init_can_drivers(&config_file.can, &input_tree, &output_tree)?;
+    init_can_drivers(&config_file.can, &input_tree, &output_tree, tx, rx)?;
     start_cats_driver(
         input_tree.cats_separation.clone(),
         input_tree.cats_deployment.clone(),

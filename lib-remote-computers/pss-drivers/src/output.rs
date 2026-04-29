@@ -8,13 +8,15 @@ use tokio::time::Duration;
 /// The valves in the propellant supply system.
 #[derive(Debug, Clone)]
 pub struct PSSValves {
-    // tx for CAN messages.
+    /// tx for CAN messages.
     tx: std::sync::mpsc::Sender<messages::Message>,
 }
 
-impl Default for PSSValves {
-    fn default() -> Self {
-        let (tx, _rx) = std::sync::mpsc::channel();
+impl PSSValves {
+    // For the OutputTree constructor
+    pub fn new(
+        tx: std::sync::mpsc::Sender<messages::Message>,
+    ) -> Self {
         Self { tx }
     }
 }
@@ -182,7 +184,7 @@ impl PSSValves {
                 dp_engine_control_board::Message::OxidizerMainControlFC(s.into()),
             )
         }));
-
+        
         map
     }
 }
@@ -226,5 +228,5 @@ where
 }
 
 impl PSSValves {
-    
+    // starts logging
 }

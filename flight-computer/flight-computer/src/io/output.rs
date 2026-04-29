@@ -14,7 +14,7 @@ use super::types::{
 };
 
 /// Holds the things we want to set
-#[derive(Debug, Clone, Default, Broadcast)]
+#[derive(Debug, Clone, Broadcast)]
 #[broadcast(message_type = "messages::Message")]
 pub struct OutputTree {
     /// When turning [`SeparationState::Separated`], the drogue should be separated.
@@ -46,4 +46,20 @@ pub struct OutputTree {
     #[datapoint(pattern = "Message::FlightComputer(dp_flight_computer::Message::Status(#value))")]
     #[broadcast(min_freq_hz = 1.0, max_freq_hz = 1.0)]
     pub fc_status: Watchable<FlightComputerStatus>,
+}
+
+// OutputTree needs a constructor given that PSSValve cannot derive Default
+impl OutputTree {
+    pub fn new(tx: std::sync::mpsc::Sender<Message>) -> Self {
+        Self {
+            separate_drogue: Watchable::default(),
+            deploy_main_chute: Watchable::default(),
+            steering_motor_target_deflections: Watchable::default(),
+            recovery_actuators_armed: Watchable::default(),
+            camera_powered_on: Watchable::default(),
+            valves: PSSValves::new(tx,),
+            hash_config: Watchable::default(),
+            fc_status: Watchable::default(),
+        }
+    }
 }
