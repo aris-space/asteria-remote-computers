@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use datatypes::actuator::{CameraPowerStatus};
+use datatypes::actuator::{CameraPowerStatus,};
 use datatypes::status::{ArmingState, BuildInformationCommon, StatusCommonMessage};
 use dp_flight_computer::FlightComputerStatus;
 use dp_recovery_board::{RecoveryPowerConfig, SteeringPositions};

@@ -1,8 +1,9 @@
-use std::collections::BTreeMap;
+use std::{collections::BTreeMap, marker::PhantomData};
 
-use datatypes::actuator::Settable;
-use messages::datapoints::dp_oxidizer_control_board;
+use datatypes::actuator::{DPRValve, NormallyClosedValve, NormallyOpenValve, OutOfRange, Settable};
+use messages::datapoints::{dp_engine_control_board, dp_fuel_control_board, dp_oxidizer_control_board};
 use std::sync::mpsc;
+use tokio::time::Duration;
 
 /// The valves in the propellant supply system.
 #[derive(Debug, Clone)]
@@ -11,135 +12,88 @@ pub struct PSSValves {
     tx: std::sync::mpsc::Sender<messages::Message>,
 }
 
+impl Default for PSSValves {
+    fn default() -> Self {
+        let (tx, _rx) = std::sync::mpsc::channel();
+        Self { tx }
+    }
+}
+
 impl PSSValves {
     // here a bunch of functions that just generates CAN messages and push them into the channel
-    fn push_pressurization_vent_valve_state(&self, state: NormallyOpenValve) {
-        let tx = self.tx.clone();
-        tokio::spawn(async move {
-            // The message is sent two times over 100 ms, to be sure if
-            // CAN has some problem
-            for _ in 0..2 {
-                let msg = messages::Message::FuelControlBoard(
-                    dp_fuel_control_board::Message::PressurizationVentControlFC(state.into())
-                );
-                if tx.send(msg).is_err() {
-                    tracing::warn!("CAN channel closed; dropping pressurization vent burst");
-                    return;
-                }
-                tokio::time::sleep(Duration::from_millis(100)).await;
-            }   
-        })
+    pub fn set_pressurization_vent(&self, state: NormallyOpenValve) {
+        can_helper(self.tx.clone(), move || {
+            messages::Message::FuelControlBoard(
+                dp_fuel_control_board::Message::PressurizationVentControlFC(state.into()),
+            )
+        });
+    }
+
+    pub fn set_fuel_pressurization(&self, state: DPRValve) {
+        can_helper(self.tx.clone(), move || {
+            messages::Message::FuelControlBoard(
+                dp_fuel_control_board::Message::FuelDprConfigFC(state),
+            )
+        });
+    }
+
+    pub fn set_fuel_vent(&self, state: NormallyOpenValve) {
+        can_helper(self.tx.clone(), move || {
+            messages::Message::FuelControlBoard(
+                dp_fuel_control_board::Message::FuelVentControlFC(state.into()),
+            )
+        });
     }
     
-    fn push_fuel_pressurization_valve_state() {
-        let tx = self.tx.clone();
-        tokio::spawn(async move {
-            // The message is sent two times over 100 ms, to be sure if
-            // CAN has some problem
-            for _ in 0..2 {
-                let msg = messages::Message::FuelControlBoard(
-                    dp_fuel_control_board::Message::FuelPressurization(target_pressure)
-                );
-                if tx.send(msg).is_err() {
-                    tracing::warn!("CAN channel closed; dropping pressurization vent burst");
-                    return;
-                }
-                tokio::time::sleep(Duration::from_millis(100)).await;
-            }   
-        })
+    pub fn set_oxidizer_pressurization(&self, state: DPRValve) {
+        can_helper(self.tx.clone(), move || {
+            messages::Message::OxidizerControlBoard(
+                dp_oxidizer_control_board::Message::OxidizerDprConfigFC(state),
+            )
+        });
+    }
+
+    pub fn set_oxidizer_vent(&self, state: NormallyClosedValve) {
+        can_helper(self.tx.clone(), move || {
+            messages::Message::OxidizerControlBoard(
+                dp_oxidizer_control_board::Message::OxidizerVentControlFC(state.into()),
+            )
+        });
     }
     
-    fn push_fuel_vent_valve_state() {
-        let tx = self.tx.clone();
-        tokio::spawn(async move {
-            // The message is sent two times over 100 ms, to be sure if
-            // CAN has some problem
-            for _ in 0..2 {
-                let msg = messages::Message::FuelControlBoard(
-                    dp_fuel_control_board::Message::FuelVentControlFC(state.into())
-                );
-                if tx.send(msg).is_err() {
-                    tracing::warn!("CAN channel closed; dropping pressurization vent burst");
-                    return;
-                }
-                tokio::time::sleep(Duration::from_millis(100)).await;
-            }   
-        })
+    pub fn set_fuel_main(&self, state: NormallyClosedValve) {
+        can_helper(self.tx.clone(), move || {
+            messages::Message::EngineControlBoard(
+                dp_engine_control_board::Message::FuelMainControlFC(state.into()),
+            )
+        });
     }
-    
-    fn push_oxidizer_pressurization_valve_state() {
-        let tx = self.tx.clone();
-        tokio::spawn(async move {
-            // The message is sent two times over 100 ms, to be sure if
-            // CAN has some problem
-            for _ in 0..2 {
-                let msg = messages::Message::FuelControlBoard(
-                    dp_fuel_control_board::Message::PressurizationVentControlFC(target_pressure)
-                );
-                if tx.send(msg).is_err() {
-                    tracing::warn!("CAN channel closed; dropping pressurization vent burst");
-                    return;
-                }
-                tokio::time::sleep(Duration::from_millis(100)).await;
-            }   
-        })
+
+    pub fn set_oxidizer_main(&self, state: NormallyClosedValve) {
+        can_helper(self.tx.clone(), move || {
+            messages::Message::EngineControlBoard(
+                dp_engine_control_board::Message::OxidizerMainControlFC(state.into()),
+            )
+        });
     }
-    
-    fn push_oxidizer_vent_valve_state() {
-        let tx = self.tx.clone();
-        tokio::spawn(async move {
-            // The message is sent two times over 100 ms, to be sure if
-            // CAN has some problem
-            for _ in 0..2 {
-                let msg = messages::Message::FuelControlBoard(
-                    dp_fuel_control_board::Message::OxidizerVentControlFC(state.into())
-                );
-                if tx.send(msg).is_err() {
-                    tracing::warn!("CAN channel closed; dropping pressurization vent burst");
-                    return;
-                }
-                tokio::time::sleep(Duration::from_millis(100)).await;
-            }   
-        })
-    }
-    
-    fn push_fuel_main_valve_state() {
-        let tx = self.tx.clone();
-        tokio::spawn(async move {
-            // The message is sent two times over 100 ms, to be sure if
-            // CAN has some problem
-            for _ in 0..2 {
-                let msg = messages::Message::FuelControlBoard(
-                    dp_fuel_control_board::Message::FuelMainControlFC(state.into())
-                );
-                if tx.send(msg).is_err() {
-                    tracing::warn!("CAN channel closed; dropping pressurization vent burst");
-                    return;
-                }
-                tokio::time::sleep(Duration::from_millis(100)).await;
-            }   
-        })
-    }
-    
-    
-    
-    fn push_oxidizer_main_valve_state() {
-        let tx = self.tx.clone();
-        tokio::spawn(async move {
-            // The message is sent two times over 100 ms, to be sure if
-            // CAN has some problem
-            for _ in 0..2 {
-                let msg = messages::Message::FuelControlBoard(
-                    dp_fuel_control_board::Message::OxidizerMainControlFC(state.into())
-                );
-                if tx.send(msg).is_err() {
-                    tracing::warn!("CAN channel closed; dropping pressurization vent burst");
-                    return;
-                }
-                tokio::time::sleep(Duration::from_millis(100)).await;
-            }   
-        })
-    }
+}
+
+// Helper function for sending CAN messages twice with interval of 100ms
+// TODO: use it
+fn can_helper<F>(tx: mpsc::Sender<messages::Message>, build_msg: F)
+where
+    F: Fn() -> messages::Message + Send + 'static,
+{
+    tokio::spawn(async move {
+        for _ in 0..2 {
+            let msg = build_msg();
+            if tx.send(msg).is_err() {
+                tracing::warn!("CAN channel closed; dropping PSS burst");
+                return;
+            }
+            tokio::time::sleep(Duration::from_millis(100)).await;
+        }
+    });
 }
 
 /// See the matching types in [`PSSValves`].
@@ -168,6 +122,7 @@ pub enum ValveName {
     /// The name of [`PSSValves::oxidizer_main_valve`].
     oss_mnl_vlv,
 }
+
 impl std::str::FromStr for ValveName {
     type Err = String;
 
@@ -178,11 +133,12 @@ impl std::str::FromStr for ValveName {
     }
 }
 
-
-/// Returns a map keyed by `ValveName`, with
-/// each entry being a boxed `Settable` that builds and sends the right
-/// CAN message when `set_value` is called.
-pub fn as_settables(&self) -> BTreeMap<ValveName, Box<dyn Settable + Send>> {
+impl PSSValves {
+    /// Returns a map keyed by `ValveName`, with each entry being a boxed
+    /// `Settable` that builds and sends the right CAN message when
+    /// `set_value` is called. Used by operator-driven code that doesn't
+    /// know valve types at compile time.
+    pub fn as_settables(&self) -> BTreeMap<ValveName, Box<dyn Settable + Send>> {
         use ValveName::*;
         let mut map: BTreeMap<ValveName, Box<dyn Settable + Send>> = BTreeMap::new();
 
@@ -232,11 +188,49 @@ pub fn as_settables(&self) -> BTreeMap<ValveName, Box<dyn Settable + Send>> {
     }
 }
 
+// ----------------------------------------------------------------------------
+// Generic adapter: holds a tx + a closure that maps typed state → message,
+// implements Settable by converting f32 → typed state and dispatching.
+// ----------------------------------------------------------------------------
+
+struct ChannelSetter<V, F>
+where
+    V: TryFrom<f32, Error = OutOfRange> + Send + 'static,
+    F: Fn(V) -> messages::Message + Send + 'static,
+{
+    tx: mpsc::Sender<messages::Message>,
+    build_msg: F,
+    _phantom: PhantomData<V>,
+}
+
+impl<V, F> Settable for ChannelSetter<V, F>
+where
+    V: TryFrom<f32, Error = OutOfRange> + Send + 'static,
+    F: Fn(V) -> messages::Message + Send + 'static,
+{
+    fn set_value(&mut self, value: f32) -> Result<(), OutOfRange> {
+        let state = V::try_from(value)?;
+        let msg = (self.build_msg)(state);
+        let _ = self.tx.send(msg);
+        Ok(())
+    }
+}
+
+fn make_setter<V, F>(
+    tx: mpsc::Sender<messages::Message>,
+    build_msg: F,
+) -> Box<dyn Settable + Send>
+where
+    V: TryFrom<f32, Error = OutOfRange> + Send + 'static,
+    F: Fn(V) -> messages::Message + Send + 'static,
+{
+    Box::new(ChannelSetter {
+        tx,
+        build_msg,
+        _phantom: PhantomData,
+    })
+}
+
 impl PSSValves {
-    /// Starts logging valve timeseries to csv files in `folder`.
-    /// Used for data analysis.
-    ///
-    /// This spawns tokio tasks and returns immediately after all setup as been completed.
-    /// This directly writes on csv the message
-    /// 
+    
 }

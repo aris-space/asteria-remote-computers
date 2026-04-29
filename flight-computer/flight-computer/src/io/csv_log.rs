@@ -420,8 +420,6 @@ impl OutputTree {
             camera_powered_on.watched(),
             time.watched(),
         );
-        // Log valve target states
-        valves.start_logging(folder, time).await?;
 
         Ok(())
     }
