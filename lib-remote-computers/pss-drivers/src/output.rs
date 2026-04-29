@@ -7,8 +7,8 @@ use std::sync::mpsc;
 /// The valves in the propellant supply system.
 #[derive(Debug, Clone)]
 pub struct PSSValves {
-    // Now we 
-    tx: mpsc::Sender<messages::Message>,
+    // tx for CAN messages.
+    tx: std::sync::mpsc::Sender<messages::Message>,
 }
 
 impl PSSValves {
@@ -22,46 +22,123 @@ impl PSSValves {
                 let msg = messages::Message::FuelControlBoard(
                     dp_fuel_control_board::Message::PressurizationVentControlFC(state.into())
                 );
-                let _ = tx.send(msg);
+                if tx.send(msg).is_err() {
+                    tracing::warn!("CAN channel closed; dropping pressurization vent burst");
+                    return;
+                }
                 tokio::time::sleep(Duration::from_millis(100)).await;
             }   
         })
     }
     
     fn push_fuel_pressurization_valve_state() {
-        tokio::spawn(async move {       
-              
+        let tx = self.tx.clone();
+        tokio::spawn(async move {
+            // The message is sent two times over 100 ms, to be sure if
+            // CAN has some problem
+            for _ in 0..2 {
+                let msg = messages::Message::FuelControlBoard(
+                    dp_fuel_control_board::Message::FuelPressurization(target_pressure)
+                );
+                if tx.send(msg).is_err() {
+                    tracing::warn!("CAN channel closed; dropping pressurization vent burst");
+                    return;
+                }
+                tokio::time::sleep(Duration::from_millis(100)).await;
+            }   
         })
     }
     
     fn push_fuel_vent_valve_state() {
-        tokio::spawn(async move {   
-            
+        let tx = self.tx.clone();
+        tokio::spawn(async move {
+            // The message is sent two times over 100 ms, to be sure if
+            // CAN has some problem
+            for _ in 0..2 {
+                let msg = messages::Message::FuelControlBoard(
+                    dp_fuel_control_board::Message::FuelVentControlFC(state.into())
+                );
+                if tx.send(msg).is_err() {
+                    tracing::warn!("CAN channel closed; dropping pressurization vent burst");
+                    return;
+                }
+                tokio::time::sleep(Duration::from_millis(100)).await;
+            }   
         })
     }
     
     fn push_oxidizer_pressurization_valve_state() {
-        tokio::spawn(async move {     
-              
+        let tx = self.tx.clone();
+        tokio::spawn(async move {
+            // The message is sent two times over 100 ms, to be sure if
+            // CAN has some problem
+            for _ in 0..2 {
+                let msg = messages::Message::FuelControlBoard(
+                    dp_fuel_control_board::Message::PressurizationVentControlFC(target_pressure)
+                );
+                if tx.send(msg).is_err() {
+                    tracing::warn!("CAN channel closed; dropping pressurization vent burst");
+                    return;
+                }
+                tokio::time::sleep(Duration::from_millis(100)).await;
+            }   
         })
     }
     
     fn push_oxidizer_vent_valve_state() {
-        tokio::spawn(async move {  
-            
+        let tx = self.tx.clone();
+        tokio::spawn(async move {
+            // The message is sent two times over 100 ms, to be sure if
+            // CAN has some problem
+            for _ in 0..2 {
+                let msg = messages::Message::FuelControlBoard(
+                    dp_fuel_control_board::Message::OxidizerVentControlFC(state.into())
+                );
+                if tx.send(msg).is_err() {
+                    tracing::warn!("CAN channel closed; dropping pressurization vent burst");
+                    return;
+                }
+                tokio::time::sleep(Duration::from_millis(100)).await;
+            }   
         })
     }
     
     fn push_fuel_main_valve_state() {
+        let tx = self.tx.clone();
         tokio::spawn(async move {
-            
+            // The message is sent two times over 100 ms, to be sure if
+            // CAN has some problem
+            for _ in 0..2 {
+                let msg = messages::Message::FuelControlBoard(
+                    dp_fuel_control_board::Message::FuelMainControlFC(state.into())
+                );
+                if tx.send(msg).is_err() {
+                    tracing::warn!("CAN channel closed; dropping pressurization vent burst");
+                    return;
+                }
+                tokio::time::sleep(Duration::from_millis(100)).await;
+            }   
         })
     }
     
     
     
     fn push_oxidizer_main_valve_state() {
-        
+        let tx = self.tx.clone();
+        tokio::spawn(async move {
+            // The message is sent two times over 100 ms, to be sure if
+            // CAN has some problem
+            for _ in 0..2 {
+                let msg = messages::Message::FuelControlBoard(
+                    dp_fuel_control_board::Message::OxidizerMainControlFC(state.into())
+                );
+                if tx.send(msg).is_err() {
+                    tracing::warn!("CAN channel closed; dropping pressurization vent burst");
+                    return;
+                }
+                tokio::time::sleep(Duration::from_millis(100)).await;
+            }   
+        })
     }
 }
 
@@ -102,10 +179,57 @@ impl std::str::FromStr for ValveName {
 }
 
 
-/// ???????? Here 
-impl PSSValves {
-    pub fn as_settables(&self) -> BTreeMap<ValveName, Box<dyn Settable + Send>> {
-        todo!()
+/// Returns a map keyed by `ValveName`, with
+/// each entry being a boxed `Settable` that builds and sends the right
+/// CAN message when `set_value` is called.
+pub fn as_settables(&self) -> BTreeMap<ValveName, Box<dyn Settable + Send>> {
+        use ValveName::*;
+        let mut map: BTreeMap<ValveName, Box<dyn Settable + Send>> = BTreeMap::new();
+
+        map.insert(prz_vnt_vlv, make_setter(self.tx.clone(), |s: NormallyOpenValve| {
+            messages::Message::FuelControlBoard(
+                dp_fuel_control_board::Message::PressurizationVentControlFC(s.into()),
+            )
+        }));
+
+        map.insert(fss_prz_vlv, make_setter(self.tx.clone(), |s: DPRValve| {
+            messages::Message::FuelControlBoard(
+                dp_fuel_control_board::Message::FuelDprConfigFC(s),
+            )
+        }));
+
+        map.insert(fss_vnt_vlv, make_setter(self.tx.clone(), |s: NormallyOpenValve| {
+            messages::Message::FuelControlBoard(
+                dp_fuel_control_board::Message::FuelVentControlFC(s.into()),
+            )
+        }));
+
+        map.insert(oss_prz_vlv, make_setter(self.tx.clone(), |s: DPRValve| {
+            messages::Message::OxidizerControlBoard(
+                dp_oxidizer_control_board::Message::OxidizerDprConfigFC(s),
+            )
+        }));
+
+        map.insert(oss_vnt_vlv, make_setter(self.tx.clone(), |s: NormallyClosedValve| {
+            messages::Message::OxidizerControlBoard(
+                dp_oxidizer_control_board::Message::OxidizerVentControlFC(s.into()),
+            )
+        }));
+
+        map.insert(fss_mnl_vlv, make_setter(self.tx.clone(), |s: NormallyClosedValve| {
+            messages::Message::EngineControlBoard(
+                dp_engine_control_board::Message::FuelMainControlFC(s.into()),
+            )
+        }));
+
+        map.insert(oss_mnl_vlv, make_setter(self.tx.clone(), |s: NormallyClosedValve| {
+            messages::Message::EngineControlBoard(
+                dp_engine_control_board::Message::OxidizerMainControlFC(s.into()),
+            )
+        }));
+
+        map
+    }
 }
 
 impl PSSValves {
