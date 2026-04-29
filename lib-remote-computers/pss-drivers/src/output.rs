@@ -136,8 +136,7 @@ impl std::str::FromStr for ValveName {
 impl PSSValves {
     /// Returns a map keyed by `ValveName`, with each entry being a boxed
     /// `Settable` that builds and sends the right CAN message when
-    /// `set_value` is called. Used by operator-driven code that doesn't
-    /// know valve types at compile time.
+    /// `set_value` is called.
     pub fn as_settables(&self) -> BTreeMap<ValveName, Box<dyn Settable + Send>> {
         use ValveName::*;
         let mut map: BTreeMap<ValveName, Box<dyn Settable + Send>> = BTreeMap::new();
@@ -187,11 +186,6 @@ impl PSSValves {
         map
     }
 }
-
-// ----------------------------------------------------------------------------
-// Generic adapter: holds a tx + a closure that maps typed state → message,
-// implements Settable by converting f32 → typed state and dispatching.
-// ----------------------------------------------------------------------------
 
 struct ChannelSetter<V, F>
 where
