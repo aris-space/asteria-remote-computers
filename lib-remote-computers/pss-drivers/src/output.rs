@@ -1,31 +1,31 @@
 use std::{collections::BTreeMap, marker::PhantomData};
 
 use datatypes::actuator::{DPRValve, NormallyClosedValve, NormallyOpenValve, OutOfRange, Settable};
-use messages::datapoints::{dp_engine_control_board, dp_fuel_control_board, dp_oxidizer_control_board};
+use messages::datapoints::{
+    dp_engine_control_board, dp_fuel_control_board, dp_oxidizer_control_board,
+};
 use std::sync::mpsc;
 use tokio::time::Duration;
 
 /// The valves in the propellant supply system.
 #[derive(Debug, Clone)]
 pub struct PSSValves {
-    /// Sender 
+    /// Sender
     tx: std::sync::mpsc::Sender<messages::Message>,
 }
 
 impl PSSValves {
     /// This method is needed for the OutputTree constructor.
-    /// We cannot derive Default for PSSValves because channels do 
+    /// We cannot derive Default for PSSValves because channels do
     /// not have a sensible default value.
-    pub fn new(
-        tx: std::sync::mpsc::Sender<messages::Message>,
-    ) -> Self {
+    pub fn new(tx: std::sync::mpsc::Sender<messages::Message>) -> Self {
         Self { tx }
     }
 }
 
 impl PSSValves {
-    /// Seven functions for the different PSSValves messages. 
-    /// The appropriate CAN message is generated 
+    /// Seven functions for the different PSSValves messages.
+    /// The appropriate CAN message is generated
     /// and sent twice within an interval of 100ms.
     pub fn set_pressurization_vent(&self, state: NormallyOpenValve) {
         can_helper(self.tx.clone(), move || {
@@ -37,20 +37,20 @@ impl PSSValves {
 
     pub fn set_fuel_pressurization(&self, state: DPRValve) {
         can_helper(self.tx.clone(), move || {
-            messages::Message::FuelControlBoard(
-                dp_fuel_control_board::Message::FuelDprConfigFC(state),
-            )
+            messages::Message::FuelControlBoard(dp_fuel_control_board::Message::FuelDprConfigFC(
+                state,
+            ))
         });
     }
 
     pub fn set_fuel_vent(&self, state: NormallyOpenValve) {
         can_helper(self.tx.clone(), move || {
-            messages::Message::FuelControlBoard(
-                dp_fuel_control_board::Message::FuelVentControlFC(state.into()),
-            )
+            messages::Message::FuelControlBoard(dp_fuel_control_board::Message::FuelVentControlFC(
+                state.into(),
+            ))
         });
     }
-    
+
     pub fn set_oxidizer_pressurization(&self, state: DPRValve) {
         can_helper(self.tx.clone(), move || {
             messages::Message::OxidizerControlBoard(
@@ -66,7 +66,7 @@ impl PSSValves {
             )
         });
     }
-    
+
     pub fn set_fuel_main(&self, state: NormallyClosedValve) {
         can_helper(self.tx.clone(), move || {
             messages::Message::EngineControlBoard(
@@ -146,48 +146,69 @@ impl PSSValves {
         use ValveName::*;
         let mut map: BTreeMap<ValveName, Box<dyn Settable + Send>> = BTreeMap::new();
 
-        map.insert(prz_vnt_vlv, make_setter(self.tx.clone(), |s: NormallyOpenValve| {
-            messages::Message::FuelControlBoard(
-                dp_fuel_control_board::Message::PressurizationVentControlFC(s.into()),
-            )
-        }));
+        map.insert(
+            prz_vnt_vlv,
+            make_setter(self.tx.clone(), |s: NormallyOpenValve| {
+                messages::Message::FuelControlBoard(
+                    dp_fuel_control_board::Message::PressurizationVentControlFC(s.into()),
+                )
+            }),
+        );
 
-        map.insert(fss_prz_vlv, make_setter(self.tx.clone(), |s: DPRValve| {
-            messages::Message::FuelControlBoard(
-                dp_fuel_control_board::Message::FuelDprConfigFC(s),
-            )
-        }));
+        map.insert(
+            fss_prz_vlv,
+            make_setter(self.tx.clone(), |s: DPRValve| {
+                messages::Message::FuelControlBoard(
+                    dp_fuel_control_board::Message::FuelDprConfigFC(s),
+                )
+            }),
+        );
 
-        map.insert(fss_vnt_vlv, make_setter(self.tx.clone(), |s: NormallyOpenValve| {
-            messages::Message::FuelControlBoard(
-                dp_fuel_control_board::Message::FuelVentControlFC(s.into()),
-            )
-        }));
+        map.insert(
+            fss_vnt_vlv,
+            make_setter(self.tx.clone(), |s: NormallyOpenValve| {
+                messages::Message::FuelControlBoard(
+                    dp_fuel_control_board::Message::FuelVentControlFC(s.into()),
+                )
+            }),
+        );
 
-        map.insert(oss_prz_vlv, make_setter(self.tx.clone(), |s: DPRValve| {
-            messages::Message::OxidizerControlBoard(
-                dp_oxidizer_control_board::Message::OxidizerDprConfigFC(s),
-            )
-        }));
+        map.insert(
+            oss_prz_vlv,
+            make_setter(self.tx.clone(), |s: DPRValve| {
+                messages::Message::OxidizerControlBoard(
+                    dp_oxidizer_control_board::Message::OxidizerDprConfigFC(s),
+                )
+            }),
+        );
 
-        map.insert(oss_vnt_vlv, make_setter(self.tx.clone(), |s: NormallyClosedValve| {
-            messages::Message::OxidizerControlBoard(
-                dp_oxidizer_control_board::Message::OxidizerVentControlFC(s.into()),
-            )
-        }));
+        map.insert(
+            oss_vnt_vlv,
+            make_setter(self.tx.clone(), |s: NormallyClosedValve| {
+                messages::Message::OxidizerControlBoard(
+                    dp_oxidizer_control_board::Message::OxidizerVentControlFC(s.into()),
+                )
+            }),
+        );
 
-        map.insert(fss_mnl_vlv, make_setter(self.tx.clone(), |s: NormallyClosedValve| {
-            messages::Message::EngineControlBoard(
-                dp_engine_control_board::Message::FuelMainControlFC(s.into()),
-            )
-        }));
+        map.insert(
+            fss_mnl_vlv,
+            make_setter(self.tx.clone(), |s: NormallyClosedValve| {
+                messages::Message::EngineControlBoard(
+                    dp_engine_control_board::Message::FuelMainControlFC(s.into()),
+                )
+            }),
+        );
 
-        map.insert(oss_mnl_vlv, make_setter(self.tx.clone(), |s: NormallyClosedValve| {
-            messages::Message::EngineControlBoard(
-                dp_engine_control_board::Message::OxidizerMainControlFC(s.into()),
-            )
-        }));
-        
+        map.insert(
+            oss_mnl_vlv,
+            make_setter(self.tx.clone(), |s: NormallyClosedValve| {
+                messages::Message::EngineControlBoard(
+                    dp_engine_control_board::Message::OxidizerMainControlFC(s.into()),
+                )
+            }),
+        );
+
         map
     }
 }
@@ -215,10 +236,7 @@ where
     }
 }
 
-fn make_setter<V, F>(
-    tx: mpsc::Sender<messages::Message>,
-    build_msg: F,
-) -> Box<dyn Settable + Send>
+fn make_setter<V, F>(tx: mpsc::Sender<messages::Message>, build_msg: F) -> Box<dyn Settable + Send>
 where
     V: TryFrom<f32, Error = OutOfRange> + Send + 'static,
     F: Fn(V) -> messages::Message + Send + 'static,

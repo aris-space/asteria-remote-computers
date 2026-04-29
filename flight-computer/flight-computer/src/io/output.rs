@@ -48,7 +48,8 @@ pub struct OutputTree {
     pub fc_status: Watchable<FlightComputerStatus>,
 }
 
-// OutputTree needs a constructor given that PSSValve cannot derive Default
+/// The constructor for OutputTree. It must be provided
+/// given that Default cannot be derived for every field.
 impl OutputTree {
     pub fn new(tx: std::sync::mpsc::Sender<Message>) -> Self {
         Self {

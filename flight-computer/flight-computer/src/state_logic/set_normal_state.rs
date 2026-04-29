@@ -33,7 +33,9 @@ impl StateLogic for SetNormalState {
         output.valves.set_pressurization_vent(Default::default());
         output.valves.set_fuel_pressurization(Default::default());
         output.valves.set_fuel_vent(Default::default());
-        output.valves.set_oxidizer_pressurization(Default::default());
+        output
+            .valves
+            .set_oxidizer_pressurization(Default::default());
         output.valves.set_fuel_main(Default::default());
         output.valves.set_oxidizer_main(Default::default());
 
