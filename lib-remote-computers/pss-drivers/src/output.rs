@@ -98,10 +98,12 @@ where
 {
     tokio::spawn(async move {
         // log to csv
-        for _ in 0..2 {
+        for i in 0..2 {
             let msg = build_msg();
-            if let Err(e) = csv_logger(&msg).await {
-                tracing::warn!("PSS log failed: {e}");
+            if i == 0 {    
+                if let Err(e) = csv_logger(&msg).await {
+                    tracing::warn!("PSS log failed: {e}");
+                }
             }
             if tx.send(msg).is_err() {
                 tracing::warn!("CAN channel closed; dropping PSS burst");
@@ -259,12 +261,17 @@ where
     })
 }
 
+// CSV logging
 static LOG_DIR: OnceLock<PathBuf> = OnceLock::new();
 static LOGGER: OnceLock<Mutex<AsyncSerializer<BufWriter<tokio_util::compat::Compat<File>>>>> = OnceLock::new();
 
+
+// CSV logger: logger is initialized once
+// and before in can_helper message is logged to CSV.
 pub async fn init_csv_logger(folder: &Path) -> Result<(), anyhow::Error> {
     LOG_DIR.set(folder.to_path_buf()).ok();
-    let file = File::create(folder.join("pss_valves.csv")).await?;
+    // name is debatable
+    let file = File::create(folder.join("pss_can_messages.csv")).await?;
     let serializer = AsyncWriterBuilder::new()
         .has_headers(true)
         .create_serializer(BufWriter::new(file.compat_write()));
@@ -272,15 +279,12 @@ pub async fn init_csv_logger(folder: &Path) -> Result<(), anyhow::Error> {
     Ok(())
 }
 
-// CSV logger: logger is initialized
-// once and before in can_helper message is logged to CSV.
-
 async fn csv_logger(msg: &messages::Message) -> Result<(), anyhow::Error> {
     let logger = LOGGER.get().ok_or_else(|| anyhow::anyhow!("CSV logger not initialised"))?;
     
     let mut csv = logger.lock().await;
     let timestamp = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
+        .duration_since(std::time::SystemTime::UNIX_EPOCH)
         .unwrap_or_default()
         .as_millis();
     
