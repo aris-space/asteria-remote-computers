@@ -1543,6 +1543,7 @@ dependencies = [
  "datatypes",
  "embedded-can",
  "fs4",
+ "futures",
  "hex",
  "io-utils",
  "mavio",
