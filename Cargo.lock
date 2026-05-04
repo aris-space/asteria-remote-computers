@@ -2273,11 +2273,15 @@ dependencies = [
 name = "pss-drivers"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
+ "csv-async",
  "datatypes",
+ "futures-util",
  "lib-mission",
  "messages",
  "serde",
  "tokio",
+ "tokio-util",
  "tracing",
  "watchable",
 ]

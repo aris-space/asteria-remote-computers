@@ -1,11 +1,13 @@
-use std::{collections::BTreeMap, marker::PhantomData};
-
+use std::{collections::BTreeMap, marker::PhantomData, path::{Path, PathBuf}, sync::OnceLock};
+use csv_async::{self, AsyncSerializer, AsyncWriterBuilder};
 use datatypes::actuator::{DPRValve, NormallyClosedValve, NormallyOpenValve, OutOfRange, Settable};
 use messages::datapoints::{
     dp_engine_control_board, dp_fuel_control_board, dp_oxidizer_control_board
 };
 use std::sync::mpsc;
-use tokio::time::Duration;
+use tokio::{fs::File, sync::Mutex, time::Duration};
+use futures_util::io::BufWriter;
+use tokio_util::compat::TokioAsyncWriteCompatExt;
 
 /// The valves in the propellant supply system.
 #[derive(Debug, Clone)]
@@ -89,13 +91,18 @@ impl PSSValves {
 }
 
 /// Helper function for sending CAN messages twice with interval of 100ms
+/// This method is also used for CSV logging.
 fn can_helper<F>(tx: mpsc::Sender<messages::Message>, build_msg: F)
 where
     F: Fn() -> messages::Message + Send + 'static,
 {
     tokio::spawn(async move {
+        // log to csv
         for _ in 0..2 {
             let msg = build_msg();
+            if let Err(e) = csv_logger(&msg).await {
+                tracing::warn!("PSS log failed: {e}");
+            }
             if tx.send(msg).is_err() {
                 tracing::warn!("CAN channel closed; dropping PSS burst");
                 return;
@@ -147,11 +154,10 @@ impl PSSValves {
     /// `Settable` that builds and sends the right CAN message when
     /// `set_value` is called.
     pub fn as_settables(&self) -> BTreeMap<ValveName, Box<dyn Settable + Send>> {
-        use ValveName::*;
         let mut map: BTreeMap<ValveName, Box<dyn Settable + Send>> = BTreeMap::new();
 
         map.insert(
-            prz_vnt_vlv,
+            ValveName::prz_vnt_vlv,
             make_setter(self.tx.clone(), |s: NormallyOpenValve| {
                 messages::Message::FuelControlBoard(
                     dp_fuel_control_board::Message::PressurizationVentValveControlFC(s.into()),
@@ -160,7 +166,7 @@ impl PSSValves {
         );
 
         map.insert(
-            fss_prz_vlv,
+            ValveName::fss_prz_vlv,
             make_setter(self.tx.clone(), |s: DPRValve| {
                 messages::Message::FuelControlBoard(
                     dp_fuel_control_board::Message::FuelDprValveControlFC(s),
@@ -169,7 +175,7 @@ impl PSSValves {
         );
 
         map.insert(
-            fss_vnt_vlv,
+            ValveName::fss_vnt_vlv,
             make_setter(self.tx.clone(), |s: NormallyOpenValve| {
                 messages::Message::FuelControlBoard(
                     dp_fuel_control_board::Message::FuelVentValveControlFC(s.into()),
@@ -178,7 +184,7 @@ impl PSSValves {
         );
 
         map.insert(
-            oss_prz_vlv,
+            ValveName::oss_prz_vlv,
             make_setter(self.tx.clone(), |s: DPRValve| {
                 messages::Message::OxidizerControlBoard(
                     dp_oxidizer_control_board::Message::OxidizerDprConfigFC(s),
@@ -187,7 +193,7 @@ impl PSSValves {
         );
 
         map.insert(
-            oss_vnt_vlv,
+            ValveName::oss_vnt_vlv,
             make_setter(self.tx.clone(), |s: NormallyClosedValve| {
                 messages::Message::OxidizerControlBoard(
                     dp_oxidizer_control_board::Message::OxidizerVentControlFC(s.into()),
@@ -196,7 +202,7 @@ impl PSSValves {
         );
 
         map.insert(
-            fss_mnl_vlv,
+            ValveName::fss_mnl_vlv,
             make_setter(self.tx.clone(), |s: NormallyClosedValve| {
                 messages::Message::EngineControlBoard(
                     dp_engine_control_board::Message::FuelMainControlFC(s.into()),
@@ -205,7 +211,7 @@ impl PSSValves {
         );
 
         map.insert(
-            oss_mnl_vlv,
+            ValveName::oss_mnl_vlv,
             make_setter(self.tx.clone(), |s: NormallyClosedValve| {
                 messages::Message::EngineControlBoard(
                     dp_engine_control_board::Message::OxidizerMainControlFC(s.into()),
@@ -253,6 +259,32 @@ where
     })
 }
 
-impl PSSValves {
-    // starts logging
+static LOG_DIR: OnceLock<PathBuf> = OnceLock::new();
+static LOGGER: OnceLock<Mutex<AsyncSerializer<BufWriter<tokio_util::compat::Compat<File>>>>> = OnceLock::new();
+
+pub async fn init_csv_logger(folder: &Path) -> Result<(), anyhow::Error> {
+    LOG_DIR.set(folder.to_path_buf()).ok();
+    let file = File::create(folder.join("pss_valves.csv")).await?;
+    let serializer = AsyncWriterBuilder::new()
+        .has_headers(true)
+        .create_serializer(BufWriter::new(file.compat_write()));
+    LOGGER.set(Mutex::new(serializer)).ok();
+    Ok(())
+}
+
+// CSV logger: logger is initialized
+// once and before in can_helper message is logged to CSV.
+
+async fn csv_logger(msg: &messages::Message) -> Result<(), anyhow::Error> {
+    let logger = LOGGER.get().ok_or_else(|| anyhow::anyhow!("CSV logger not initialised"))?;
+    
+    let mut csv = logger.lock().await;
+    let timestamp = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_millis();
+    
+    csv.serialize((timestamp, format!("{:?}", msg)))
+        .await
+        .map_err(anyhow::Error::from)
 }

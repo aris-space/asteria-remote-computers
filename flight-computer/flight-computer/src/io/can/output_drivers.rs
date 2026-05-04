@@ -228,6 +228,8 @@ pub fn spawn_flight_computer_status_driver(
                             .expect("Time moved backwards")
                             .as_micros() as u64,
                     },
+                    // this has to be completely removed
+                    has_pss_control: false,
                     is_software_armed: is_software_armed.current().into(),
                 };
                 let _ = fc_status.update(status.clone());
