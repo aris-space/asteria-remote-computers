@@ -39,6 +39,7 @@ impl RemoteSystem {
 /// Starts a medium priority thread to read from `socket` and set the given commands.
 ///
 /// Reasoning for medium is that the CAN interaction is more important, but uplink is more important than downlink.
+#[allow(unreachable_code)]
 pub fn start_uplink_actor<ActuatorName>(
     socket: std::net::UdpSocket,
     transition_command: Watchable<ManualStateTransition>,
@@ -60,6 +61,7 @@ where
         ) {
             tracing::warn!("cannot set uplink actor to medium priority: {e}");
         }
+        
         read_uplink(
             &socket,
             &transition_command,

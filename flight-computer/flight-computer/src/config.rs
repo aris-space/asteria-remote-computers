@@ -200,24 +200,6 @@ pub enum StateLogicConfig<Gnc: CompatGuidanceController> {
         /// The name of the state which to proceed to if the rfs is not armed for ignition.
         on_not_armed: String,
     },
-    /// Describes a [`state_logic::AwaitRFSMode`].
-    AwaitRFSMode {
-        /// What mode should be awaited
-        mode: state_logic::await_rfs_mode::RfsPSSMode,
-        /// The name of the state which to proceed to after setting the mode.
-        on_detected: String,
-    },
-    /// Describes a [`state_logic::AwaitRFSModeWhileConnected`].
-    AwaitRFSModeWhileConnected {
-        /// What mode should be awaited
-        mode: state_logic::await_rfs_mode::RfsPSSMode,
-        /// The name of the state which to proceed to after setting the mode.
-        on_detected: String,
-        /// The max time after a message from the RFS before a transition is triggered.
-        rfs_can_timeout_sec: f32,
-        /// The name of the state which to proceed to after a timeout.
-        on_timeout: String,
-    },
     /// Describes a [`state_logic::WaitWhileConnected`].
     WaitWhileConnected {
         /// The max time after a message from the RFS before a transition is triggered.
@@ -489,25 +471,6 @@ impl<Gnc: CompatGuidanceController> MakeState for StateLogicConfig<Gnc> {
             } => state_logic::ReadRFSArming {
                 on_armed: StateName::try_new(&on_armed, names)?,
                 on_not_armed: StateName::try_new(&on_not_armed, names)?,
-            }
-            .into_box(),
-            StateLogicConfig::AwaitRFSMode { mode, on_detected } => state_logic::AwaitRFSMode {
-                manual_transitions,
-                mode,
-                on_detected: StateName::try_new(&on_detected, names)?,
-            }
-            .into_box(),
-            StateLogicConfig::AwaitRFSModeWhileConnected {
-                mode,
-                on_detected,
-                rfs_can_timeout_sec,
-                on_timeout,
-            } => state_logic::AwaitRFSModeWhileConnected {
-                manual_transitions,
-                mode,
-                on_detected: StateName::try_new(&on_detected, names)?,
-                rfs_can_timeout: Duration::from_secs_f32(rfs_can_timeout_sec),
-                on_timeout: StateName::try_new(&on_timeout, names)?,
             }
             .into_box(),
             StateLogicConfig::WaitWhileConnected {

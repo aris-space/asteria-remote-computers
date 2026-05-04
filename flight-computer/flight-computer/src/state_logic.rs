@@ -49,16 +49,8 @@ pub use set_normal_state::SetNormalState;
 pub mod set_actuators;
 pub use set_actuators::SetActuators;
 
-pub mod set_pss_mode;
-
 pub mod read_rfs_arming;
 pub use read_rfs_arming::ReadRFSArming;
-
-pub mod await_rfs_mode;
-pub use await_rfs_mode::AwaitRFSMode;
-
-pub mod await_rfs_mode_while_connected;
-pub use await_rfs_mode_while_connected::AwaitRFSModeWhileConnected;
 
 pub mod wait_while_connected;
 pub use wait_while_connected::WaitWhileConnected;
