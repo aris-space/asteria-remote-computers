@@ -61,7 +61,7 @@ where
         ) {
             tracing::warn!("cannot set uplink actor to medium priority: {e}");
         }
-        
+
         read_uplink(
             &socket,
             &transition_command,
