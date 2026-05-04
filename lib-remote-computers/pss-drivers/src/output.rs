@@ -29,6 +29,7 @@ impl PSSValves {
     /// and sent twice within an interval of 100ms.
     pub fn set_pressurization_vent(&self, state: NormallyOpenValve) {
         can_helper(self.tx.clone(), move || {
+            messages::Message::EngineControlBoard(())
             messages::Message::FuelControlBoard(
                 dp_fuel_control_board::Message::PressurizationVentControlFC(state.into()),
             )
@@ -215,7 +216,7 @@ impl PSSValves {
 
 struct ChannelSetter<V, F>
 where
-    V: TryFrom<f32, Error = OutOfRange> + Send + 'static,
+    V: Settable + Default + Send + 'static,
     F: Fn(V) -> messages::Message + Send + 'static,
 {
     tx: mpsc::Sender<messages::Message>,
@@ -225,11 +226,12 @@ where
 
 impl<V, F> Settable for ChannelSetter<V, F>
 where
-    V: TryFrom<f32, Error = OutOfRange> + Send + 'static,
+    V: Settable + Default + Send + 'static,
     F: Fn(V) -> messages::Message + Send + 'static,
 {
     fn set_value(&mut self, value: f32) -> Result<(), OutOfRange> {
-        let state = V::try_from(value)?;
+        let mut state = V::default();
+        state.set_value(value)?;
         let msg = (self.build_msg)(state);
         let _ = self.tx.send(msg);
         Ok(())
@@ -238,7 +240,7 @@ where
 
 fn make_setter<V, F>(tx: mpsc::Sender<messages::Message>, build_msg: F) -> Box<dyn Settable + Send>
 where
-    V: TryFrom<f32, Error = OutOfRange> + Send + 'static,
+    V: Settable + Default + Send + 'static,
     F: Fn(V) -> messages::Message + Send + 'static,
 {
     Box::new(ChannelSetter {
