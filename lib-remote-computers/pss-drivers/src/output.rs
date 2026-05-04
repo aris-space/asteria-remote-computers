@@ -2,7 +2,7 @@ use std::{collections::BTreeMap, marker::PhantomData};
 
 use datatypes::actuator::{DPRValve, NormallyClosedValve, NormallyOpenValve, OutOfRange, Settable};
 use messages::datapoints::{
-    dp_engine_control_board, dp_fuel_control_board, dp_oxidizer_control_board,
+    dp_engine_control_board, dp_fuel_control_board, dp_oxidizer_control_board
 };
 use std::sync::mpsc;
 use tokio::time::Duration;
@@ -29,24 +29,27 @@ impl PSSValves {
     /// and sent twice within an interval of 100ms.
     pub fn set_pressurization_vent(&self, state: NormallyOpenValve) {
         can_helper(self.tx.clone(), move || {
-            messages::Message::EngineControlBoard(())
             messages::Message::FuelControlBoard(
-                dp_fuel_control_board::Message::PressurizationVentControlFC(state.into()),
+                dp_fuel_control_board::Message::PressurizationVentValveControlFC(
+                    state.into()
+                )
             )
         });
     }
 
     pub fn set_fuel_pressurization(&self, state: DPRValve) {
         can_helper(self.tx.clone(), move || {
-            messages::Message::FuelControlBoard(dp_fuel_control_board::Message::FuelDprConfigFC(
-                state,
-            ))
+            messages::Message::FuelControlBoard(
+                dp_fuel_control_board::Message::FuelDprValveControlFC(
+                    state
+                ))
         });
     }
 
     pub fn set_fuel_vent(&self, state: NormallyOpenValve) {
         can_helper(self.tx.clone(), move || {
-            messages::Message::FuelControlBoard(dp_fuel_control_board::Message::FuelVentControlFC(
+            messages::Message::FuelControlBoard(
+                dp_fuel_control_board::Message::FuelVentValveControlFC(
                 state.into(),
             ))
         });
@@ -151,7 +154,7 @@ impl PSSValves {
             prz_vnt_vlv,
             make_setter(self.tx.clone(), |s: NormallyOpenValve| {
                 messages::Message::FuelControlBoard(
-                    dp_fuel_control_board::Message::PressurizationVentControlFC(s.into()),
+                    dp_fuel_control_board::Message::PressurizationVentValveControlFC(s.into()),
                 )
             }),
         );
@@ -160,7 +163,7 @@ impl PSSValves {
             fss_prz_vlv,
             make_setter(self.tx.clone(), |s: DPRValve| {
                 messages::Message::FuelControlBoard(
-                    dp_fuel_control_board::Message::FuelDprConfigFC(s),
+                    dp_fuel_control_board::Message::FuelDprValveControlFC(s),
                 )
             }),
         );
@@ -169,7 +172,7 @@ impl PSSValves {
             fss_vnt_vlv,
             make_setter(self.tx.clone(), |s: NormallyOpenValve| {
                 messages::Message::FuelControlBoard(
-                    dp_fuel_control_board::Message::FuelVentControlFC(s.into()),
+                    dp_fuel_control_board::Message::FuelVentValveControlFC(s.into()),
                 )
             }),
         );
