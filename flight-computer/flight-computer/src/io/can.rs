@@ -55,11 +55,7 @@ pub fn init_can_drivers(
     // Spawn the transmitting thread
     std::thread::spawn(move || {
         let mut transmitter = transmitter;
-        run_can_transmit_actor(
-            &mut transmitter,
-            rx,
-            writer
-        );
+        run_can_transmit_actor(&mut transmitter, rx, writer);
     });
 
     Ok(output_handles)

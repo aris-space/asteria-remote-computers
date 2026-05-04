@@ -1,12 +1,11 @@
-use std::{collections::BTreeMap, marker::PhantomData, path::Path};
 use datatypes::actuator::{DPRValve, NormallyClosedValve, NormallyOpenValve, OutOfRange, Settable};
 use lib_mission::{reactive::Watched, util::time::MissionTime};
 use messages::datapoints::{
-    dp_engine_control_board, dp_fuel_control_board, dp_oxidizer_control_board
+    dp_engine_control_board, dp_fuel_control_board, dp_oxidizer_control_board,
 };
 use std::sync::mpsc;
+use std::{collections::BTreeMap, marker::PhantomData, path::Path};
 use tokio::time::Duration;
-
 
 /// The valves in the propellant supply system.
 #[derive(Debug, Clone)]
@@ -33,9 +32,7 @@ impl PSSValves {
     pub fn set_pressurization_vent(&self, state: NormallyOpenValve) {
         can_helper(self.tx.clone(), move || {
             messages::Message::FuelControlBoard(
-                dp_fuel_control_board::Message::PressurizationVentValveControlFC(
-                    state.into()
-                )
+                dp_fuel_control_board::Message::PressurizationVentValveControlFC(state.into()),
             )
         });
     }
@@ -44,7 +41,7 @@ impl PSSValves {
     pub fn set_fuel_pressurization(&self, state: DPRValve) {
         can_helper(self.tx.clone(), move || {
             messages::Message::FuelControlBoard(
-                dp_fuel_control_board::Message::FuelDprValveControlFC(state)
+                dp_fuel_control_board::Message::FuelDprValveControlFC(state),
             )
         });
     }
@@ -53,7 +50,7 @@ impl PSSValves {
     pub fn set_fuel_vent(&self, state: NormallyOpenValve) {
         can_helper(self.tx.clone(), move || {
             messages::Message::FuelControlBoard(
-                dp_fuel_control_board::Message::FuelVentValveControlFC(state.into())
+                dp_fuel_control_board::Message::FuelVentValveControlFC(state.into()),
             )
         });
     }

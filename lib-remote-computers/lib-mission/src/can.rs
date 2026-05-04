@@ -9,9 +9,9 @@ use can_hal::{CanDecode as _, CanEncode as _};
 use embedded_can::{Frame, StandardId};
 use io_utils::Collector;
 use messages::Message as CanMessage;
-use tokio::{sync::mpsc};
+use tokio::sync::mpsc;
 
-use crate::{reactive::Watched, util::{log::TimeseriesWriter, time::MissionTime}};
+use crate::util::log::TimeseriesWriter;
 
 /// This collects the consumers of specific can messages.
 ///
@@ -172,19 +172,17 @@ pub fn run_can_transmit_actor<S: embedded_can::blocking::Can>(
     // Blocking iterator
     for msg in receiver {
         tracing::debug!(?msg, "transmitting CAN message");
-        
+
         let clock = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap_or_default()
             .as_millis();
-        
+
         // log to csv, a TimeSeriesWriter has been passed as argument.
         // It is blocking but shouldn't be critical(?)
         // TODO: consider if it is the case or not
-        let _ = futures::executor::block_on(
-            writer.serialize((clock, format!("{:?}", msg)))
-        );
-        
+        let _ = futures::executor::block_on(writer.serialize((clock, format!("{msg:?}"))));
+
         let mut buf = [0; 64];
         let (id, len) = match msg.encode_into(&mut buf) {
             Ok(x) => x,

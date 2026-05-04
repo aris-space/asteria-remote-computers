@@ -52,10 +52,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     output_tree
         .start_logging(&log_folder, input_tree.time.clone())
         .await?;
-    
+
     // init CAN logger
     let writer = make_timeseries_writer(&log_folder, "can_outgoing", &["message"]).await?;
-
 
     init_telemetry(
         &config_file.telemetry,
@@ -65,10 +64,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     )?;
 
     init_can_drivers(
-        &config_file.can, 
-        &input_tree, 
-        &output_tree, 
-        can_tx, 
+        &config_file.can,
+        &input_tree,
+        &output_tree,
+        can_tx,
         can_rx,
         writer,
     )?;
