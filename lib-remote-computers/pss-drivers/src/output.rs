@@ -1,34 +1,35 @@
-use std::{collections::BTreeMap, marker::PhantomData, path::{Path, PathBuf}, sync::OnceLock};
-use csv_async::{self, AsyncSerializer, AsyncWriterBuilder};
+use std::{collections::BTreeMap, marker::PhantomData, path::Path};
 use datatypes::actuator::{DPRValve, NormallyClosedValve, NormallyOpenValve, OutOfRange, Settable};
+use lib_mission::{reactive::Watched, util::time::MissionTime};
 use messages::datapoints::{
     dp_engine_control_board, dp_fuel_control_board, dp_oxidizer_control_board
 };
 use std::sync::mpsc;
-use tokio::{fs::File, sync::Mutex, time::Duration};
-use futures_util::io::BufWriter;
-use tokio_util::compat::TokioAsyncWriteCompatExt;
+use tokio::time::Duration;
+
 
 /// The valves in the propellant supply system.
 #[derive(Debug, Clone)]
 pub struct PSSValves {
     /// Sender
     tx: std::sync::mpsc::Sender<messages::Message>,
+    log_tx: Option<tokio::sync::mpsc::UnboundedSender<String>>,
 }
 
 impl PSSValves {
     /// This method is needed for the OutputTree constructor.
     /// We cannot derive Default for PSSValves because channels do
     /// not have a sensible default value.
-    pub fn new(tx: std::sync::mpsc::Sender<messages::Message>) -> Self {
-        Self { tx }
+    pub fn new(tx: mpsc::Sender<messages::Message>) -> Self {
+        Self { tx, log_tx: None }
     }
 }
 
+/// Seven functions for the different PSSValves messages.
+/// The appropriate CAN message for each valve is generated
+/// and sent twice within an interval of 100ms.
 impl PSSValves {
-    /// Seven functions for the different PSSValves messages.
-    /// The appropriate CAN message is generated
-    /// and sent twice within an interval of 100ms.
+    /// Controls the pressurization vent valve (`ValveName::prz_vnt_vlv`).
     pub fn set_pressurization_vent(&self, state: NormallyOpenValve) {
         can_helper(self.tx.clone(), move || {
             messages::Message::FuelControlBoard(
@@ -39,24 +40,25 @@ impl PSSValves {
         });
     }
 
+    /// Controls the fuel pressurization valve (`ValveName::fss_prz_vlv`).
     pub fn set_fuel_pressurization(&self, state: DPRValve) {
         can_helper(self.tx.clone(), move || {
             messages::Message::FuelControlBoard(
-                dp_fuel_control_board::Message::FuelDprValveControlFC(
-                    state
-                ))
+                dp_fuel_control_board::Message::FuelDprValveControlFC(state)
+            )
         });
     }
 
+    /// Controls the fuel vent valve (`ValveName::fss_vnt_vlv`).
     pub fn set_fuel_vent(&self, state: NormallyOpenValve) {
         can_helper(self.tx.clone(), move || {
             messages::Message::FuelControlBoard(
-                dp_fuel_control_board::Message::FuelVentValveControlFC(
-                state.into(),
-            ))
+                dp_fuel_control_board::Message::FuelVentValveControlFC(state.into())
+            )
         });
     }
 
+    /// Controls the oxidizer pressurization valve (`ValveName::oss_prz_vlv`).
     pub fn set_oxidizer_pressurization(&self, state: DPRValve) {
         can_helper(self.tx.clone(), move || {
             messages::Message::OxidizerControlBoard(
@@ -65,6 +67,7 @@ impl PSSValves {
         });
     }
 
+    /// Controls the oxidizer vent valve (`ValveName::oss_vnt_vlv`).
     pub fn set_oxidizer_vent(&self, state: NormallyClosedValve) {
         can_helper(self.tx.clone(), move || {
             messages::Message::OxidizerControlBoard(
@@ -73,6 +76,7 @@ impl PSSValves {
         });
     }
 
+    /// Controls the fuel main valve (`ValveName::fss_mnl_vlv`).
     pub fn set_fuel_main(&self, state: NormallyClosedValve) {
         can_helper(self.tx.clone(), move || {
             messages::Message::EngineControlBoard(
@@ -81,6 +85,7 @@ impl PSSValves {
         });
     }
 
+    /// Controls the oxidizer main valve (`ValveName::oss_mnl_vlv`).
     pub fn set_oxidizer_main(&self, state: NormallyClosedValve) {
         can_helper(self.tx.clone(), move || {
             messages::Message::EngineControlBoard(
@@ -97,14 +102,8 @@ where
     F: Fn() -> messages::Message + Send + 'static,
 {
     tokio::spawn(async move {
-        // log to csv
-        for i in 0..2 {
+        for _ in 0..2 {
             let msg = build_msg();
-            if i == 0 {    
-                if let Err(e) = csv_logger(&msg).await {
-                    tracing::warn!("PSS log failed: {e}");
-                }
-            }
             if tx.send(msg).is_err() {
                 tracing::warn!("CAN channel closed; dropping PSS burst");
                 return;
@@ -259,36 +258,4 @@ where
         build_msg,
         _phantom: PhantomData,
     })
-}
-
-// CSV logging
-static LOG_DIR: OnceLock<PathBuf> = OnceLock::new();
-static LOGGER: OnceLock<Mutex<AsyncSerializer<BufWriter<tokio_util::compat::Compat<File>>>>> = OnceLock::new();
-
-
-// CSV logger: logger is initialized once
-// and before in can_helper message is logged to CSV.
-pub async fn init_csv_logger(folder: &Path) -> Result<(), anyhow::Error> {
-    LOG_DIR.set(folder.to_path_buf()).ok();
-    // name is debatable
-    let file = File::create(folder.join("pss_can_messages.csv")).await?;
-    let serializer = AsyncWriterBuilder::new()
-        .has_headers(true)
-        .create_serializer(BufWriter::new(file.compat_write()));
-    LOGGER.set(Mutex::new(serializer)).ok();
-    Ok(())
-}
-
-async fn csv_logger(msg: &messages::Message) -> Result<(), anyhow::Error> {
-    let logger = LOGGER.get().ok_or_else(|| anyhow::anyhow!("CSV logger not initialised"))?;
-    
-    let mut csv = logger.lock().await;
-    let timestamp = std::time::SystemTime::now()
-        .duration_since(std::time::SystemTime::UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_millis();
-    
-    csv.serialize((timestamp, format!("{:?}", msg)))
-        .await
-        .map_err(anyhow::Error::from)
 }

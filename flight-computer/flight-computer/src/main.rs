@@ -13,6 +13,7 @@ use flight_computer::io::telemetry::init_telemetry;
 use flight_computer::state_logic::control_loop::AnyGncController;
 use lib_mission::state_machine::StateMachine;
 use lib_mission::util::init::init_binary;
+use lib_mission::util::log::make_timeseries_writer;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -31,8 +32,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut input_tree = InputTree::default();
     input_tree.boards_status.time = input_tree.time.clone(); // synchronize shared variable
 
-    let (tx, rx) = std::sync::mpsc::channel();
-    let output_tree = OutputTree::new(tx.clone());
+    let (can_tx, can_rx) = std::sync::mpsc::channel();
+    let output_tree = OutputTree::new(can_tx.clone());
     let config_hash = ConfigHash {
         hash: run_info.config_hash.as_bytes()[..5]
             .try_into()
@@ -51,6 +52,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     output_tree
         .start_logging(&log_folder, input_tree.time.clone())
         .await?;
+    
+    // init CAN logger
+    let writer = make_timeseries_writer(&log_folder, "can_outgoing", &["message"]).await?;
+
 
     init_telemetry(
         &config_file.telemetry,
@@ -59,7 +64,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         &state_machine,
     )?;
 
-    init_can_drivers(&config_file.can, &input_tree, &output_tree, tx, rx)?;
+    init_can_drivers(
+        &config_file.can, 
+        &input_tree, 
+        &output_tree, 
+        can_tx, 
+        can_rx,
+        writer,
+    )?;
     start_cats_driver(
         input_tree.cats_separation.clone(),
         input_tree.cats_deployment.clone(),

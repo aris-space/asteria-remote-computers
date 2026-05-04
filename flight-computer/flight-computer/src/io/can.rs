@@ -1,5 +1,6 @@
 use lib_mission::can::{read_can, run_can_transmit_actor, ConsumerRegistry};
 use lib_mission::reactive::IntoWatched;
+use lib_mission::util::log::TimeseriesWriter;
 use lib_mission::util::time::MissionTime;
 use tokio::task::AbortHandle;
 
@@ -17,6 +18,7 @@ pub fn init_can_drivers(
     output_tree: &OutputTree,
     tx: std::sync::mpsc::Sender<messages::Message>,
     rx: std::sync::mpsc::Receiver<messages::Message>,
+    writer: TimeseriesWriter,
 ) -> Result<Vec<AbortHandle>, Box<dyn std::error::Error>> {
     // Setup actual receiver on linux
     #[cfg(target_os = "linux")]
@@ -53,7 +55,11 @@ pub fn init_can_drivers(
     // Spawn the transmitting thread
     std::thread::spawn(move || {
         let mut transmitter = transmitter;
-        run_can_transmit_actor(&mut transmitter, rx);
+        run_can_transmit_actor(
+            &mut transmitter,
+            rx,
+            writer
+        );
     });
 
     Ok(output_handles)
