@@ -13,6 +13,7 @@ members = [
     "flight-computer/flight-computer",
     "flight-computer/asteria-gnc/gnc-interface",
     "flight-computer/asteria-gnc/gnc-configurations",
+    "flight-computer/deployment/mavlink-heartbeat",
     "data-definitions/can-hal",
     "data-definitions/core",
     "data-definitions/datapoints/*",
@@ -21,6 +22,7 @@ members = [
     "data-definitions/macros",
     "data-definitions/mavlink-hal",
     "data-definitions/messages",
+    "sequences",
 ]
 
 [workspace.lints.clippy]
