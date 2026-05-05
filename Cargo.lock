@@ -195,6 +195,7 @@ name = "can-hal"
 version = "0.1.0"
 dependencies = [
  "bincode",
+ "defmt",
  "embedded-can",
  "thiserror 2.0.17",
 ]
@@ -642,6 +643,7 @@ version = "0.3.0"
 dependencies = [
  "data-core",
  "datatypes",
+ "defmt",
  "gated-derive",
  "serde",
  "utoipa",

@@ -1,10 +1,9 @@
 use datatypes::actuator::{DPRValve, NormallyClosedValve, NormallyOpenValve, OutOfRange, Settable};
-use lib_mission::{reactive::Watched, util::time::MissionTime};
 use messages::datapoints::{
     dp_engine_control_board, dp_fuel_control_board, dp_oxidizer_control_board,
 };
 use std::sync::mpsc;
-use std::{collections::BTreeMap, marker::PhantomData, path::Path};
+use std::{collections::BTreeMap, marker::PhantomData};
 use tokio::time::Duration;
 
 /// The valves in the propellant supply system.
@@ -30,77 +29,76 @@ impl PSSValves {
 impl PSSValves {
     /// Controls the pressurization vent valve (`ValveName::prz_vnt_vlv`).
     pub fn set_pressurization_vent(&self, state: NormallyOpenValve) {
-        can_helper(self.tx.clone(), move || {
+        can_helper(self.tx.clone(),
             messages::Message::FuelControlBoard(
-                dp_fuel_control_board::Message::PressurizationVentValveControlFC(state.into()),
+                dp_fuel_control_board::Message::PressurizationVentValveControlFC(state),
             )
-        });
+        );
     }
 
     /// Controls the fuel pressurization valve (`ValveName::fss_prz_vlv`).
     pub fn set_fuel_pressurization(&self, state: DPRValve) {
-        can_helper(self.tx.clone(), move || {
+        can_helper(self.tx.clone(),
             messages::Message::FuelControlBoard(
                 dp_fuel_control_board::Message::FuelDprValveControlFC(state),
             )
-        });
+        );
     }
 
     /// Controls the fuel vent valve (`ValveName::fss_vnt_vlv`).
     pub fn set_fuel_vent(&self, state: NormallyOpenValve) {
-        can_helper(self.tx.clone(), move || {
+        can_helper(self.tx.clone(),
             messages::Message::FuelControlBoard(
-                dp_fuel_control_board::Message::FuelVentValveControlFC(state.into()),
+                dp_fuel_control_board::Message::FuelVentValveControlFC(state),
             )
-        });
+        );
     }
 
     /// Controls the oxidizer pressurization valve (`ValveName::oss_prz_vlv`).
     pub fn set_oxidizer_pressurization(&self, state: DPRValve) {
-        can_helper(self.tx.clone(), move || {
+        can_helper(self.tx.clone(),
             messages::Message::OxidizerControlBoard(
                 dp_oxidizer_control_board::Message::OxidizerDprConfigFC(state),
             )
-        });
+        );
     }
 
     /// Controls the oxidizer vent valve (`ValveName::oss_vnt_vlv`).
     pub fn set_oxidizer_vent(&self, state: NormallyClosedValve) {
-        can_helper(self.tx.clone(), move || {
+        can_helper(self.tx.clone(),
             messages::Message::OxidizerControlBoard(
-                dp_oxidizer_control_board::Message::OxidizerVentControlFC(state.into()),
+                dp_oxidizer_control_board::Message::OxidizerVentControlFC(state),
             )
-        });
+        );
     }
 
     /// Controls the fuel main valve (`ValveName::fss_mnl_vlv`).
     pub fn set_fuel_main(&self, state: NormallyClosedValve) {
-        can_helper(self.tx.clone(), move || {
+        can_helper(self.tx.clone(),
             messages::Message::EngineControlBoard(
-                dp_engine_control_board::Message::FuelMainControlFC(state.into()),
+                dp_engine_control_board::Message::FuelMainControlFC(state),
             )
-        });
+        );
     }
 
     /// Controls the oxidizer main valve (`ValveName::oss_mnl_vlv`).
     pub fn set_oxidizer_main(&self, state: NormallyClosedValve) {
-        can_helper(self.tx.clone(), move || {
+        can_helper(self.tx.clone(),
             messages::Message::EngineControlBoard(
-                dp_engine_control_board::Message::OxidizerMainControlFC(state.into()),
+                dp_engine_control_board::Message::OxidizerMainControlFC(state),
             )
-        });
+        );
     }
 }
 
 /// Helper function for sending CAN messages twice with interval of 100ms
 /// This method is also used for CSV logging.
-fn can_helper<F>(tx: mpsc::Sender<messages::Message>, build_msg: F)
-where
-    F: Fn() -> messages::Message + Send + 'static,
+fn can_helper(tx: mpsc::Sender<messages::Message>, can_msg: messages::Message)
+
 {
     tokio::spawn(async move {
         for _ in 0..2 {
-            let msg = build_msg();
+            let msg = can_msg.clone();
             if tx.send(msg).is_err() {
                 tracing::warn!("CAN channel closed; dropping PSS burst");
                 return;
@@ -158,7 +156,7 @@ impl PSSValves {
             ValveName::prz_vnt_vlv,
             make_setter(self.tx.clone(), |s: NormallyOpenValve| {
                 messages::Message::FuelControlBoard(
-                    dp_fuel_control_board::Message::PressurizationVentValveControlFC(s.into()),
+                    dp_fuel_control_board::Message::PressurizationVentValveControlFC(s),
                 )
             }),
         );
@@ -176,7 +174,7 @@ impl PSSValves {
             ValveName::fss_vnt_vlv,
             make_setter(self.tx.clone(), |s: NormallyOpenValve| {
                 messages::Message::FuelControlBoard(
-                    dp_fuel_control_board::Message::FuelVentValveControlFC(s.into()),
+                    dp_fuel_control_board::Message::FuelVentValveControlFC(s),
                 )
             }),
         );
@@ -194,7 +192,7 @@ impl PSSValves {
             ValveName::oss_vnt_vlv,
             make_setter(self.tx.clone(), |s: NormallyClosedValve| {
                 messages::Message::OxidizerControlBoard(
-                    dp_oxidizer_control_board::Message::OxidizerVentControlFC(s.into()),
+                    dp_oxidizer_control_board::Message::OxidizerVentControlFC(s),
                 )
             }),
         );
@@ -203,7 +201,7 @@ impl PSSValves {
             ValveName::fss_mnl_vlv,
             make_setter(self.tx.clone(), |s: NormallyClosedValve| {
                 messages::Message::EngineControlBoard(
-                    dp_engine_control_board::Message::FuelMainControlFC(s.into()),
+                    dp_engine_control_board::Message::FuelMainControlFC(s),
                 )
             }),
         );
@@ -212,7 +210,7 @@ impl PSSValves {
             ValveName::oss_mnl_vlv,
             make_setter(self.tx.clone(), |s: NormallyClosedValve| {
                 messages::Message::EngineControlBoard(
-                    dp_engine_control_board::Message::OxidizerMainControlFC(s.into()),
+                    dp_engine_control_board::Message::OxidizerMainControlFC(s),
                 )
             }),
         );
