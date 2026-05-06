@@ -1,6 +1,5 @@
 use lib_mission::can::{read_can, run_can_transmit_actor, ConsumerRegistry};
 use lib_mission::reactive::IntoWatched;
-use lib_mission::util::log::TimeseriesWriter;
 use lib_mission::util::time::MissionTime;
 use tokio::task::AbortHandle;
 
@@ -78,7 +77,7 @@ where
         steering_motor_target_deflections,
         recovery_actuators_armed,
         camera_powered_on,
-        valves,
+        valves: _,
         hash_config: _,
         fc_status,
     } = output_tree;
