@@ -18,7 +18,6 @@ pub fn init_can_drivers(
     output_tree: &OutputTree,
     tx: std::sync::mpsc::Sender<messages::Message>,
     rx: std::sync::mpsc::Receiver<messages::Message>,
-    writer: TimeseriesWriter,
 ) -> Result<Vec<AbortHandle>, Box<dyn std::error::Error>> {
     // Setup actual receiver on linux
     #[cfg(target_os = "linux")]
@@ -55,7 +54,7 @@ pub fn init_can_drivers(
     // Spawn the transmitting thread
     std::thread::spawn(move || {
         let mut transmitter = transmitter;
-        run_can_transmit_actor(&mut transmitter, rx, writer);
+        run_can_transmit_actor(&mut transmitter, rx);
     });
 
     Ok(output_handles)

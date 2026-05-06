@@ -69,7 +69,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         &output_tree,
         can_tx,
         can_rx,
-        writer,
     )?;
     start_cats_driver(
         input_tree.cats_separation.clone(),

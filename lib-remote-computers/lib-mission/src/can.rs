@@ -166,22 +166,11 @@ fn read_can_once<S: embedded_can::blocking::Can, Col>(
 pub fn run_can_transmit_actor<S: embedded_can::blocking::Can>(
     transmitter: &mut S,
     receiver: std::sync::mpsc::Receiver<CanMessage>,
-    mut writer: TimeseriesWriter,
 ) {
     // initialize writer for all CAN messages
     // Blocking iterator
     for msg in receiver {
         tracing::debug!(?msg, "transmitting CAN message");
-
-        let clock = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap_or_default()
-            .as_millis();
-
-        // log to csv, a TimeSeriesWriter has been passed as argument.
-        // It is blocking but shouldn't be critical(?)
-        // TODO: consider if it is the case or not
-        let _ = futures::executor::block_on(writer.serialize((clock, format!("{msg:?}"))));
 
         let mut buf = [0; 64];
         let (id, len) = match msg.encode_into(&mut buf) {

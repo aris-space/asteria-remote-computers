@@ -11,7 +11,6 @@ use tokio::time::Duration;
 pub struct PSSValves {
     /// Sender
     tx: std::sync::mpsc::Sender<messages::Message>,
-    log_tx: Option<tokio::sync::mpsc::UnboundedSender<String>>,
 }
 
 impl PSSValves {
@@ -19,7 +18,7 @@ impl PSSValves {
     /// We cannot derive Default for PSSValves because channels do
     /// not have a sensible default value.
     pub fn new(tx: mpsc::Sender<messages::Message>) -> Self {
-        Self { tx, log_tx: None }
+        Self { tx }
     }
 }
 
