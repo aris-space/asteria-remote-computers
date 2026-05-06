@@ -13,7 +13,6 @@ use flight_computer::io::telemetry::init_telemetry;
 use flight_computer::state_logic::control_loop::AnyGncController;
 use lib_mission::state_machine::StateMachine;
 use lib_mission::util::init::init_binary;
-use lib_mission::util::log::make_timeseries_writer;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -60,7 +59,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         &state_machine,
     )?;
 
-    init_can_drivers(&config_file.can, &input_tree, &output_tree, &can_tx, &can_rx)?;
+    init_can_drivers(&config_file.can, &input_tree, &output_tree, &can_tx, can_rx)?;
     start_cats_driver(
         input_tree.cats_separation.clone(),
         input_tree.cats_deployment.clone(),

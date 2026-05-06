@@ -123,19 +123,19 @@ fn can_helper(tx: mpsc::Sender<messages::Message>, can_msg: messages::Message) {
 )]
 #[allow(non_camel_case_types)]
 pub enum ValveName {
-    /// The name of [`PSSValves::pressurization_vent_valve`].
+    /// The name of [`PSSValves::set_pressurization_vent`].
     prz_vnt_vlv,
-    /// The name of [`PSSValves::fuel_pressurization_valve`].
+    /// The name of [`PSSValves::set_fuel_pressurization`].
     fss_prz_vlv,
-    /// The name of [`PSSValves::fuel_vent_valve`].
+    /// The name of [`PSSValves::set_fuel_vent`].
     fss_vnt_vlv,
-    /// The name of [`PSSValves::oxidizer_pressurization_valve`].
+    /// The name of [`PSSValves::set_oxidizer_pressurization`].
     oss_prz_vlv,
-    /// The name of [`PSSValves::oxidizer_vent_valve`].
+    /// The name of [`PSSValves::set_oxidizer_vent`].
     oss_vnt_vlv,
-    /// The name of [`PSSValves::fuel_main_valve`].
+    /// The name of [`PSSValves::set_fuel_main`].
     fss_mnl_vlv,
-    /// The name of [`PSSValves::oxidizer_main_valve`].
+    /// The name of [`PSSValves::set_oxidizer_main`].
     oss_mnl_vlv,
 }
 
