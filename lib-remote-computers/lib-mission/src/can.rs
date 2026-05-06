@@ -11,8 +11,6 @@ use io_utils::Collector;
 use messages::Message as CanMessage;
 use tokio::sync::mpsc;
 
-use crate::util::log::TimeseriesWriter;
-
 /// This collects the consumers of specific can messages.
 ///
 /// A driver should register itself using [`Self::register`], using a self-created sender.
