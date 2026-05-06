@@ -15,8 +15,8 @@ pub fn init_can_drivers(
     config: &CANConfig,
     input_tree: &InputTree,
     output_tree: &OutputTree,
-    tx: std::sync::mpsc::Sender<messages::Message>,
-    rx: std::sync::mpsc::Receiver<messages::Message>,
+    tx: &std::sync::mpsc::Sender<messages::Message>,
+    rx: &std::sync::mpsc::Receiver<messages::Message>,
 ) -> Result<Vec<AbortHandle>, Box<dyn std::error::Error>> {
     // Setup actual receiver on linux
     #[cfg(target_os = "linux")]

@@ -60,7 +60,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         &state_machine,
     )?;
 
-    init_can_drivers(&config_file.can, &input_tree, &output_tree, can_tx, can_rx)?;
+    init_can_drivers(&config_file.can, &input_tree, &output_tree, &can_tx, &can_rx)?;
     start_cats_driver(
         input_tree.cats_separation.clone(),
         input_tree.cats_deployment.clone(),
