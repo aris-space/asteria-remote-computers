@@ -115,7 +115,7 @@ fn can_helper(tx: mpsc::Sender<messages::Message>, can_msg: messages::Message) {
 ///
 /// ```
 /// use pss_drivers::output::ValveName;
-/// assert_eq!("oss_vnt_vlv".parse::<ValveName>().unwrap(), ValveName::oss_vnt_vlv)
+/// assert_eq!("oss_tnk_vnt".parse::<ValveName>().unwrap(), ValveName::oss_tnk_vnt)
 /// ```
 #[derive(
     Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, serde::Deserialize, serde::Serialize,

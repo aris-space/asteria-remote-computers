@@ -193,7 +193,7 @@ manual_transitions = [
 [state_machine.states."Pressurization"]
 type = "MonitoredManualControl"
 allowed_actuators = [
-    "prz_copv_vlv",
+    "prz_copv_vnt",
     "fss_tnk_vnt",
     "prz_oss_dpr",
     "oss_tnk_vnt",
