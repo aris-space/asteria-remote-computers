@@ -193,10 +193,10 @@ manual_transitions = [
 [state_machine.states."Pressurization"]
 type = "MonitoredManualControl"
 allowed_actuators = [
-    "fss_prz_vlv",
-    "fss_vnt_vlv",
-    "oss_prz_vlv",
-    "oss_vnt_vlv",
+    "prz_copv_vlv",
+    "fss_tnk_vnt",
+    "prz_oss_dpr",
+    "oss_tnk_vnt",
 ]
 telemetry_loss_threshold_sec = 900 # 15min
 on_violation = "Depressure"
