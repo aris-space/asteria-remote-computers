@@ -36,31 +36,11 @@ macro_rules! extract_args {
     (@process $args:expr, $emitter:expr, $e:expr, [$($acc:tt)*] ; ) => {{
         extract_args!(@build $args, $emitter, $e, [$($acc)*])
     }};
-    (@process $args:expr, $emitter:expr, $e:expr, [$($acc:tt)*] ;
-        $name:ident : $ty:ident
-        $($rest:tt)*
-    ) => {
-        extract_args!(
-            @process
-            $args,
-            $emitter,
-            $e,
-            [$($acc)* ($name, /* optional */ false, $ty)];
-            $($rest)*
-        )
+    (@process $args:expr, $emitter:expr, $e:expr, [$($acc:tt)*] ; $name:ident : $ty:ident $($rest:tt)*) => {
+        extract_args!(@process $args, $emitter, $e, [$($acc)* ($name, /* optional */ false, $ty)]; $($rest)*)
     };
-    (@process $args:expr, $emitter:expr, $e:expr, [$($acc:tt)*] ;
-        $name:ident ?: $ty:ident
-        $($rest:tt)*
-    ) => {
-        extract_args!(
-            @process
-            $args,
-            $emitter,
-            $e,
-            [$($acc)* ($name, /* optional */ true, $ty)];
-            $($rest)*
-        )
+    (@process $args:expr, $emitter:expr, $e:expr, [$($acc:tt)*] ; $name:ident ?: $ty:ident $($rest:tt)*) => {
+        extract_args!(@process $args, $emitter, $e, [$($acc)* ($name, /* optional */ true, $ty)]; $($rest)*)
     };
     (@extract $args:ident, $emitter:expr, $e:expr, $name:ident, true, $ty:ident) => {{
         match $args.remove(stringify!($name)) {
@@ -83,15 +63,11 @@ macro_rules! extract_args {
         }
     }};
     (@build $args:expr, $emitter:expr, $e:expr, [
-        $(
-            ($name:ident, $opt:tt, $ty:ident)
-        )*
+        $(($name:ident, $opt:tt, $ty:ident))*
     ]) => {{
         #[allow(unused_mut)]
         let mut args = $args;
-        $(
-            let $name = extract_args!(@extract args, $emitter, $e, $name, $opt, $ty);
-        )*
+        $(let $name = extract_args!(@extract args, $emitter, $e, $name, $opt, $ty);)*
 
         if !args.is_empty() {
             $emitter.emit(Rich::custom($e.span(), format!("unexpected arguments: {}", args.into_keys().map(|str| format!("`{str}`")).collect::<Vec<_>>().join(", "))))
