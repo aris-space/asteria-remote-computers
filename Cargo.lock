@@ -195,7 +195,6 @@ name = "can-hal"
 version = "0.1.0"
 dependencies = [
  "bincode",
- "defmt",
  "embedded-can",
  "thiserror 2.0.18",
 ]
@@ -583,7 +582,7 @@ checksum = "1435fa1053d8b2fbbe9be7e97eca7f33d37b28409959813daefc1446a14247f1"
 
 [[package]]
 name = "dp-engine-control-board"
-version = "0.4.0"
+version = "0.3.0"
 dependencies = [
  "arbitrary",
  "bincode",
@@ -611,7 +610,7 @@ dependencies = [
 
 [[package]]
 name = "dp-fuel-control-board"
-version = "0.4.0"
+version = "0.3.0"
 dependencies = [
  "arbitrary",
  "bincode",
@@ -625,7 +624,7 @@ dependencies = [
 
 [[package]]
 name = "dp-oxidizer-control-board"
-version = "0.4.0"
+version = "0.3.0"
 dependencies = [
  "arbitrary",
  "bincode",
@@ -643,7 +642,6 @@ version = "0.3.0"
 dependencies = [
  "data-core",
  "datatypes",
- "defmt",
  "gated-derive",
  "serde",
  "utoipa",
