@@ -40,9 +40,6 @@ impl StateLogic for MonitoredManualControl {
     ) -> StateName {
         tracing::info!(?self, "Entering a monitored manual control state");
 
-        // Enable PSS control in an manual state
-        output.valves.set_active(&input.pss_valves).await;
-
         // Prepares a background task to listen for (and act upon) manual actuator inputs.
         let actuator_future = self.allowed_actuators.act(
             input.state.current_state.get().0 as usize,

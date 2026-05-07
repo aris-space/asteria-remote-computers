@@ -15,6 +15,8 @@ pub fn init_can_drivers(
     config: &CANConfig,
     input_tree: &InputTree,
     output_tree: &OutputTree,
+    tx: &std::sync::mpsc::Sender<messages::Message>,
+    rx: std::sync::mpsc::Receiver<messages::Message>,
 ) -> Result<Vec<AbortHandle>, Box<dyn std::error::Error>> {
     // Setup actual receiver on linux
     #[cfg(target_os = "linux")]
@@ -40,8 +42,7 @@ pub fn init_can_drivers(
     };
 
     // Initialize the driver tasks
-    let (tx, rx) = std::sync::mpsc::channel();
-    let output_handles = init_output_drivers(&input_tree.time, output_tree, &tx);
+    let output_handles = init_output_drivers(&input_tree.time, output_tree, tx);
     let mut consumers = ConsumerRegistry::new().with_collector(input_tree.clone());
 
     // Spawn the receiving thread
@@ -76,14 +77,13 @@ where
         steering_motor_target_deflections,
         recovery_actuators_armed,
         camera_powered_on,
-        valves,
+        valves: _,
         hash_config: _,
         fc_status,
     } = output_tree;
     // Register the emitters
     let handles = vec![
         output_drivers::spawn_flight_computer_status_driver(
-            valves.watch_active(),
             recovery_actuators_armed.watched(),
             fc_status.clone(),
             tx.clone(),
@@ -114,6 +114,5 @@ where
             tx.clone(),
         ),
     ];
-    // TODO: PSS Stuff
     handles
 }

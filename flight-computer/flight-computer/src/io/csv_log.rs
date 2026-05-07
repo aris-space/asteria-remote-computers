@@ -374,7 +374,7 @@ impl OutputTree {
             steering_motor_target_deflections,
             recovery_actuators_armed,
             camera_powered_on,
-            valves,
+            valves: _,
             hash_config: _,
             fc_status: _,
         } = self;
@@ -420,8 +420,6 @@ impl OutputTree {
             camera_powered_on.watched(),
             time.watched(),
         );
-        // Log valve target states
-        valves.start_logging(folder, time).await?;
 
         Ok(())
     }

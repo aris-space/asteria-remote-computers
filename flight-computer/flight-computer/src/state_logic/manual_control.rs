@@ -29,8 +29,6 @@ impl StateLogic for ManualControl {
         param: &AdditionalState<Self::Parameter>,
     ) -> StateName {
         tracing::info!("Entering a manual control state");
-        // Enable PSS control in an manual state
-        output.valves.set_active(&input.pss_valves).await;
 
         // Prepares a background task to listen for (and act upon) manual actuator inputs.
         let actuator_future = self.actuator_control.act(
