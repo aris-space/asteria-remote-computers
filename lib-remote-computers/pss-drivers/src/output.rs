@@ -156,7 +156,7 @@ impl PSSValves {
         let mut map: BTreeMap<ValveName, Box<dyn Settable + Send>> = BTreeMap::new();
 
         map.insert(
-            ValveName::prz_vnt_vlv,
+            ValveName::prz_copv_vnt,
             make_setter(self.tx.clone(), |s: NormallyOpenValve| {
                 messages::Message::FuelControlBoard(
                     dp_fuel_control_board::Message::PressurizationVentValveControlFC(s),
@@ -165,7 +165,7 @@ impl PSSValves {
         );
 
         map.insert(
-            ValveName::fss_prz_vlv,
+            ValveName::prz_fss_dpr,
             make_setter(self.tx.clone(), |s: DPRValve| {
                 messages::Message::FuelControlBoard(
                     dp_fuel_control_board::Message::FuelDprValveControlFC(s),
@@ -174,7 +174,7 @@ impl PSSValves {
         );
 
         map.insert(
-            ValveName::fss_vnt_vlv,
+            ValveName::fss_tnk_vnt,
             make_setter(self.tx.clone(), |s: NormallyOpenValve| {
                 messages::Message::FuelControlBoard(
                     dp_fuel_control_board::Message::FuelVentValveControlFC(s),
@@ -183,7 +183,7 @@ impl PSSValves {
         );
 
         map.insert(
-            ValveName::oss_prz_vlv,
+            ValveName::prz_oss_dpr,
             make_setter(self.tx.clone(), |s: DPRValve| {
                 messages::Message::OxidizerControlBoard(
                     dp_oxidizer_control_board::Message::OxidizerDprValveControlFC(s),
@@ -192,7 +192,7 @@ impl PSSValves {
         );
 
         map.insert(
-            ValveName::oss_vnt_vlv,
+            ValveName::oss_tnk_vnt,
             make_setter(self.tx.clone(), |s: NormallyClosedValve| {
                 messages::Message::OxidizerControlBoard(
                     dp_oxidizer_control_board::Message::OxidizerVentValveControlFC(s),
@@ -201,7 +201,7 @@ impl PSSValves {
         );
 
         map.insert(
-            ValveName::fss_mnl_vlv,
+            ValveName::fss_ml_vlv,
             make_setter(self.tx.clone(), |s: NormallyClosedValve| {
                 messages::Message::EngineControlBoard(
                     dp_engine_control_board::Message::FuelMainValveControlFC(s),
@@ -210,7 +210,7 @@ impl PSSValves {
         );
 
         map.insert(
-            ValveName::oss_mnl_vlv,
+            ValveName::oss_ml_vlv,
             make_setter(self.tx.clone(), |s: NormallyClosedValve| {
                 messages::Message::EngineControlBoard(
                     dp_engine_control_board::Message::OxidizerMainValveControlFC(s),
