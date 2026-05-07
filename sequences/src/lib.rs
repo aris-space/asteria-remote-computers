@@ -61,68 +61,53 @@ pub fn sequence<'a>() -> impl Parser<'a, &'a str, Vec<Command>, E<'a>> {
 }
 
 fn msg<'a>() -> impl Parser<'a, &'a str, Command, E<'a>> {
-    just("sys")
-        .then_ignore(just("."))
-        .then(func("msg"))
-        .validate(|(_, args), e, emitter| {
-            let text = extract_args! {
-                args, emitter, e => { text: String }
-            };
+    func("sys.msg").validate(|args, e, emitter| {
+        let text = extract_args! {
+            args, emitter, e => { text: String }
+        };
 
-            Command::Msg(text)
-        })
+        Command::Msg(text)
+    })
 }
 
 fn warning<'a>() -> impl Parser<'a, &'a str, Command, E<'a>> {
-    just("sys")
-        .then_ignore(just("."))
-        .then(func("warning"))
-        .validate(|(_, args), e, emitter| {
-            let text = extract_args! {
-                args, emitter, e => { text: String }
-            };
+    func("sys.warning").validate(|args, e, emitter| {
+        let text = extract_args! {
+            args, emitter, e => { text: String }
+        };
 
-            Command::Warning(text)
-        })
+        Command::Warning(text)
+    })
 }
 
 fn error<'a>() -> impl Parser<'a, &'a str, Command, E<'a>> {
-    just("sys")
-        .then_ignore(just("."))
-        .then(func("error"))
-        .validate(|(_, args), e, emitter| {
-            let text = extract_args! {
-                args, emitter, e => { text: String }
-            };
+    func("sys.error").validate(|args, e, emitter| {
+        let text = extract_args! {
+            args, emitter, e => { text: String }
+        };
 
-            Command::Warning(text)
-        })
+        Command::Warning(text)
+    })
 }
 
 fn wait<'a>() -> impl Parser<'a, &'a str, Command, E<'a>> {
-    just("sys")
-        .then_ignore(just("."))
-        .then(func("wait"))
-        .validate(|(_, args), e, emitter| {
-            let time = extract_args! {
-                args, emitter, e => { time: Time }
-            };
+    func("sys.wait").validate(|args, e, emitter| {
+        let time = extract_args! {
+            args, emitter, e => { time: Time }
+        };
 
-            Command::Wait(time)
-        })
+        Command::Wait(time)
+    })
 }
 
 fn to_state<'a>() -> impl Parser<'a, &'a str, Command, E<'a>> {
-    just("sys")
-        .then_ignore(just("."))
-        .then(func("to_state"))
-        .validate(|(_, args), e, emitter| {
-            let state = extract_args! {
-                args, emitter, e => { state: Ident }
-            };
+    func("sys.to_state").validate(|args, e, emitter| {
+        let state = extract_args! {
+            args, emitter, e => { state: Ident }
+        };
 
-            Command::ToState(state)
-        })
+        Command::ToState(state)
+    })
 }
 
 fn actuator_open<'a>() -> impl Parser<'a, &'a str, Command, E<'a>> {
