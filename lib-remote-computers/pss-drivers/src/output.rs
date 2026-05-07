@@ -26,7 +26,7 @@ impl PSSValves {
 /// The appropriate CAN message for each valve is generated
 /// and sent twice within an interval of 100ms.
 impl PSSValves {
-    /// Controls the pressurization vent valve (`ValveName::prz_vnt_vlv`).
+    /// Controls the pressurization vent valve (`ValveName::prz_copv_vnt`).
     pub fn set_pressurization_vent(&self, state: NormallyOpenValve) {
         can_helper(
             self.tx.clone(),
@@ -36,7 +36,7 @@ impl PSSValves {
         );
     }
 
-    /// Controls the fuel pressurization valve (`ValveName::fss_prz_vlv`).
+    /// Controls the fuel pressurization valve (`ValveName::prz_fss_dpr`).
     pub fn set_fuel_pressurization(&self, state: DPRValve) {
         can_helper(
             self.tx.clone(),
@@ -46,7 +46,7 @@ impl PSSValves {
         );
     }
 
-    /// Controls the fuel vent valve (`ValveName::fss_vnt_vlv`).
+    /// Controls the fuel vent valve (`ValveName::fss_tnk_vnt`).
     pub fn set_fuel_vent(&self, state: NormallyOpenValve) {
         can_helper(
             self.tx.clone(),
@@ -56,7 +56,7 @@ impl PSSValves {
         );
     }
 
-    /// Controls the oxidizer pressurization valve (`ValveName::oss_prz_vlv`).
+    /// Controls the oxidizer pressurization valve (`ValveName::prz_oss_dpr`).
     pub fn set_oxidizer_pressurization(&self, state: DPRValve) {
         can_helper(
             self.tx.clone(),
@@ -66,7 +66,7 @@ impl PSSValves {
         );
     }
 
-    /// Controls the oxidizer vent valve (`ValveName::oss_vnt_vlv`).
+    /// Controls the oxidizer vent valve (`ValveName::oss_tnk_vnt`).
     pub fn set_oxidizer_vent(&self, state: NormallyClosedValve) {
         can_helper(
             self.tx.clone(),
@@ -76,7 +76,7 @@ impl PSSValves {
         );
     }
 
-    /// Controls the fuel main valve (`ValveName::fss_mnl_vlv`).
+    /// Controls the fuel main valve (`ValveName::fss_ml_vlv`).
     pub fn set_fuel_main(&self, state: NormallyClosedValve) {
         can_helper(
             self.tx.clone(),
@@ -86,7 +86,7 @@ impl PSSValves {
         );
     }
 
-    /// Controls the oxidizer main valve (`ValveName::oss_mnl_vlv`).
+    /// Controls the oxidizer main valve (`ValveName::oss_ml_vlv`).
     pub fn set_oxidizer_main(&self, state: NormallyClosedValve) {
         can_helper(
             self.tx.clone(),
@@ -98,7 +98,6 @@ impl PSSValves {
 }
 
 /// Helper function for sending CAN messages twice with interval of 100ms
-/// This method is also used for CSV logging.
 fn can_helper(tx: mpsc::Sender<messages::Message>, can_msg: messages::Message) {
     tokio::spawn(async move {
         for _ in 0..2 {
@@ -124,19 +123,19 @@ fn can_helper(tx: mpsc::Sender<messages::Message>, can_msg: messages::Message) {
 #[allow(non_camel_case_types)]
 pub enum ValveName {
     /// The name of [`PSSValves::set_pressurization_vent`].
-    prz_vnt_vlv,
+    prz_copv_vnt,
     /// The name of [`PSSValves::set_fuel_pressurization`].
-    fss_prz_vlv,
+    prz_fss_dpr,
     /// The name of [`PSSValves::set_fuel_vent`].
-    fss_vnt_vlv,
+    fss_tnk_vnt,
     /// The name of [`PSSValves::set_oxidizer_pressurization`].
-    oss_prz_vlv,
+    prz_oss_dpr,
     /// The name of [`PSSValves::set_oxidizer_vent`].
-    oss_vnt_vlv,
+    oss_tnk_vnt,
     /// The name of [`PSSValves::set_fuel_main`].
-    fss_mnl_vlv,
+    fss_ml_vlv,
     /// The name of [`PSSValves::set_oxidizer_main`].
-    oss_mnl_vlv,
+    oss_ml_vlv,
 }
 
 impl std::str::FromStr for ValveName {

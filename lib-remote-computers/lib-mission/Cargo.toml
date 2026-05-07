@@ -21,7 +21,7 @@ messages = { path = "../../data-definitions/messages", features = [
 ], default-features = false }
 mavlink-hal = { path = "../../data-definitions/mavlink-hal" }
 can-hal = { path = "../../data-definitions/can-hal", optional = true }
-datatypes = { path = "../../data-definitions/datatypes", features = ["derive_serde"] } # for the traits
+datatypes = { path = "../../data-definitions/datatypes" } # for the traits
 embedded-can = { version = "0.4.1", optional = true }
 hex = "0.4.3"
 
@@ -37,7 +37,6 @@ chrono = { version = "0.4.42", default-features = false, features = [
     "clock",
 ] }
 thread-priority = "3.0.0"
-futures = { version = "0.3", features = ["executor"] }
 
 [dev-dependencies]
 mockall = "0.13.1"
