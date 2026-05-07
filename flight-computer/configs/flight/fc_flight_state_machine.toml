@@ -193,7 +193,7 @@ manual_transitions = [
 [state_machine.states."Pressurization"]
 type = "MonitoredManualControl"
 allowed_actuators = [
-    "prz_copv_vnt",
+    "prz_fss_dpr",
     "fss_tnk_vnt",
     "prz_oss_dpr",
     "oss_tnk_vnt",
@@ -309,7 +309,7 @@ type = "Ignition"
 on_done = "Ignition 2"
 [state_machine.states."Ignition 2"]
 type = "LiftoffDetection"
-acceleration_limit_ms2 = 20 # m/s^2 
+acceleration_limit_ms2 = 20 # m/s^2
 required_duration_s = 0.2 # seconds
 on_liftoff_detected = "Thrusting"
 on_aborted = "Firing Aborted"
