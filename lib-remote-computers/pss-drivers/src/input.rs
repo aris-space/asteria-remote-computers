@@ -5,7 +5,7 @@ use watchable::Watchable;
 /// The feedback for the valves in the propellant supply system.
 #[derive(Debug, Default, Clone)]
 pub struct PSSValves {
-    /// The current state for the Pressurization Vent Valve (`PRZ_VNT_VLV`).
+    /// The current state for the Pressurization Vent Valve (`prz_copv_vnt`).
     pub pressurization_vent_valve: Watchable<NormallyOpenValve>,
     /// The current state for the Fuel Pressurization Valve (DPR) (`FSS_PRZ_VLV`).
     pub fuel_pressurization_valve: Watchable<DPRValve>,
@@ -92,7 +92,7 @@ impl PSSValves {
         // Log valve observed states
         Ok([
             spawn_serializable_logger!(
-                "observed_state_PRZ_VNT_VLV",
+                "observed_state_prz_copv_vnt",
                 pressurization_vent_valve,
                 ["observed state [open|closed]"],
             ),

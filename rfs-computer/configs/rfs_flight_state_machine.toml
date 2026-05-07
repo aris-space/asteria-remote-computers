@@ -249,13 +249,13 @@ allowed_actuators = [
     "h2_ign_vlv",
     "gox_ign_vlv",
     "ign_spk_plg",
-    "prz_vnt_vlv",
-    "fss_prz_vlv",
-    "fss_vnt_vlv",
-    "oss_prz_vlv",
-    "oss_vnt_vlv",
-    "fss_mnl_vlv",
-    "oss_mnl_vlv",
+    "prz_copv_vnt",
+    "prz_fss_dpr",
+    "fss_tnk_vnt",
+    "prz_oss_dpr",
+    "oss_tnk_vnt",
+    "fss_ml_vlv",
+    "oss_ml_vlv",
 ]
 manual_transitions = [{ target = "Pre Filling Abort", display = "Done" }]
 
@@ -345,7 +345,7 @@ manual_transitions = [
 # Close n2 bleed, open n2 purge. Prz Vent and Fuel prz are already open/closed respectively.
 [[state_machine.states."Purge".sequence]]
 action = "SetActuators"
-targets = { "n2_bld_vlv" = "Close", "n2_prg_vlv" = "Open", "prz_vnt_vlv" = "Open", "fss_prz_vlv" = "DPRDisabled" }
+targets = { "n2_bld_vlv" = "Close", "n2_prg_vlv" = "Open", "prz_copv_vnt" = "Open", "prz_fss_dpr" = "DPRDisabled" }
 # Purge pressure tank for 5 sec
 [[state_machine.states."Purge".sequence]]
 action = "Wait"
@@ -353,7 +353,7 @@ duration_sec = 5
 # Open fuel prz valve and close prz Vent.
 [[state_machine.states."Purge".sequence]]
 action = "SetActuators"
-targets = { "prz_vnt_vlv" = "Close", "fss_vnt_vlv" = "Open", "fss_prz_vlv" = { "SetpointBarG" = 10.0 } }
+targets = { "prz_copv_vnt" = "Close", "fss_tnk_vnt" = "Open", "prz_fss_dpr" = { "SetpointBarG" = 10.0 } }
 # Purge fuel tank for 10 sec
 [[state_machine.states."Purge".sequence]]
 action = "Wait"
@@ -361,7 +361,7 @@ duration_sec = 10
 # Close fuel vent and open main valve fully
 [[state_machine.states."Purge".sequence]]
 action = "SetActuators"
-targets = { "fss_vnt_vlv" = "Close", "fss_mnl_vlv" = "Open" }
+targets = { "fss_tnk_vnt" = "Close", "fss_ml_vlv" = "Open" }
 # Purge fuel line for 5 sec
 [[state_machine.states."Purge".sequence]]
 action = "Wait"
@@ -369,7 +369,7 @@ duration_sec = 5
 # Close FSS prz valve, but open OSS one.
 [[state_machine.states."Purge".sequence]]
 action = "SetActuators"
-targets = { "fss_prz_vlv" = "DPRDisabled", "oss_prz_vlv" = { "SetpointBarG" = 10.0 } }
+targets = { "prz_fss_dpr" = "DPRDisabled", "prz_oss_dpr" = { "SetpointBarG" = 10.0 } }
 # Purge oxidizer tank for 10 sec
 [[state_machine.states."Purge".sequence]]
 action = "Wait"
@@ -387,7 +387,7 @@ manual_transitions = [
 ]
 [[state_machine.states."Purge 3".sequence]]
 action = "SetActuators"
-targets = { "n2_prg_vlv" = "Close", "oss_prz_vlv" = "DPRDisabled", "prz_vnt_vlv" = "Open", "fss_vnt_vlv" = "Open", "n2_bld_vlv" = "Open", "fss_mnl_vlv" = "Close" }
+targets = { "n2_prg_vlv" = "Close", "prz_oss_dpr" = "DPRDisabled", "prz_copv_vnt" = "Open", "fss_tnk_vnt" = "Open", "n2_bld_vlv" = "Open", "fss_ml_vlv" = "Close" }
 [[state_machine.states."Purge 3".sequence]]
 action = "Wait"
 duration_sec = 0.4
@@ -402,7 +402,7 @@ duration_sec = 5
 # Now open lox main, but close oss vent
 [[state_machine.states."Purge 3".sequence]]
 action = "SetActuators"
-targets = { "oss_mnl_vlv" = "Open", "oss_vnt_vlv" = "Close" }
+targets = { "oss_ml_vlv" = "Open", "oss_tnk_vnt" = "Close" }
 # Purge lox main line  for 5 sec
 [[state_machine.states."Purge 3".sequence]]
 action = "Wait"
@@ -410,7 +410,7 @@ duration_sec = 5
 # Open OSS vent, close OSS main, open lox fill valve to 100%
 [[state_machine.states."Purge 3".sequence]]
 action = "SetActuators"
-targets = { "oss_vnt_vlv" = "Open", "oss_mnl_vlv" = "Close", "lox_fll_vlv" = "Open" }
+targets = { "oss_tnk_vnt" = "Open", "oss_ml_vlv" = "Close", "lox_fll_vlv" = "Open" }
 # Purge dewar flex pipe for 5 sec
 [[state_machine.states."Purge 3".sequence]]
 action = "Wait"
@@ -466,13 +466,13 @@ allowed_actuators = [
     "h2_ign_vlv",
     "gox_ign_vlv",
     "ign_spk_plg",
-    "prz_vnt_vlv",
-    "fss_prz_vlv",
-    "fss_vnt_vlv",
-    "oss_prz_vlv",
-    "oss_vnt_vlv",
-    "fss_mnl_vlv",
-    "oss_mnl_vlv",
+    "prz_copv_vnt",
+    "prz_fss_dpr",
+    "fss_tnk_vnt",
+    "prz_oss_dpr",
+    "oss_tnk_vnt",
+    "fss_ml_vlv",
+    "oss_ml_vlv",
 ]
 manual_transitions = [{ target = "Filling Abort", display = "Done" }]
 
@@ -505,8 +505,8 @@ allowed_actuators = [
     "n2_fll_vlv",    # N2 fill valve
     "n2_bld_vlv",    # N2 bleed valve
     "pnm_bstr_vlv",  # N2/pneumatic booster valve
-    "oss_mnl_vlv",   # rocket LOX(OSS) main valve
-    "prz_vnt_vlv",   # rocket N2(PRZ) vent valve
+    "oss_ml_vlv",   # rocket LOX(OSS) main valve
+    "prz_copv_vnt",   # rocket N2(PRZ) vent valve
     "pnm_n2rls_vlv", # N2 release valve
 ]
 telemetry_loss_threshold_sec = 900 # 15min
@@ -523,7 +523,7 @@ type = "RunSeqWithControl"
 allowed_actuators = [
     "lox_fll_vlv",   # LOX fill valve
     "lox_bld_vlv",   # LOX bleed valve
-    "oss_mnl_vlv",   # rocket LOX(OSS) main valve
+    "oss_ml_vlv",   # rocket LOX(OSS) main valve
     "pnm_n2rls_vlv", # N2 release valve
 ]
 telemetry_loss_threshold_sec = 900 # 15min
@@ -538,7 +538,7 @@ manual_transitions = [
 # Close vent valves
 [[state_machine.states."Parallel Filling".sequence]]
 action = "SetActuators"
-targets = { "n2_bld_vlv" = "Close", "prz_vnt_vlv" = "Close" }
+targets = { "n2_bld_vlv" = "Close", "prz_copv_vnt" = "Close" }
 [[state_machine.states."Parallel Filling".sequence]]
 action = "Wait"
 duration_sec = 0.4
@@ -571,7 +571,7 @@ type = "MonitoredManualControl"
 allowed_actuators = [
     "lox_fll_vlv",   # LOX fill valve
     "lox_bld_vlv",   # LOX bleed valve
-    "oss_mnl_vlv",   # rocket LOX(OSS) main valve
+    "oss_ml_vlv",   # rocket LOX(OSS) main valve
     "pnm_n2rls_vlv", # N2 release valve
     "n2_bld_vlv",    # N2 bleed valve
 ]
@@ -592,13 +592,13 @@ on_cancelled = "Decouple"
 action = "SetActuators"
 [state_machine.states."Set Known State".sequence.targets]
 # Off normal: oss & prz vent closed, lox bleed closed
-prz_vnt_vlv = "Close"
-oss_vnt_vlv = "Close"
+prz_copv_vnt = "Close"
+oss_tnk_vnt = "Close"
 lox_bld_vlv = "Close"
 pnm_n2rls_vlv = "Open"
 # Normal
 lox_fll_vlv = "Close"
-oss_mnl_vlv = "Close"
+oss_ml_vlv = "Close"
 n2_fll_vlv = "Close"
 n2_bld_vlv = "Open"
 pnm_bstr_vlv = "Close"

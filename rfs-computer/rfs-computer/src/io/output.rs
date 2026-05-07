@@ -83,12 +83,12 @@ fn test_name_from_str() {
         ActuatorName::URValve(uremote::ActuatorName::pnm_n2dec_ret)
     );
     assert_eq!(
-        "oss_mnl_vlv".parse::<ActuatorName>().expect("must parse"),
-        ActuatorName::PSSValve(pss_drivers::output::ValveName::oss_mnl_vlv)
+        "oss_ml_vlv".parse::<ActuatorName>().expect("must parse"),
+        ActuatorName::PSSValve(pss_drivers::output::ValveName::oss_ml_vlv)
     );
     assert_eq!(
-        "prz_vnt_vlv".parse::<ActuatorName>().expect("must parse"),
-        ActuatorName::PSSValve(pss_drivers::output::ValveName::prz_vnt_vlv)
+        "prz_copv_vnt".parse::<ActuatorName>().expect("must parse"),
+        ActuatorName::PSSValve(pss_drivers::output::ValveName::prz_copv_vnt)
     );
     assert_eq!(
         "lox_fll_vlv".parse::<ActuatorName>().expect("must parse"),
