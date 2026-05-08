@@ -21,6 +21,7 @@ members = [
     "data-definitions/macros",
     "data-definitions/mavlink-hal",
     "data-definitions/messages",
+    "flight-computer/deployment/mavlink-heartbeat",
 ]
 
 [workspace.lints.clippy]
@@ -51,5 +52,3 @@ rayon = "1.11.0"
 
 # [patch.crates-io]
 # ur20 = { git = "https://github.com/slowtec/ur20.git", rev = "592771d18d547e100aacd7204e65bf7d989910ac" }
-[patch.crates-io]
-ur20 = { git = "https://github.com/slowtec/ur20.git", rev = "592771d18d547e100aacd7204e65bf7d989910ac" }

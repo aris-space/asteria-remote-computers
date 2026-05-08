@@ -147,7 +147,7 @@ impl PSSValves {
         // Log valve observed states
         Ok([
             spawn_serializable_logger!(
-                "observed_state_PRZ_VNT_VLV",
+                "observed_state_prz_copv_vnt",
                 pressurization_vent_valve,
                 ["observed state [open|closed]"],
             ),

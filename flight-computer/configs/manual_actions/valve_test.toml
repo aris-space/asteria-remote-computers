@@ -32,13 +32,13 @@ manual_transitions = [
 [state_machine.states."Control"]
 type = "ManualControl"
 allowed_actuators = [
-    "prz_vnt_vlv", # Pressurization Vent Valve, 0 (closed) or 1 (open)
-    "fss_prz_vlv", # Fuel Pressurization Valve (DPR), NaN (disabled) or 0-60 barg
-    "fss_vnt_vlv", # Fuel Vent Valve, 0 (closed) or 1 (open)
-    "oss_prz_vlv", # Oxidizer Pressurization Valve (DPR), NaN (disabled) or 0-60 barg
-    "oss_vnt_vlv", # Oxidizer Vent Valve, 0 (closed) or 1 (open)
-    "fss_mnl_vlv", # Fuel Main Valve, 0 (closed) to 1 (open)
-    "oss_mnl_vlv", # Oxidizer Main Valve, 0 (closed) to 1 (open)
+    "prz_copv_vnt", # Pressurization Vent Valve, 0 (closed) or 1 (open)
+    "prz_fss_dpr", # Fuel Pressurization Valve (DPR), NaN (disabled) or 0-60 barg
+    "fss_tnk_vnt", # Fuel Vent Valve, 0 (closed) or 1 (open)
+    "prz_oss_dpr", # Oxidizer Pressurization Valve (DPR), NaN (disabled) or 0-60 barg
+    "oss_tnk_vnt", # Oxidizer Vent Valve, 0 (closed) or 1 (open)
+    "fss_ml_vlv", # Fuel Main Valve, 0 (closed) to 1 (open)
+    "oss_ml_vlv", # Oxidizer Main Valve, 0 (closed) to 1 (open)
 ]
 manual_transitions = [
     { target = "Idle", display = "Deactivate", abort = false },

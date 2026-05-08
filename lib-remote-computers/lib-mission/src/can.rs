@@ -165,6 +165,7 @@ pub fn run_can_transmit_actor<S: embedded_can::blocking::Can>(
     transmitter: &mut S,
     receiver: std::sync::mpsc::Receiver<CanMessage>,
 ) {
+    // initialize writer for all CAN messages
     // Blocking iterator
     for msg in receiver {
         tracing::debug!(?msg, "transmitting CAN message");
