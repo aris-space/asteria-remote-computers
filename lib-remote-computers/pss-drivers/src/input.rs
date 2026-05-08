@@ -1,24 +1,50 @@
+use datapoints::dp_flight_computer::Message as FCMessage;
+use datapoints::dp_fuel_control_board::Message as FCBMessage;
+use datapoints::dp_oxidizer_control_board::Message as OCBMessage;
+use datapoints::dp_power_board::Message as PWBMessage;
 use datatypes::actuator::{DPRValve, NormallyClosedValve, NormallyOpenValve};
+
 use lib_mission::util::types::{BarG, Celsius, Percent};
 use watchable::Watchable;
+use io_utils::{Broadcast, Collector};
+use messages::Message;
 
 /// The feedback for the valves in the propellant supply system.
-#[derive(Debug, Default, Clone)]
+#[derive(Debug, Default, Clone, Broadcast, Collector)]
+#[broadcast(message_type = "Message")]
+#[collector(
+    message_type = "Message",
+    update_expr = "let _ = #field.update(#value);"
+)]
 pub struct PSSValves {
     /// The current state for the Pressurization Vent Valve (`PRZ_VNT_VLV`).
+    #[datapoint(pattern = "Message::FuelControlBoard(FCBMessage::PressurizationVentValveState(#value))")]
+    #[broadcast(min_freq_hz = 5., max_freq_hz = 15.)]
     pub pressurization_vent_valve: Watchable<NormallyOpenValve>,
     /// The current state for the Fuel Pressurization Valve (DPR) (`FSS_PRZ_VLV`).
+    #[datapoint(pattern = "Message::FuelControlBoard(FCBMessage::FuelDprValveState(#value))")]
+    #[broadcast(min_freq_hz = 5., max_freq_hz = 15.)]
     pub fuel_pressurization_valve: Watchable<DPRValve>,
     /// The current state for the Fuel Vent Valve (`FSS_VNT_VLV`).
+    #[datapoint(pattern = "Message::FuelControlBoard(FCBMessage::FuelVentValveState(#value))")]
+    #[broadcast(min_freq_hz = 5., max_freq_hz = 15.)]
     pub fuel_vent_valve: Watchable<NormallyOpenValve>,
     /// The current state for the Oxidizer Pressurization Valve (DPR) (`OSS_PRZ_VLV`).
+    #[datapoint(pattern = "Message::OxidizwerControlBoard(OCBMessage::OxidizerVentValveState(#value))")]
+    #[broadcast(min_freq_hz = 5., max_freq_hz = 15.)]
     pub oxidizer_pressurization_valve: Watchable<DPRValve>,
     /// The current state for the Oxidizer Vent Valve (`OSS_VNT_VLV`).
     /// Note that this should be opened in an abort, despite being normally closed.
+    #[datapoint(pattern = "Message::OxidizwerControlBoard(OCBMessage::PressurizationVentValveState(#value))")]
+    #[broadcast(min_freq_hz = 5., max_freq_hz = 15.)]
     pub oxidizer_vent_valve: Watchable<NormallyClosedValve>,
     /// The current state for the Fuel Main Valve (`FSS_MNL_VLV`).
+    #[datapoint(pattern = "Message::FuelControlBoard(FCBMessage::FuelMainValveState(#value))")]
+    #[broadcast(min_freq_hz = 5., max_freq_hz = 15.)]
     pub fuel_main_valve: Watchable<NormallyClosedValve>,
     /// The current state for the Oxidizer Main Valve (`OSS_MNL_VLV`).
+    #[datapoint(pattern = "Message::OxidizwerControlBoard(OCBMessage::OxidizerMainValveState(#value))")]
+    #[broadcast(min_freq_hz = 5., max_freq_hz = 15.)]
     pub oxidizer_main_valve: Watchable<NormallyClosedValve>,
 }
 
