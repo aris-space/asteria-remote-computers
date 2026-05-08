@@ -89,13 +89,12 @@ pub struct PSSSensors {
     #[broadcast(min_freq_hz = 5., max_freq_hz = 15.)]
     pub engine_chamber_pressure: Watchable<EnginePressure>,
 
-    /// Oxidizer Tank Temperature Sensor `oss_tnk_t`
+    /// Engine bay Temperature Sensor `oss_tnk_t`
     #[datapoint(pattern = "Message::EngineControlBoard(ECBMessage::EngineBayTemperature(#value))")]
     #[broadcast(min_freq_hz = 5., max_freq_hz = 15.)]
-    pub oxidizer_tank_temperature: Watchable<EngineBayTemperature>,
+    pub engine_bay_temperature: Watchable<EngineBayTemperature>,
 }
 
-/*
 impl PSSValves {
     /// Starts logging valve timeseries to csv files in `folder`.
     /// Used for data analysis.
@@ -180,7 +179,7 @@ impl PSSSensors {
         &self,
         folder: &std::path::Path,
         time: &Watchable<lib_mission::util::time::MissionTime>,
-    ) -> Result<[tokio::task::AbortHandle; 6], Box<dyn std::error::Error>> {
+    ) -> Result<[tokio::task::AbortHandle; 5], Box<dyn std::error::Error>> {
         use lib_mission::reactive::IntoWatched as _;
         /// Helper macro to spawn a task for a single sensor, capturing `time` and `folder`.
         macro_rules! spawn_serializable_logger {
@@ -199,8 +198,7 @@ impl PSSSensors {
             fuel_tank_pressure,
             oxidizer_tank_pressure,
             engine_chamber_pressure,
-            oxidizer_fill_fraction,
-            oxidizer_tank_temperature,
+            engine_bay_temperature,
         } = self;
 
         Ok([
@@ -210,31 +208,33 @@ impl PSSSensors {
                 ["pressurization_line_pressure [barg?]"],
             ),
             spawn_serializable_logger!(
-                "sensor_FSS_TNK_P",
+                "sensors_fuel_tank_p",
                 fuel_tank_pressure,
-                ["fuel_tank_pressure [barg?]"],
+                [
+                    "fuel_tank_pressure_sensor_1 [barg?]",
+                    "fuel_tank_pressure_sensor_2 [barg?]",
+                    "fuel_tank_pressure_filtered [barg?]"
+                ],
             ),
             spawn_serializable_logger!(
-                "sensor_OSS_TNK_P",
+                "sensors_oxidizer_tank_p",
                 oxidizer_tank_pressure,
-                ["oxidizer_tank_pressure [barg?]"],
+                [
+                    "oxidizer_tank_pressure1 [barg?]",
+                    "oxidizer_tank_pressure1 [barg?]",
+                    "oxidizer_diff_tank_pressure [barg?]",
+                ],
             ),
             spawn_serializable_logger!(
-                "sensor_ENG_CC_P",
+                "sensors_engine_p",
                 engine_chamber_pressure,
-                ["engine_chamber_pressure [barg?]"],
+                ["eng_cc_p [barg?]", "eng_inj_p [barg?]", "oss_inj_p [barg?]",],
             ),
             spawn_serializable_logger!(
-                "sensor_OSS_TNK_LVL",
-                oxidizer_fill_fraction,
-                ["oxidizer_fill_fraction [%?]"],
-            ),
-            spawn_serializable_logger!(
-                "sensor_OSS_TNK_T",
-                oxidizer_tank_temperature,
-                ["oxidizer_tank_temperature [°C?]"],
+                "sensors_engine_t",
+                engine_bay_temperature,
+                ["eng_inj_t [°C?]", "oss_tnk_t [°C?]"],
             ),
         ])
     }
 }
- */

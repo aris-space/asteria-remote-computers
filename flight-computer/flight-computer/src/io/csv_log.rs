@@ -349,8 +349,8 @@ impl InputTree {
                 .map(|v| (v.temperature, v.humidity, v.pressure)),
             time.watched(),
         );
-        // pss_valves.start_logging(folder, time).await?;
-        // pss_sensors.start_logging(folder, time).await?;
+        pss_valves.start_logging(folder, time).await?;
+        pss_sensors.start_logging(folder, time).await?;
 
         Ok(())
     }
