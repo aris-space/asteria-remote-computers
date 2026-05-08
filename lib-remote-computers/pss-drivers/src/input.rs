@@ -30,12 +30,12 @@ pub struct PSSValves {
     #[broadcast(min_freq_hz = 5., max_freq_hz = 15.)]
     pub fuel_vent_valve: Watchable<NormallyOpenValve>,
     /// The current state for the Oxidizer Pressurization Valve (DPR) (`OSS_PRZ_VLV`).
-    #[datapoint(pattern = "Message::OxidizwerControlBoard(OCBMessage::OxidizerVentValveState(#value))")]
+    #[datapoint(pattern = "Message::OxidizerControlBoard(OCBMessage::OxidizerDprValveState(#value))")]
     #[broadcast(min_freq_hz = 5., max_freq_hz = 15.)]
     pub oxidizer_pressurization_valve: Watchable<DPRValve>,
     /// The current state for the Oxidizer Vent Valve (`OSS_VNT_VLV`).
     /// Note that this should be opened in an abort, despite being normally closed.
-    #[datapoint(pattern = "Message::OxidizwerControlBoard(OCBMessage::PressurizationVentValveState(#value))")]
+    #[datapoint(pattern = "Message::OxidizerControlBoard(OCBMessage::OxidizerVentValveState(#value))")]
     #[broadcast(min_freq_hz = 5., max_freq_hz = 15.)]
     pub oxidizer_vent_valve: Watchable<NormallyClosedValve>,
     /// The current state for the Fuel Main Valve (`FSS_MNL_VLV`).
@@ -106,8 +106,12 @@ pub struct PSSSensors {
     #[broadcast(min_freq_hz = 5., max_freq_hz = 15.)]
     pub fuel_tank_temperature: Watchable<Celsius>,
     /// Oxidizer Tank bottom Temperature Sensor `OSS_TNK_T`
+    #[datapoint(pattern = "Message::EngineControlBoard(ECBMessage::EngineBayTemperature(#value))")]
+    #[broadcast(min_freq_hz = 5., max_freq_hz = 15.)]
     pub oxidizer_tank_temperature: Watchable<Celsius>,
     /// Oxidizer Runline Temperature Sensor `OSS_RNL_T`
+    #[datapoint(pattern = "Message::EngineControlBoard(ECBMessage::EngineBayTemperature(#value))")]
+    #[broadcast(min_freq_hz = 5., max_freq_hz = 15.)]
     pub oxidizer_runline_temperature: Watchable<Celsius>,
 }
 
