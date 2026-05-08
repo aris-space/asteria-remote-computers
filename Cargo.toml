@@ -21,7 +21,6 @@ members = [
     "data-definitions/macros",
     "data-definitions/mavlink-hal",
     "data-definitions/messages",
-    "flight-computer/deployment/mavlink-heartbeat",
 ]
 
 [workspace.lints.clippy]
