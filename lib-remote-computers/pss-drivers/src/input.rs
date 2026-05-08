@@ -4,10 +4,10 @@ use datapoints::dp_oxidizer_control_board::Message as OCBMessage;
 use datapoints::dp_power_board::Message as PWBMessage;
 use datatypes::actuator::{DPRValve, NormallyClosedValve, NormallyOpenValve};
 
-use lib_mission::util::types::{BarG, Celsius, Percent};
-use watchable::Watchable;
 use io_utils::{Broadcast, Collector};
+use lib_mission::util::types::{BarG, Celsius, Percent};
 use messages::Message;
+use watchable::Watchable;
 
 /// The feedback for the valves in the propellant supply system.
 #[derive(Debug, Default, Clone, Broadcast, Collector)]
@@ -18,7 +18,9 @@ use messages::Message;
 )]
 pub struct PSSValves {
     /// The current state for the Pressurization Vent Valve (`PRZ_VNT_VLV`).
-    #[datapoint(pattern = "Message::FuelControlBoard(FCBMessage::PressurizationVentValveState(#value))")]
+    #[datapoint(
+        pattern = "Message::FuelControlBoard(FCBMessage::PressurizationVentValveState(#value))"
+    )]
     #[broadcast(min_freq_hz = 5., max_freq_hz = 15.)]
     pub pressurization_vent_valve: Watchable<NormallyOpenValve>,
     /// The current state for the Fuel Pressurization Valve (DPR) (`FSS_PRZ_VLV`).
@@ -30,12 +32,16 @@ pub struct PSSValves {
     #[broadcast(min_freq_hz = 5., max_freq_hz = 15.)]
     pub fuel_vent_valve: Watchable<NormallyOpenValve>,
     /// The current state for the Oxidizer Pressurization Valve (DPR) (`OSS_PRZ_VLV`).
-    #[datapoint(pattern = "Message::OxidizerControlBoard(OCBMessage::OxidizerDprValveState(#value))")]
+    #[datapoint(
+        pattern = "Message::OxidizerControlBoard(OCBMessage::OxidizerDprValveState(#value))"
+    )]
     #[broadcast(min_freq_hz = 5., max_freq_hz = 15.)]
     pub oxidizer_pressurization_valve: Watchable<DPRValve>,
     /// The current state for the Oxidizer Vent Valve (`OSS_VNT_VLV`).
     /// Note that this should be opened in an abort, despite being normally closed.
-    #[datapoint(pattern = "Message::OxidizerControlBoard(OCBMessage::OxidizerVentValveState(#value))")]
+    #[datapoint(
+        pattern = "Message::OxidizerControlBoard(OCBMessage::OxidizerVentValveState(#value))"
+    )]
     #[broadcast(min_freq_hz = 5., max_freq_hz = 15.)]
     pub oxidizer_vent_valve: Watchable<NormallyClosedValve>,
     /// The current state for the Fuel Main Valve (`FSS_MNL_VLV`).
@@ -43,7 +49,9 @@ pub struct PSSValves {
     #[broadcast(min_freq_hz = 5., max_freq_hz = 15.)]
     pub fuel_main_valve: Watchable<NormallyClosedValve>,
     /// The current state for the Oxidizer Main Valve (`OSS_MNL_VLV`).
-    #[datapoint(pattern = "Message::EngineControlBoard(ECBMessage::OxidizerMainValveState(#value))")]
+    #[datapoint(
+        pattern = "Message::EngineControlBoard(ECBMessage::OxidizerMainValveState(#value))"
+    )]
     #[broadcast(min_freq_hz = 5., max_freq_hz = 15.)]
     pub oxidizer_main_valve: Watchable<NormallyClosedValve>,
 }
@@ -56,7 +64,9 @@ pub struct PSSValves {
 )]
 pub struct PSSSensors {
     /// Pressurization Line Pressure in barg `PRZ_MNL_P`
-    #[datapoint(pattern = "Message::FuelControlBoard(FCBMessage::PressurizationLinePressure(#value))")]
+    #[datapoint(
+        pattern = "Message::FuelControlBoard(FCBMessage::PressurizationLinePressure(#value))"
+    )]
     #[broadcast(min_freq_hz = 5., max_freq_hz = 15.)]
     pub pressurization_line_pressure: Watchable<BarG>,
     /// Fuel Tank Pressure filtered from both sensors in barg.
@@ -72,15 +82,21 @@ pub struct PSSSensors {
     #[broadcast(min_freq_hz = 5., max_freq_hz = 15.)]
     pub fuel_tank_pressure_2: Watchable<BarG>,
     /// Oxidizer Tank Pressure filtered from both sensors in barg.
-    #[datapoint(pattern = "Message::OxidizerControlBoard(OCBMessage::OxidizerTankPressure(#value))")]
+    #[datapoint(
+        pattern = "Message::OxidizerControlBoard(OCBMessage::OxidizerTankPressure(#value))"
+    )]
     #[broadcast(min_freq_hz = 5., max_freq_hz = 15.)]
     pub oxidizer_tank_pressure: Watchable<BarG>,
     /// Oxidizer Tank Pressure Sensor 1 in barg `OSS_TNK_P1`
-    #[datapoint(pattern = "Message::OxidizerControlBoard(OCBMessage::OxidizerTankPressure(#value))")]
+    #[datapoint(
+        pattern = "Message::OxidizerControlBoard(OCBMessage::OxidizerTankPressure(#value))"
+    )]
     #[broadcast(min_freq_hz = 5., max_freq_hz = 15.)]
     pub oxidizer_tank_pressure_1: Watchable<BarG>,
     /// Oxidizer Tank Pressure Sensor 2 in barg `OSS_TNK_P2`
-    #[datapoint(pattern = "Message::OxidizerControlBoard(OCBMessage::OxidizerTankPressure(#value))")]
+    #[datapoint(
+        pattern = "Message::OxidizerControlBoard(OCBMessage::OxidizerTankPressure(#value))"
+    )]
     #[broadcast(min_freq_hz = 5., max_freq_hz = 15.)]
     pub oxidizer_tank_pressure_2: Watchable<BarG>,
     /// Injector fuel pressure in barg `FSS_INJ_P`
