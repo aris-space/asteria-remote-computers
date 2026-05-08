@@ -1,7 +1,14 @@
-use messages::datapoints::dp_engine_control_board::{EngineBayTemperature, EnginePressure, Message as ECBMessage};
+use datatypes::{
+    actuator::{DPRValve, NormallyClosedValve, NormallyOpenValve},
+    units::BarG,
+};
+use messages::datapoints::dp_engine_control_board::{
+    EngineBayTemperature, EnginePressure, Message as ECBMessage,
+};
 use messages::datapoints::dp_fuel_control_board::{FuelTankPressure, Message as FCBMessage};
-use messages::datapoints::dp_oxidizer_control_board::{Message as OCBMessage, OxidizerTankPressure};
-use datatypes::{actuator::{DPRValve, NormallyClosedValve, NormallyOpenValve}, units::BarG};
+use messages::datapoints::dp_oxidizer_control_board::{
+    Message as OCBMessage, OxidizerTankPressure,
+};
 
 use io_utils::{Broadcast, Collector};
 use messages::Message;
@@ -81,14 +88,14 @@ pub struct PSSSensors {
     #[datapoint(pattern = "Message::EngineControlBoard(ECBMessage::EnginePressure(#value))")]
     #[broadcast(min_freq_hz = 5., max_freq_hz = 15.)]
     pub engine_chamber_pressure: Watchable<EnginePressure>,
-    
+
     /// Oxidizer Tank Temperature Sensor `oss_tnk_t`
     #[datapoint(pattern = "Message::EngineControlBoard(ECBMessage::EngineBayTemperature(#value))")]
     #[broadcast(min_freq_hz = 5., max_freq_hz = 15.)]
     pub oxidizer_tank_temperature: Watchable<EngineBayTemperature>,
 }
 
-/* 
+/*
 impl PSSValves {
     /// Starts logging valve timeseries to csv files in `folder`.
     /// Used for data analysis.
