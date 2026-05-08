@@ -1,10 +1,9 @@
-use messages::datapoints::dp_engine_control_board::Message as ECBMessage;
-use messages::datapoints::dp_fuel_control_board::Message as FCBMessage;
-use messages::datapoints::dp_oxidizer_control_board::Message as OCBMessage;
+use messages::datapoints::dp_engine_control_board::{EngineBayTemperature, EnginePressure, Message as ECBMessage};
+use messages::datapoints::dp_fuel_control_board::{FuelTankPressure, Message as FCBMessage};
+use messages::datapoints::dp_oxidizer_control_board::{Message as OCBMessage, OxidizerTankPressure};
 use datatypes::{actuator::{DPRValve, NormallyClosedValve, NormallyOpenValve}, units::BarG};
 
 use io_utils::{Broadcast, Collector};
-use lib_mission::util::types::{ BarG, Celsius, Percent};
 use messages::Message;
 use watchable::Watchable;
 
@@ -71,22 +70,22 @@ pub struct PSSSensors {
     /// Fuel Tank Pressure filtered from both sensors in barg.
     #[datapoint(pattern = "Message::FuelControlBoard(FCBMessage::FuelTankPressure(#value))")]
     #[broadcast(min_freq_hz = 5., max_freq_hz = 15.)]
-    pub fuel_tank_pressure: Watchable<BarG>,
+    pub fuel_tank_pressure: Watchable<FuelTankPressure>,
     /// Oxidizer Tank Pressure filtered from both sensors in barg.
     #[datapoint(
         pattern = "Message::OxidizerControlBoard(OCBMessage::OxidizerTankPressure(#value))"
     )]
     #[broadcast(min_freq_hz = 5., max_freq_hz = 15.)]
-    pub oxidizer_tank_pressure: Watchable<BarG>,
+    pub oxidizer_tank_pressure: Watchable<OxidizerTankPressure>,
     /// Injector fuel pressure in barg `eng_inj_p`
     #[datapoint(pattern = "Message::EngineControlBoard(ECBMessage::EnginePressure(#value))")]
     #[broadcast(min_freq_hz = 5., max_freq_hz = 15.)]
-    pub engine_chamber_pressure: Watchable<BarG>,
+    pub engine_chamber_pressure: Watchable<EnginePressure>,
     
     /// Oxidizer Tank Temperature Sensor `oss_tnk_t`
     #[datapoint(pattern = "Message::EngineControlBoard(ECBMessage::EngineBayTemperature(#value))")]
     #[broadcast(min_freq_hz = 5., max_freq_hz = 15.)]
-    pub oxidizer_tank_temperature: Watchable<Celsius>,
+    pub oxidizer_tank_temperature: Watchable<EngineBayTemperature>,
 }
 
 /* 
