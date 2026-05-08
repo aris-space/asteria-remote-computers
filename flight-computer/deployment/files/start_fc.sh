@@ -7,11 +7,11 @@ PURPLE='\033[0;35m'
 CYAN='\033[0;36m'
 NC='\033[0m' # No Color
 
-# Path to flight computer binary
-FC_BINARY="$HOME/asteria/flight-computer"
+# Path to state machine config file (overridable via first arg)
+CONFIG_FILE="${1:-$HOME/asteria/current-config.toml}"
 
-# Path to state machine config file
-CONFIG_FILE="$HOME/asteria/current-config.toml"
+# Path to flight computer binary (overridable via second arg)
+FC_BINARY="${2:-$HOME/asteria/flight-computer}"
 
 # Flight computer startup procedure
 echo -e "${GREY}"
