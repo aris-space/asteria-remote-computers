@@ -9,9 +9,10 @@ socket_address = "can0"
 [state_machine]
 name = "Launch State Machine"
 initial_state = "Idle"
-# Path to the state machine diagram SVG which is used by the mission control
+
+# Path to the state machine diagram SVG which is used by the mission control.
 # **Note**: This path is relative to the root of the repository.
-diagram_path = "state-machines/flight-state-machine.drawio.svg"
+diagram_path = "state-machines/fc-flight-state-machine.drawio.svg"
 
 # ======================================= Preparation =======================================
 
