@@ -272,6 +272,8 @@ pub enum AnyGncController {
         height: f32,
         descent_per_tick: f32,
     },
+    #[cfg(feature = "gnc")]
+    SysID(Box<gnc_interface::adapter::CompatAdapter<SafetySpiralGuidance<SysIdGuidance>>>),
 }
 
 /// The config for any of the implemented GNC controllers.
@@ -289,6 +291,8 @@ pub enum AnyGncControllerConfig {
         initial_height: f32,
         descent_per_tick: f32,
     },
+    #[cfg(feature = "gnc")]
+    SysID(<gnc_interface::adapter::CompatAdapter<SafetySpiralGuidance<SysIdGuidance>>as gnc_interface::CompatGuidanceController>::Config),
 }
 
 impl gnc_interface::CompatGuidanceController for AnyGncController {
@@ -310,6 +314,12 @@ impl gnc_interface::CompatGuidanceController for AnyGncController {
                 height: initial_height,
                 descent_per_tick,
             }),
+            #[cfg(feature = "gnc")]
+            AnyGncControllerConfig::SysID(gnc) => Ok(Self::SysID(Box::new(
+                gnc_interface::adapter::CompatAdapter::<SafetySpiralGuidance<SysIdGuidance>>::new(
+                    gnc,
+                )?,
+            ))),
         }
     }
 
@@ -341,6 +351,9 @@ impl gnc_interface::CompatGuidanceController for AnyGncController {
                     tracing::info!("Simulating at {height}m");
                 }
                 position.altitude = f64::from(*height);
+                gnc.step(time_unix, position, velocity, acceleration, orientation)
+            }
+            AnyGncController::SysID(gnc) => {
                 gnc.step(time_unix, position, velocity, acceleration, orientation)
             }
         }
