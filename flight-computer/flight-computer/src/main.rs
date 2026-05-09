@@ -113,27 +113,19 @@ mod tests {
     #[cfg(feature = "gnc")]
     #[test]
     fn print_gnc_test_data() {
-        // TODO:
-        // fn check_type(
-        //     _: &<gnc_interface::CompatAdapter<
-        //         gnc_algorithms::CompositeController<
-        //             gnc_algorithms::guidance::o_approach::ImprovedOApproachGuidance,
-        //             gnc_algorithms::PController,
-        //         >,
-        //     > as gnc_interface::CompatGuidanceController>::Config,
-        // ) {
-        // }
+        fn check_type(
+            _: &<gnc_interface::adapter::CompatAdapter<
+                gnc_algorithms::SafetySpiralGuidance<
+                    gnc_algorithms::guidance::sysid_flight::SysIdGuidance,
+                >,
+            > as gnc_interface::CompatGuidanceController>::Config,
+        ) {
+        }
 
-        // let cfg = gnc_interface::CompatAdapterConfig {
-        //     ned_origin_lat: 46.757_456,
-        //     ned_origin_lon: 8.411_131,
-        //     ned_origin_alt: 1606.1,
-        //     dt_hint: 0.01,
-        //     inner: gnc_configurations::duebendorf_hil_tests::official_composite(),
-        // };
-        // check_type(&cfg);
+        let cfg =  gnc_configurations::sysid_hil_duebendorf::hil_sysid_compat_adapter_config_with_safety_spiral();
+        check_type(&cfg);
 
-        // let ser = toml::to_string(&cfg).expect("has to serialize");
-        // println!("{ser}");
+        let ser = toml::to_string(&cfg).expect("has to serialize");
+        println!("{ser}");
     }
 }

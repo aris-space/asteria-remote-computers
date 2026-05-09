@@ -1,0 +1,214 @@
+# SysID HIL testing configuration
+
+# System configuration
+system_time_rate_hz = 100
+[telemetry]
+mavlink_address = "127.0.0.1:5760"
+[can]
+socket_address = "can0"
+[state_machine]
+name = "Hermes Drogue Out Drop Test"
+initial_state = "Idle"
+
+# Path to the state machine diagram SVG which is used by the mission control
+# **Note**: This path is relative to the root of the repository.
+diagram_path = "state-machines/drogue-drop-test-state-machine.drawio.svg"
+
+# State machine's starting point. Simply waits for a manual command.
+[state_machine.states."Idle"]
+type = "Waiting"
+manual_transitions = [
+    { target = "Diagnostics", display = "Startup" },
+    { target = "Ready" },
+]
+
+# This state exists for recovering from failures that can happen before liftoff
+[state_machine.states."Soft Failure"]
+type = "Waiting"
+manual_transitions = [{ target = "Idle", display = "Restart" }]
+
+# This state continues only when all boards have sent healthy reports
+[state_machine.states."Diagnostics"]
+type = "Diagnostics"
+on_tests_pass = "Ready"
+on_tests_fail = "Soft Failure"
+outdated_threshold_sec = 5
+check_pss_boards = false       # Not connected during drop tests
+
+# This state waits for a manual command which indicates that the rocket is ready for hooking onto the helicopter
+[state_machine.states."Ready"]
+type = "Waiting"
+manual_transitions = [
+    { target = "Live Helicopter", display = "Live" },
+    { target = "Soft Failure", display = "Manual Reset", abort = true },
+]
+
+# This state should be active when the heli lifts off the ground up until it reaches
+# the necessary altitude for final checks before the dropoff
+[state_machine.states."Live Helicopter"] # First disarm, then continue with the actual state
+type = "ArmRecovery"
+arming_state = "Unarmed"
+on_state_set = "Live Helicopter - W"
+[state_machine.states."Live Helicopter - W"]
+type = "Waiting"
+manual_transitions = [{ target = "Helicopter Armed", display = "Arm" }]
+
+# This state is there to make sure everything's ready, while the helicopter
+# is already on the dropping altitude
+[state_machine.states."Helicopter Armed"] # First arm, then continue with the actual state
+type = "ArmRecovery"
+arming_state = "Armed"
+on_state_set = "Helicopter Armed - W"
+[state_machine.states."Helicopter Armed - W"]
+type = "HeightOrTimeTrigger"
+on_time_limit_reached = "Live Helicopter"
+on_height_limit_reached = "Drogue Descent"
+time_limit_sec = 60
+# TODO Define height limit
+height_limit_m = 3
+manual_transitions = [
+    { target = "Live Helicopter", display = "Disarm" },
+    { target = "Drogue Descent", display = "Countdown" },
+    { target = "Main Chute Deployment", display = "Manual Deployment", abort = true },
+]
+
+# This state is active when the rocket is dropped up until the chute is deployed
+[state_machine.states."Drogue Descent"]
+type = "HeightOrTimeTrigger"
+on_time_limit_reached = "Main Chute Deployment"
+on_height_limit_reached = "Main Chute Deployment"
+time_limit_sec = 60
+# TODO Define height limit
+height_limit_m = 3
+manual_transitions = [
+    { target = "Live Helicopter", display = "Disarm" },
+    { target = "Main Chute Deployment", display = "Manual Deployment", abort = true },
+]
+
+# This state deploys the chute and waits for some time before transitioning
+[state_machine.states."Main Chute Deployment"]
+type = "MainChuteDeployment"
+deploy_time_sec = 10
+on_after_deployment = "Hook Release"
+
+[state_machine.states."Hook Release"]
+type = "HookRelease"
+# Motor positions are expressed in full revolutions
+motors_pull_value_rev = [0.7, 0.7]
+motors_ok_threshold_rev = [0.6, 0.6]
+on_motors_ok_threshhold_reached = "Control Loop"
+manual_transitions = [
+    { target = "Safety Spiral", display = "Manual Safety Spiral", abort = true },
+]
+
+# This states runs the guided recovery algorithm in a loop until failure or touchdown
+[state_machine.states."Control Loop"]
+type = "ControlLoop"
+loop_frequency_hz = 10.0
+# mappings taken from nicollier.
+revolution_interval_mapping_left = [-3.36, 1.59]
+revolution_interval_mapping_right = [-2.273, 2.677]
+on_failure = "Safety Spiral"
+time_limit_sec = 600
+on_touchdown = "Await Recovery"
+manual_transitions = [
+    { target = "Safety Spiral", display = "Manual Safety Spiral", abort = true },
+]
+[state_machine.states."Control Loop".gnc_config]
+controller_type = "SysIdHIL"
+initial_height = 1432
+descent_per_tick = 0.6
+[state_machine.states."Control Loop".gnc_config.gnc]
+# Taken from gnc_configurations::sysid_hil_duebendorf::hil_sysid_compat_adapter_config_with_safety_spiral()
+ned_origin_lat = 47.405072
+ned_origin_lon = 8.63092
+ned_origin_alt = 435.0
+dt_hint = 0.01
+[state_machine.states."Control Loop".gnc_config.gnc.inner]
+bounding_polygon = [
+    [
+        149.704875,
+        41.079351,
+    ],
+    [
+        26.063571,
+        153.322687,
+    ],
+    [
+        -108.871476,
+        -6.790393,
+    ],
+    [
+        15.378971,
+        -127.065187,
+    ],
+    [
+        149.704875,
+        41.079351,
+    ],
+]
+safety_spiral_timeout = 5.0
+safety_spiral_deflection_left = 0.6
+safety_spiral_deflection_right = 0.95
+[state_machine.states."Control Loop".gnc_config.gnc.inner.inner_config]
+spiral_steps = [[0.4, 0.2], [0.4, 0.15], [0.45, 0.15], [0.45, 0.1]]
+spiral_step_altitude_interval = 150.0
+alignment_trigger_altitude = -350.0
+alignment_target_ned = [191.247898, 294.455103]
+alignment_tolerance = 0.1
+alignment_inner_turn = 0.3
+alignment_outer_turn = 0.0
+min_alignment_duration_secs = 10.0
+max_alignment_duration_secs = 60.0
+braking_schedule = [
+    [
+        250.0,
+        0.0,
+    ],
+    [
+        225.0,
+        0.8,
+    ],
+    [
+        200.0,
+        1.0,
+    ],
+    [
+        150.0,
+        0.2,
+    ],
+    [
+        100.0,
+        0.4,
+    ],
+    [
+        50.0,
+        0.6,
+    ],
+    [
+        0.0,
+        0.3,
+    ],
+]
+
+[state_machine.states."Safety Spiral"]
+type = "SafetySpiral"
+# Motor positions are expressed in full revolutions
+motors_pull_value_rev = [0.6, -0.788]
+on_motors_pulled = "Safety Spiral 2"
+[state_machine.states."Safety Spiral 2"]
+type = "AwaitTimer"
+# Wait ten minutes and assume it's safe to recover
+duration_sec = 600
+on_timer = "Await Recovery"
+manual_transitions = [
+    { target = "Await Recovery", display = "Manual Ground Recovery", abort = true },
+]
+
+[state_machine.states."Await Recovery"] # First unarm, then just idle.
+type = "ArmRecovery"
+arming_state = "Unarmed"
+on_state_set = "Await Recovery - W"
+
+[state_machine.states."Await Recovery - W"]
+type = "Shutdown"
