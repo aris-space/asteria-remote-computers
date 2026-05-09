@@ -15,3 +15,6 @@
 # Artifacts of running the system
 *.lockfile
 logs
+
+# Configuration validation outputs
+configuration/out/

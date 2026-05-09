@@ -36,12 +36,42 @@ def git_log_oneline(ref: str, cwd: Path) -> str:
 def git_branch(ref: str, cwd: Path) -> str:
     try:
         result = subprocess.run(
-            ["git", "name-rev", "--name-only", ref],
+            ["git", "rev-parse", "--abbrev-ref", ref],
             capture_output=True, text=True, check=True, cwd=cwd
         )
-        return result.stdout.strip().replace("remotes/origin/", "")
+        branch = result.stdout.strip()
+        if branch and branch != "HEAD":
+            return branch
+        result = subprocess.run(
+            ["git", "name-rev", "--name-only", "--refs=refs/heads/*", ref],
+            capture_output=True, text=True, check=True, cwd=cwd
+        )
+        return result.stdout.strip()
     except subprocess.CalledProcessError:
         return "unknown"
+
+
+def git_repo_root(cwd: Path) -> Path:
+    result = subprocess.run(
+        ["git", "rev-parse", "--show-toplevel"],
+        capture_output=True, text=True, check=True, cwd=cwd
+    )
+    return Path(result.stdout.strip())
+
+
+def git_submodule_info(submodule_dir: Path) -> dict:
+    try:
+        commit = subprocess.run(
+            ["git", "rev-parse", "--short", "HEAD"],
+            capture_output=True, text=True, check=True, cwd=submodule_dir
+        ).stdout.strip()
+        return {
+            "commit": commit,
+            "branch": git_branch("HEAD", submodule_dir),
+            "last_change": git_log_oneline("HEAD", submodule_dir),
+        }
+    except subprocess.CalledProcessError:
+        return {"commit": "unknown", "branch": "unknown", "last_change": "unknown"}
 
 
 def git_config_info(config_path: Path) -> dict:
@@ -105,6 +135,9 @@ def main():
 
     config_info = git_config_info(config_path)
 
+    repo_root = git_repo_root(cwd)
+    gnc_info = git_submodule_info(repo_root / "flight-computer" / "asteria-gnc")
+
     data = {
         "binary": {
             "commit": commit[:7],
@@ -117,6 +150,11 @@ def main():
             "hash": object_hash(config_path),
             "branch": config_info["branch"],
             "last_change": config_info["last_change"],
+        },
+        "gnc": {
+            "commit": gnc_info["commit"],
+            "branch": gnc_info["branch"],
+            "last_change": gnc_info["last_change"],
         },
         "toml_annotated": "\n".join(annotated),
     }

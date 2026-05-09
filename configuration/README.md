@@ -16,7 +16,7 @@ There are two steps:
 
 1. generate the metadata.
     ```sh
-    python3 ./configuration/gen_metadata.py $PATH_TO_CONFIG $PATH_TO_CONFIG_TEMPLATE $BINARY_COMMIT > ./configuration/data.json 
+    python3 ./configuration/gen_metadata.py $PATH_TO_CONFIG $PATH_TO_CONFIG_TEMPLATE $BINARY_COMMIT > ./configuration/out/data.json 
     ```
 
     Noteably, the git commit of the binary can be HEAD for the current version, or a commit hash.
@@ -24,7 +24,7 @@ There are two steps:
 
 2. build the pdf.
     ```sh
-    docker run -v .:/workspace --rm ghcr.io/typst/typst:latest compile --input metadata-file=data.json /workspace/configuration/validation_file_template.typ /workspace/configuration/validation_file.pdf
+    docker run -v .:/workspace --rm ghcr.io/typst/typst:latest compile --input metadata-file=out/data.json /workspace/configuration/validation_file_template.typ /workspace/configuration/out/validation_file.pdf
     ```
 
-Don't commit the changes, delete them afterwards
+Outputs go to `configuration/out/` which is gitignored.
