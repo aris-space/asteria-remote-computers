@@ -20,7 +20,7 @@ pub enum Command {
     // ----- Sensor functions -----
     SensorWatch {
         name: String,
-        abort: String,
+        abort_state: String,
         max: f32,
         min: f32,
         key: Option<String>,
@@ -33,7 +33,7 @@ pub enum Command {
         name: String,
         value: f32,
         rising: bool,
-        abort: String,
+        abort_state: String,
         patience: Duration,
         duration: Option<Duration>,
     },
@@ -112,6 +112,7 @@ fn to_state<'a>() -> impl Parser<'a, &'a str, Command, E<'a>> {
 
 fn actuator_open<'a>() -> impl Parser<'a, &'a str, Command, E<'a>> {
     text::ident()
+        .spanned()
         .then_ignore(just("."))
         .then(func("open"))
         .validate(|(name, args), e, emitter| {
@@ -125,6 +126,7 @@ fn actuator_open<'a>() -> impl Parser<'a, &'a str, Command, E<'a>> {
 
 fn actuator_close<'a>() -> impl Parser<'a, &'a str, Command, E<'a>> {
     text::ident()
+        .spanned()
         .then_ignore(just("."))
         .then(func("close"))
         .validate(|(name, args), e, emitter| {
@@ -138,6 +140,7 @@ fn actuator_close<'a>() -> impl Parser<'a, &'a str, Command, E<'a>> {
 
 fn sensor_watch<'a>() -> impl Parser<'a, &'a str, Command, E<'a>> {
     text::ident()
+        .spanned()
         .then_ignore(just("."))
         .then(func("watch"))
         .validate(|(name, args), e, emitter| {
@@ -153,7 +156,7 @@ fn sensor_watch<'a>() -> impl Parser<'a, &'a str, Command, E<'a>> {
 
             Command::SensorWatch {
                 name: name.to_string(),
-                abort,
+                abort_state: abort,
                 max: max.unwrap_or(f32::INFINITY),
                 min: min.unwrap_or(f32::INFINITY),
                 key,
@@ -163,6 +166,7 @@ fn sensor_watch<'a>() -> impl Parser<'a, &'a str, Command, E<'a>> {
 
 fn sensor_ignore<'a>() -> impl Parser<'a, &'a str, Command, E<'a>> {
     text::ident()
+        .spanned()
         .then_ignore(just("."))
         .then(func("ignore"))
         .validate(|(name, args), e, emitter| {
@@ -180,6 +184,7 @@ fn sensor_ignore<'a>() -> impl Parser<'a, &'a str, Command, E<'a>> {
 
 fn sensor_detect<'a>() -> impl Parser<'a, &'a str, Command, E<'a>> {
     text::ident()
+        .spanned()
         .then_ignore(just("."))
         .then(func("detect"))
         .validate(|(name, args), e, emitter| {
@@ -198,7 +203,7 @@ fn sensor_detect<'a>() -> impl Parser<'a, &'a str, Command, E<'a>> {
                 name: name.to_string(),
                 value,
                 rising: rising.unwrap_or_default(),
-                abort,
+                abort_state: abort,
                 patience,
                 duration,
             }
