@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use chumsky::prelude::*;
+use chumsky::{input::Emitter, prelude::*};
 
 use crate::parsers::{E, func, junk};
 
@@ -123,20 +123,7 @@ fn actuator_open<'a>(actuators: &[String]) -> impl Parser<'a, &'a str, Command, 
             // Ensure that we don't have any arguments.
             extract_args! { args, emitter, e => {} };
             // Validate that the actuator exists.
-            if !actuators.contains(&name.to_string()) {
-                emitter.emit(Rich::custom(
-                    name.span,
-                    format!(
-                        "`{}` is not a valid actuator name. Expected one of: {}",
-                        *name,
-                        actuators
-                            .iter()
-                            .map(|name| format!("`{name}`"))
-                            .collect::<Vec<_>>()
-                            .join(", ")
-                    ),
-                ));
-            }
+            validate_actuator(&name, actuators, emitter);
 
             Command::AcutatorOpen(name.to_string())
         })
@@ -151,20 +138,7 @@ fn actuator_close<'a>(actuators: &[String]) -> impl Parser<'a, &'a str, Command,
             // Ensure that we don't have any arguments.
             extract_args! { args, emitter, e => {} };
             // Validate that the actuator exists.
-            if !actuators.contains(&name.to_string()) {
-                emitter.emit(Rich::custom(
-                    name.span,
-                    format!(
-                        "`{}` is not a valid actuator name. Expected one of: {}",
-                        *name,
-                        actuators
-                            .iter()
-                            .map(|name| format!("`{name}`"))
-                            .collect::<Vec<_>>()
-                            .join(", ")
-                    ),
-                ));
-            }
+            validate_actuator(&name, actuators, emitter);
 
             Command::ActuatorClose(name.to_string())
         })
@@ -188,35 +162,9 @@ fn sensor_watch<'a>(
                 }
             };
             // Validate that the sensor exists.
-            if !sensors.contains(&name.to_string()) {
-                emitter.emit(Rich::custom(
-                    name.span,
-                    format!(
-                        "`{}` is not a valid sensor name. Expected one of: {}",
-                        *name,
-                        sensors
-                            .iter()
-                            .map(|name| format!("`{name}`"))
-                            .collect::<Vec<_>>()
-                            .join(", ")
-                    ),
-                ));
-            }
+            validate_sensor(&name, sensors, emitter);
             // Validate that the abort state exists.
-            if !states.contains(&abort) {
-                emitter.emit(Rich::custom(
-                    abort.span,
-                    format!(
-                        "`{}` is not a valid state. Expected one of: {}",
-                        *abort,
-                        states
-                            .iter()
-                            .map(|name| format!("`{name}`"))
-                            .collect::<Vec<_>>()
-                            .join(", ")
-                    ),
-                ));
-            }
+            validate_state(&abort, states, emitter);
 
             Command::SensorWatch {
                 name: name.to_string(),
@@ -238,20 +186,7 @@ fn sensor_ignore<'a>(sensors: &[String]) -> impl Parser<'a, &'a str, Command, E<
                 args, emitter, e => { key?: Ident }
             };
             // Validate that the sensor exists.
-            if !sensors.contains(&name.to_string()) {
-                emitter.emit(Rich::custom(
-                    name.span,
-                    format!(
-                        "`{}` is not a valid sensor name. Expected one of: {}",
-                        *name,
-                        sensors
-                            .iter()
-                            .map(|name| format!("`{name}`"))
-                            .collect::<Vec<_>>()
-                            .join(", ")
-                    ),
-                ));
-            }
+            validate_sensor(&name, sensors, emitter);
 
             Command::SensorIgnore {
                 name: name.to_string(),
@@ -279,35 +214,9 @@ fn sensor_detect<'a>(
                 }
             };
             // Validate that the sensor exists.
-            if !sensors.contains(&name.to_string()) {
-                emitter.emit(Rich::custom(
-                    name.span,
-                    format!(
-                        "`{}` is not a valid sensor name. Expected one of: {}",
-                        *name,
-                        sensors
-                            .iter()
-                            .map(|name| format!("`{name}`"))
-                            .collect::<Vec<_>>()
-                            .join(", ")
-                    ),
-                ));
-            }
+            validate_sensor(&name, sensors, emitter);
             // Validate that the abort state exists.
-            if !states.contains(&abort) {
-                emitter.emit(Rich::custom(
-                    abort.span,
-                    format!(
-                        "`{}` is not a valid state. Expected one of: {}",
-                        *abort,
-                        states
-                            .iter()
-                            .map(|name| format!("`{name}`"))
-                            .collect::<Vec<_>>()
-                            .join(", ")
-                    ),
-                ));
-            }
+            validate_state(&abort, states, emitter);
 
             Command::SensorDetect {
                 name: name.to_string(),
@@ -318,4 +227,73 @@ fn sensor_detect<'a>(
                 duration: duration.map(|duration| *duration),
             }
         })
+}
+
+/// Validate that `actuator_name` is a valid actuator of `actuators` and
+/// otherwise emit an error into `emitter`.
+fn validate_actuator(
+    actuator_name: &Spanned<&str>,
+    actuators: &[String],
+    emitter: &mut Emitter<Rich<'_, char>>,
+) {
+    if !actuators.contains(&actuator_name.to_string()) {
+        emitter.emit(Rich::custom(
+            actuator_name.span,
+            format!(
+                "`{}` is not a valid actuator. Expected one of: {}",
+                **actuator_name,
+                actuators
+                    .iter()
+                    .map(|name| format!("`{name}`"))
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ),
+        ));
+    }
+}
+
+/// Validate that `sensor_name` is a valid sensor of `sensors` and otherwise
+/// emit an error into `emitter`.
+fn validate_sensor(
+    sensor_name: &Spanned<&str>,
+    sensors: &[String],
+    emitter: &mut Emitter<Rich<'_, char>>,
+) {
+    if !sensors.contains(&sensor_name.to_string()) {
+        emitter.emit(Rich::custom(
+            sensor_name.span,
+            format!(
+                "`{}` is not a valid sensor. Expected one of: {}",
+                **sensor_name,
+                sensors
+                    .iter()
+                    .map(|name| format!("`{name}`"))
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ),
+        ));
+    }
+}
+
+/// Validate that `state_name` is a valid state in `states` and otherwise
+/// emit an error into `emitter`.
+fn validate_state(
+    state_name: &Spanned<String>,
+    states: &[String],
+    emitter: &mut Emitter<Rich<'_, char>>,
+) {
+    if !states.contains(state_name) {
+        emitter.emit(Rich::custom(
+            state_name.span,
+            format!(
+                "`{}` is not a valid state. Expected one of: {}",
+                **state_name,
+                states
+                    .iter()
+                    .map(|name| format!("`{name}`"))
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ),
+        ));
+    }
 }
