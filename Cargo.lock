@@ -1292,7 +1292,6 @@ dependencies = [
  "nalgebra 0.34.2",
  "nav-types",
  "serde",
- "serde_json",
  "tracing",
 ]
 
