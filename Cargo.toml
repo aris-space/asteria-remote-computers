@@ -22,7 +22,7 @@ members = [
     "data-definitions/macros",
     "data-definitions/mavlink-hal",
     "data-definitions/messages",
-    "sequences",
+    "sequence-parser",
 ]
 
 [workspace.lints.clippy]
