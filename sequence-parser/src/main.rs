@@ -12,15 +12,6 @@ use sequence_parser::sequence;
 struct Cli {
     /// Path to the sequence to parse.
     path: PathBuf,
-    /// Available sensor names.
-    #[arg(short, long, value_delimiter = ',')]
-    sensors: Vec<String>,
-    /// Available actuator names.
-    #[arg(short, long, value_delimiter = ',')]
-    actuators: Vec<String>,
-    /// Available state machine states.
-    #[arg(short = 'm', long, value_delimiter = ',')]
-    states: Vec<String>,
 }
 
 fn main() {
@@ -42,7 +33,7 @@ fn main() {
         }
     };
 
-    let (commands, errors) = sequence(&cli.actuators, &cli.sensors, &cli.states)
+    let (commands, errors) = sequence::<String, String, String>()
         .parse(&sequence_str)
         .into_output_errors();
 
@@ -102,21 +93,7 @@ mod tests {
     #[test]
     fn test_firing3_seq() {
         let sequence_str = include_str!("../tests/firing3.seq");
-        let (commands, errors) = sequence(
-            &[
-                String::from("IGN_PRG_VLV"),
-                String::from("OSS_PRG_VLV"),
-                String::from("FSS_PRG_VLV"),
-                String::from("OSS_PRZ_DPR"),
-                String::from("OSS_MNL_VLV"),
-                String::from("FSS_PRZ_DPR"),
-                String::from("FSS_MNL_VLV"),
-                String::from("IGN_SPK_PLG"),
-                String::from("IGN_OXD_VLV"),
-                String::from("IGN_FUE_VLV"),
-            ],
-            &[String::from("IGN_CC_P"), String::from("ENG_CC_P1")],
-            &[String::from("firing_abort")],
+        let (commands, errors) = sequence::<String, String, String>(
         )
         .parse(sequence_str)
         .into_output_errors();
@@ -128,7 +105,7 @@ mod tests {
     #[test]
     fn test_ignition_no_engine_seq() {
         let sequence_str = include_str!("../tests/ignition_no_engine.seq");
-        let (_commands, errors) = sequence(&[], &[], &[])
+        let (_commands, errors) = sequence::<String, String, String>()
             .parse(sequence_str)
             .into_output_errors();
         // The sequence should be invalid.

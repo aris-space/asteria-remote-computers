@@ -1,299 +1,308 @@
-use std::time::Duration;
+use std::{fmt::Display, str::FromStr, time::Duration};
 
-use chumsky::{input::Emitter, prelude::*};
+use chumsky::prelude::*;
 
-use crate::parsers::{E, func, junk};
+use crate::parsers::{E, func, ident, junk};
 
 pub mod parsers;
 
 #[derive(Clone, Debug)]
-pub enum Command {
+pub enum Command<Actuator, Sensor, State>
+where
+    Actuator: Clone + FromStr,
+    Sensor: Clone + FromStr,
+    State: Clone + FromStr,
+{
     // ----- System functions -----
     Msg(String),
     Warning(String),
     Error(String),
     Wait(Duration),
-    ToState(String),
+    ToState(State),
     // ----- Actuator functions -----
-    AcutatorOpen(String),
-    ActuatorClose(String),
+    AcutatorOpen(Actuator),
+    ActuatorClose(Actuator),
     // ----- Sensor functions -----
     SensorWatch {
-        name: String,
-        abort_state: String,
+        name: Sensor,
+        abort_state: State,
         max: f32,
         min: f32,
         key: Option<String>,
     },
     SensorIgnore {
-        name: String,
+        name: Sensor,
         key: Option<String>,
     },
     SensorDetect {
-        name: String,
+        name: Sensor,
         value: f32,
         rising: bool,
-        abort_state: String,
+        abort_state: State,
         patience: Duration,
         duration: Option<Duration>,
     },
 }
 
-pub fn sequence<'a>(
-    actuators: &[String],
-    sensors: &[String],
-    states: &[String],
-) -> impl Parser<'a, &'a str, Vec<Command>, E<'a>> {
+pub fn sequence<'a, Actuator, Sensor, State>()
+-> impl Parser<'a, &'a str, Vec<Command<Actuator, Sensor, State>>, E<'a>>
+where
+    Actuator: Clone + FromStr,
+    <Actuator as FromStr>::Err: Display,
+    Sensor: Clone + FromStr,
+    <Sensor as FromStr>::Err: Display,
+    State: Clone + FromStr,
+    <State as FromStr>::Err: Display,
+{
     let command = msg()
-        .or(warning())
-        .or(error())
-        .or(wait())
+        .map(Some)
+        .or(warning().map(Some))
+        .or(error().map(Some))
+        .or(wait().map(Some))
         .or(to_state())
-        .or(actuator_open(actuators))
-        .or(actuator_close(actuators))
-        .or(sensor_watch(sensors, states))
-        .or(sensor_ignore(sensors))
-        .or(sensor_detect(sensors, states));
+        .or(actuator_open())
+        .or(actuator_close())
+        .or(sensor_watch())
+        .or(sensor_ignore())
+        .or(sensor_detect());
 
     command
         .padded_by(junk())
         .separated_by(just(";").padded_by(junk()))
         .allow_trailing()
         .collect::<_>()
+        // Filter out `None`s which are invalid items.
+        .map(|commands: Vec<Option<Command<Actuator, Sensor, State>>>| {
+            commands.into_iter().flatten().collect()
+        })
         .then_ignore(junk())
         .then_ignore(end())
 }
 
-fn msg<'a>() -> impl Parser<'a, &'a str, Command, E<'a>> {
-    func("sys.msg").validate(|args, e, emitter| {
-        let text = extract_args! {
-            args, emitter, e => { text: String }
-        };
+/// Parser for the `sys.msg(text = "...")` command.
+fn msg<'a, Actuator, Sensor, State>()
+-> impl Parser<'a, &'a str, Command<Actuator, Sensor, State>, E<'a>>
+where
+    Actuator: Clone + FromStr,
+    Sensor: Clone + FromStr,
+    State: Clone + FromStr,
+{
+    func("sys.msg")
+        .or(func("SYS.msg"))
+        .validate(|args, e, emitter| {
+            let text = extract_args! {
+                args, emitter, e => { text: String }
+            };
 
-        Command::Msg(text.to_string())
-    })
+            Command::Msg(text.inner)
+        })
 }
 
-fn warning<'a>() -> impl Parser<'a, &'a str, Command, E<'a>> {
-    func("sys.warning").validate(|args, e, emitter| {
-        let text = extract_args! {
-            args, emitter, e => { text: String }
-        };
+/// Parser for the `sys.warning(text = "...")` command.
+fn warning<'a, Actuator, Sensor, State>()
+-> impl Parser<'a, &'a str, Command<Actuator, Sensor, State>, E<'a>>
+where
+    Actuator: Clone + FromStr,
+    Sensor: Clone + FromStr,
+    State: Clone + FromStr,
+{
+    func("sys.warning")
+        .or(func("SYS.warning"))
+        .validate(|args, e, emitter| {
+            let text = extract_args! {
+                args, emitter, e => { text: String }
+            };
 
-        Command::Warning(text.to_string())
-    })
+            Command::Warning(text.inner)
+        })
 }
 
-fn error<'a>() -> impl Parser<'a, &'a str, Command, E<'a>> {
-    func("sys.error").validate(|args, e, emitter| {
-        let text = extract_args! {
-            args, emitter, e => { text: String }
-        };
+/// Parser for the `sys.error(text = "...")` command.
+fn error<'a, Actuator, Sensor, State>()
+-> impl Parser<'a, &'a str, Command<Actuator, Sensor, State>, E<'a>>
+where
+    Actuator: Clone + FromStr,
+    Sensor: Clone + FromStr,
+    State: Clone + FromStr,
+{
+    func("sys.error")
+        .or(func("SYS.error"))
+        .validate(|args, e, emitter| {
+            let text = extract_args! {
+                args, emitter, e => { text: String }
+            };
 
-        Command::Warning(text.to_string())
-    })
+            Command::Warning(text.inner)
+        })
 }
 
-fn wait<'a>() -> impl Parser<'a, &'a str, Command, E<'a>> {
-    func("sys.wait").validate(|args, e, emitter| {
-        let time = extract_args! {
-            args, emitter, e => { time: Time }
-        };
+/// Parser for the `sys.wait(time = <time>)` command.
+fn wait<'a, Actuator, Sensor, State>()
+-> impl Parser<'a, &'a str, Command<Actuator, Sensor, State>, E<'a>>
+where
+    Actuator: Clone + FromStr,
+    Sensor: Clone + FromStr,
+    State: Clone + FromStr,
+{
+    func("sys.wait")
+        .or(func("SYS.wait"))
+        .validate(|args, e, emitter| {
+            let time = extract_args! {
+                args, emitter, e => { time: Time }
+            };
 
-        Command::Wait(*time)
-    })
+            Command::Wait(time.inner)
+        })
 }
 
-fn to_state<'a>() -> impl Parser<'a, &'a str, Command, E<'a>> {
-    func("sys.to_state").validate(|args, e, emitter| {
-        let state = extract_args! {
-            args, emitter, e => { state: Ident }
-        };
+/// Parser for the `sys.to_state(state = <state_name>)` command.
+fn to_state<'a, Actuator, Sensor, State>()
+-> impl Parser<'a, &'a str, Option<Command<Actuator, Sensor, State>>, E<'a>>
+where
+    Actuator: Clone + FromStr,
+    Sensor: Clone + FromStr,
+    State: Clone + FromStr,
+    <State as FromStr>::Err: Display,
+{
+    func("sys.to_state")
+        .or(func("SYS.to_state"))
+        .validate(|args, e, emitter| {
+            let state = extract_args! {
+                args, emitter, e => { state: Ident as State }
+            };
 
-        Command::ToState(state.to_string())
-    })
+            Some(Command::ToState(state?.inner))
+        })
 }
 
-fn actuator_open<'a>(actuators: &[String]) -> impl Parser<'a, &'a str, Command, E<'a>> {
-    text::ident()
-        .spanned()
+/// Parser for the `<actuator_name>.open()` command.
+fn actuator_open<'a, Actuator, Sensor, State>()
+-> impl Parser<'a, &'a str, Option<Command<Actuator, Sensor, State>>, E<'a>>
+where
+    Actuator: Clone + FromStr,
+    <Actuator as FromStr>::Err: Display,
+    Sensor: Clone + FromStr,
+    State: Clone + FromStr,
+{
+    ident::<Actuator>()
         .then_ignore(just("."))
         .then(func("open"))
-        .validate(|(name, args), e, emitter| {
+        .validate(|(actuator, args), _e, emitter| {
             // Ensure that we don't have any arguments.
             extract_args! { args, emitter, e => {} };
-            // Validate that the actuator exists.
-            validate_actuator(&name, actuators, emitter);
 
-            Command::AcutatorOpen(name.to_string())
+            Some(Command::AcutatorOpen(actuator?.inner))
         })
 }
 
-fn actuator_close<'a>(actuators: &[String]) -> impl Parser<'a, &'a str, Command, E<'a>> {
-    text::ident()
-        .spanned()
+/// Parser for the `<actuator_name>.close()` command.
+fn actuator_close<'a, Actuator, Sensor, State>()
+-> impl Parser<'a, &'a str, Option<Command<Actuator, Sensor, State>>, E<'a>>
+where
+    Actuator: Clone + FromStr,
+    <Actuator as FromStr>::Err: Display,
+    Sensor: Clone + FromStr,
+    State: Clone + FromStr,
+{
+    ident::<Actuator>()
         .then_ignore(just("."))
         .then(func("close"))
-        .validate(|(name, args), e, emitter| {
+        .validate(|(actuator, args), _e, emitter| {
             // Ensure that we don't have any arguments.
             extract_args! { args, emitter, e => {} };
-            // Validate that the actuator exists.
-            validate_actuator(&name, actuators, emitter);
 
-            Command::ActuatorClose(name.to_string())
+            Some(Command::ActuatorClose(actuator?.inner))
         })
 }
 
-fn sensor_watch<'a>(
-    sensors: &[String],
-    states: &[String],
-) -> impl Parser<'a, &'a str, Command, E<'a>> {
-    text::ident()
-        .spanned()
+/// Parser for the `<sensor_name>.watch(abort = <state_name>, max = <optional float>, min = <optional float>, key = <optional identifier>)` command.
+fn sensor_watch<'a, Actuator, Sensor, State>()
+-> impl Parser<'a, &'a str, Option<Command<Actuator, Sensor, State>>, E<'a>>
+where
+    Actuator: Clone + FromStr,
+    Sensor: Clone + FromStr,
+    <Sensor as FromStr>::Err: Display,
+    State: Clone + FromStr,
+    <State as FromStr>::Err: Display,
+{
+    ident::<Sensor>()
         .then_ignore(just("."))
         .then(func("watch"))
-        .validate(|(name, args), e, emitter| {
+        .validate(|(sensor, args), e, emitter| {
             let (abort, max, min, key) = extract_args! {
                 args, emitter, e => {
-                    abort: Ident
+                    abort: Ident as State
                     max?: Float
                     min?: Float
                     key?: Ident
                 }
             };
-            // Validate that the sensor exists.
-            validate_sensor(&name, sensors, emitter);
-            // Validate that the abort state exists.
-            validate_state(&abort, states, emitter);
 
-            Command::SensorWatch {
-                name: name.to_string(),
-                abort_state: abort.to_string(),
-                max: max.map_or(f32::INFINITY, |max| *max),
-                min: min.map_or(f32::INFINITY, |min| *min),
-                key: key.map(|key| key.to_string()),
-            }
+            Some(Command::SensorWatch {
+                name: sensor?.inner,
+                abort_state: abort?.inner,
+                max: max.inner.unwrap_or(f32::INFINITY),
+                min: min.inner.unwrap_or(f32::INFINITY),
+                key: key.inner,
+            })
         })
 }
 
-fn sensor_ignore<'a>(sensors: &[String]) -> impl Parser<'a, &'a str, Command, E<'a>> {
-    text::ident()
-        .spanned()
+/// Parser for the `<sensor_name>.ignore(key = <optional identifier>)` command.
+fn sensor_ignore<'a, Actuator, Sensor, State>()
+-> impl Parser<'a, &'a str, Option<Command<Actuator, Sensor, State>>, E<'a>>
+where
+    Actuator: Clone + FromStr,
+    Sensor: Clone + FromStr,
+    <Sensor as FromStr>::Err: Display,
+    State: Clone + FromStr,
+{
+    ident::<Sensor>()
         .then_ignore(just("."))
         .then(func("ignore"))
-        .validate(|(name, args), e, emitter| {
+        .validate(|(sensor, args), e, emitter| {
             let key = extract_args! {
                 args, emitter, e => { key?: Ident }
             };
-            // Validate that the sensor exists.
-            validate_sensor(&name, sensors, emitter);
 
-            Command::SensorIgnore {
-                name: name.to_string(),
-                key: key.map(|key| key.to_string()),
-            }
+            Some(Command::SensorIgnore {
+                name: sensor?.inner,
+                key: key.inner,
+            })
         })
 }
 
-fn sensor_detect<'a>(
-    sensors: &[String],
-    states: &[String],
-) -> impl Parser<'a, &'a str, Command, E<'a>> {
-    text::ident()
-        .spanned()
+/// Parser for the `<sensor_name>.detect(value = <float>, rising = <optional bool>, abort = <state_name>, patience = <time>, duration = <optional time>)` command.
+fn sensor_detect<'a, Actuator, Sensor, State>()
+-> impl Parser<'a, &'a str, Option<Command<Actuator, Sensor, State>>, E<'a>>
+where
+    Actuator: Clone + FromStr,
+    Sensor: Clone + FromStr,
+    <Sensor as FromStr>::Err: Display,
+    State: Clone + FromStr,
+    <State as FromStr>::Err: Display,
+{
+    ident::<Sensor>()
         .then_ignore(just("."))
         .then(func("detect"))
-        .validate(|(name, args), e, emitter| {
+        .validate(|(sensor, args), e, emitter| {
             let (value, rising, abort, patience, duration) = extract_args! {
                 args, emitter, e => {
                     value: Float
                     rising?: Bool
-                    abort: Ident
+                    abort: Ident as State
                     patience: Time
                     duration?: Time
                 }
             };
-            // Validate that the sensor exists.
-            validate_sensor(&name, sensors, emitter);
-            // Validate that the abort state exists.
-            validate_state(&abort, states, emitter);
 
-            Command::SensorDetect {
-                name: name.to_string(),
-                value: *value,
-                rising: rising.is_some_and(|rising| *rising),
-                abort_state: abort.to_string(),
-                patience: *patience,
-                duration: duration.map(|duration| *duration),
-            }
+            Some(Command::SensorDetect {
+                name: sensor?.inner,
+                value: value.inner,
+                rising: rising.inner.unwrap_or_default(),
+                abort_state: abort?.inner,
+                patience: patience.inner,
+                duration: duration.inner,
+            })
         })
-}
-
-/// Validate that `actuator_name` is a valid actuator of `actuators` and
-/// otherwise emit an error into `emitter`.
-fn validate_actuator(
-    actuator_name: &Spanned<&str>,
-    actuators: &[String],
-    emitter: &mut Emitter<Rich<'_, char>>,
-) {
-    if !actuators.contains(&actuator_name.to_string()) {
-        emitter.emit(Rich::custom(
-            actuator_name.span,
-            format!(
-                "`{}` is not a valid actuator. Expected one of: {}",
-                **actuator_name,
-                actuators
-                    .iter()
-                    .map(|name| format!("`{name}`"))
-                    .collect::<Vec<_>>()
-                    .join(", ")
-            ),
-        ));
-    }
-}
-
-/// Validate that `sensor_name` is a valid sensor of `sensors` and otherwise
-/// emit an error into `emitter`.
-fn validate_sensor(
-    sensor_name: &Spanned<&str>,
-    sensors: &[String],
-    emitter: &mut Emitter<Rich<'_, char>>,
-) {
-    if !sensors.contains(&sensor_name.to_string()) {
-        emitter.emit(Rich::custom(
-            sensor_name.span,
-            format!(
-                "`{}` is not a valid sensor. Expected one of: {}",
-                **sensor_name,
-                sensors
-                    .iter()
-                    .map(|name| format!("`{name}`"))
-                    .collect::<Vec<_>>()
-                    .join(", ")
-            ),
-        ));
-    }
-}
-
-/// Validate that `state_name` is a valid state in `states` and otherwise
-/// emit an error into `emitter`.
-fn validate_state(
-    state_name: &Spanned<String>,
-    states: &[String],
-    emitter: &mut Emitter<Rich<'_, char>>,
-) {
-    if !states.contains(state_name) {
-        emitter.emit(Rich::custom(
-            state_name.span,
-            format!(
-                "`{}` is not a valid state. Expected one of: {}",
-                **state_name,
-                states
-                    .iter()
-                    .map(|name| format!("`{name}`"))
-                    .collect::<Vec<_>>()
-                    .join(", ")
-            ),
-        ));
-    }
 }
