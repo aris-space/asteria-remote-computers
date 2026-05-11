@@ -1,6 +1,6 @@
 use std::{collections::HashMap, time::Duration};
 
-use chumsky::prelude::*;
+use chumsky::{prelude::*, span::Spanned};
 
 pub type E<'a> = extra::Err<Rich<'a, char>>;
 
@@ -44,10 +44,10 @@ macro_rules! extract_args {
     };
     (@extract $args:ident, $emitter:expr, $e:expr, $name:ident, true, $ty:ident) => {{
         match $args.remove(stringify!($name)) {
-            Some(parsers::Arg::$ty(v)) => Some(v),
+            Some(Spanned { inner: parsers::Arg::$ty(v), .. }) => Some(v),
             None => None,
-            _ => {
-                $emitter.emit(Rich::custom($e.span(), format!("expected argument `{}` of type `{}`", stringify!($name), stringify!($ty))));
+            Some(Spanned { span, .. }) => {
+                $emitter.emit(Rich::custom(span, format!("expected argument `{}` of type `{}`", stringify!($name), stringify!($ty))));
                 None
             }
         }
@@ -55,9 +55,13 @@ macro_rules! extract_args {
 
     (@extract $args:ident, $emitter:expr, $e:expr, $name:ident, false, $ty:ident) => {{
         match $args.remove(stringify!($name)) {
-            Some(parsers::Arg::$ty(v)) => v,
-            _ => {
-                $emitter.emit(Rich::custom($e.span(), format!("expected argument `{}` of type `{}`", stringify!($name), stringify!($ty))));
+            Some(Spanned { inner: parsers::Arg::$ty(v), .. }) => v,
+            None => {
+                $emitter.emit(Rich::custom($e.span(), format!("missing argument `{}` of type `{}`", stringify!($name), stringify!($ty))));
+                Default::default()
+            },
+            Some(Spanned { span, .. }) => {
+                $emitter.emit(Rich::custom(span, format!("expected argument `{}` of type `{}`", stringify!($name), stringify!($ty))));
                 Default::default()
             }
         }
@@ -67,10 +71,12 @@ macro_rules! extract_args {
     ]) => {{
         #[allow(unused_mut)]
         let mut args = $args;
-        $(let $name = extract_args!(@extract args, $emitter, $e, $name, $opt, $ty);)*
+        #[allow(unused)]
+        let e = $e;
+        $(let $name = extract_args!(@extract args, $emitter, e, $name, $opt, $ty);)*
 
-        if !args.is_empty() {
-            $emitter.emit(Rich::custom($e.span(), format!("unexpected arguments: {}", args.into_keys().map(|str| format!("`{str}`")).collect::<Vec<_>>().join(", "))))
+        for (name, arg) in args.into_iter() {
+            $emitter.emit(Rich::custom(arg.span, format!("unexpected argument `{name}`")))
         }
 
         #[allow(clippy::unused_unit)]
@@ -88,7 +94,7 @@ pub enum Arg {
 
 /// Parser for an argument.
 /// It returns a tuple with an argument name and an [`Arg`] value.
-pub fn arg<'a>() -> impl Parser<'a, &'a str, (String, Arg), E<'a>> {
+pub fn arg<'a>() -> impl Parser<'a, &'a str, (String, Spanned<Arg>), E<'a>> {
     let int = text::int(10);
     let frac = just(".").then(text::digits(10));
     let float = int
@@ -131,12 +137,22 @@ pub fn arg<'a>() -> impl Parser<'a, &'a str, (String, Arg), E<'a>> {
             string.map(Arg::String),
             ident.map(Arg::Ident),
         )))
-        .map(|(name, arg): (&str, Arg)| (name.to_string(), arg))
+        .map_with(|(name, arg): (&str, Arg), e| {
+            (
+                name.to_string(),
+                Spanned {
+                    inner: arg,
+                    span: e.span(),
+                },
+            )
+        })
 }
 
 /// Parser for a function with name `name`.
 /// It returns a map of argument names and [`Arg`] values.
-pub fn func<'a>(name: &'static str) -> impl Parser<'a, &'a str, HashMap<String, Arg>, E<'a>> {
+pub fn func<'a>(
+    name: &'static str,
+) -> impl Parser<'a, &'a str, HashMap<String, Spanned<Arg>>, E<'a>> {
     just(name)
         .then(
             arg()
