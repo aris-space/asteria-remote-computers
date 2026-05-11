@@ -93,10 +93,9 @@ mod tests {
     #[test]
     fn test_firing3_seq() {
         let sequence_str = include_str!("../tests/firing3.seq");
-        let (commands, errors) = sequence::<String, String, String>(
-        )
-        .parse(sequence_str)
-        .into_output_errors();
+        let (commands, errors) = sequence::<String, String, String>()
+            .parse(sequence_str)
+            .into_output_errors();
         // The sequence should be valid.
         assert!(errors.is_empty());
         assert_eq!(commands.unwrap_or_default().len(), 49);
