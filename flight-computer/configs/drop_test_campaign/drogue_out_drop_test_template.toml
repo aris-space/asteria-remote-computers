@@ -36,6 +36,7 @@ on_tests_pass = "Ready"
 on_tests_fail = "Soft Failure"
 outdated_threshold_sec = 5
 check_pss_boards = false       # Not connected during drop tests
+check_separation = false       # Not connected during drogue out drop tests
 
 # This state waits for a manual command which indicates that the rocket is ready for hooking onto the helicopter
 [state_machine.states."Ready"]
