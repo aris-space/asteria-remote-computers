@@ -44,7 +44,7 @@ macro_rules! extract_args {
     };
     (@extract $args:ident, $emitter:expr, $e:expr, $name:ident, true, $ty:ident) => {{
         match $args.remove(stringify!($name)) {
-            Some(Spanned { inner: parsers::Arg::$ty(v), .. }) => Some(v),
+            Some(Spanned { inner: parsers::Arg::$ty(v), span }) => Some(Spanned { inner: v, span }),
             None => None,
             Some(Spanned { span, .. }) => {
                 $emitter.emit(Rich::custom(span, format!("expected argument `{}` of type `{}`", stringify!($name), stringify!($ty))));
@@ -55,14 +55,14 @@ macro_rules! extract_args {
 
     (@extract $args:ident, $emitter:expr, $e:expr, $name:ident, false, $ty:ident) => {{
         match $args.remove(stringify!($name)) {
-            Some(Spanned { inner: parsers::Arg::$ty(v), .. }) => v,
+            Some(Spanned { inner: parsers::Arg::$ty(v), span }) => Spanned { inner: v, span },
             None => {
                 $emitter.emit(Rich::custom($e.span(), format!("missing argument `{}` of type `{}`", stringify!($name), stringify!($ty))));
-                Default::default()
+                Spanned { inner: Default::default(), span: $e.span() }
             },
             Some(Spanned { span, .. }) => {
                 $emitter.emit(Rich::custom(span, format!("expected argument `{}` of type `{}`", stringify!($name), stringify!($ty))));
-                Default::default()
+                Spanned { inner: Default::default(), span }
             }
         }
     }};

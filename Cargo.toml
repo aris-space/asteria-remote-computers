@@ -22,7 +22,7 @@ members = [
     "data-definitions/mavlink-hal",
     "data-definitions/messages",
     "flight-computer/deployment/mavlink-heartbeat",
-    "sequences",
+    "sequence-parser",
 ]
 
 [workspace.lints.clippy]
