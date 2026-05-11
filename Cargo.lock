@@ -933,6 +933,7 @@ dependencies = [
  "messages",
  "pss-drivers",
  "rppal",
+ "sequences",
  "serde",
  "socketcan",
  "thiserror 1.0.69",
@@ -2671,6 +2672,22 @@ dependencies = [
  "chumsky",
  "clap",
  "colored",
+]
+
+[[package]]
+name = "sequences"
+version = "0.1.0"
+dependencies = [
+ "datatypes",
+ "lib-mission",
+ "messages",
+ "pss-drivers",
+ "sequence-parser",
+ "serde",
+ "thiserror 1.0.69",
+ "tokio",
+ "tracing",
+ "watchable",
 ]
 
 [[package]]

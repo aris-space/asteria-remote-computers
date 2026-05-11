@@ -95,6 +95,37 @@ pub struct PSSSensors {
     pub engine_bay_temperature: Watchable<EngineBayTemperature>,
 }
 
+/// See the matching types in [`PSSSensors`].
+///
+/// ```
+/// use pss_drivers::input::SensorName;
+/// assert_eq!("PRZ_MNL_P".parse::<SensorName>().unwrap(), SensorName::PRZ_MNL_P)
+/// ```
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, serde::Deserialize, serde::Serialize,
+)]
+#[allow(non_camel_case_types)]
+pub enum SensorName {
+    PRZ_MNL_P,
+    FSS_TNK_P,
+    FSS_TNK_P1,
+    FSS_TNK_P2,
+    OSS_TNK_P,
+    OSS_TNK_P1,
+    OSS_TNK_P2,
+    // TODO: This isn't exhaustive as I think the names will change anyways.
+}
+
+impl std::str::FromStr for SensorName {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        use serde::Deserialize as _;
+        Self::deserialize(<&str as serde::de::IntoDeserializer>::into_deserializer(s))
+            .map_err(|e| e.to_string())
+    }
+}
+
 impl PSSValves {
     /// Starts logging valve timeseries to csv files in `folder`.
     /// Used for data analysis.
