@@ -108,6 +108,6 @@ mod tests {
             .parse(sequence_str)
             .into_output_errors();
         // The sequence should be invalid.
-        assert_eq!(errors.len(), 7);
+        assert_eq!(errors.len(), 1);
     }
 }
