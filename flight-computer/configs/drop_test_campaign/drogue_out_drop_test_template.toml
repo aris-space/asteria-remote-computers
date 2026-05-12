@@ -117,7 +117,90 @@ manual_transitions = [
     { target = "Safety Spiral", display = "Manual Safety Spiral", abort = true },
 ]
 [state_machine.states."Control Loop".gnc_config]
-controller_type = "SelfTest" # FIXME: correct gnc
+# FIXME: correct gnc
+controller_type =
+"SysIdHIL"
+initial_height = 1432
+descent_per_tick = 0.6
+[state_machine.states.
+"Control Loop"
+.gnc_config.gnc]
+# Taken from
+gnc_configurations::sysid_hil_duebendorf::hil_sysid_compat_adapter_config_with_safety_spi
+ned_origin_lat = 47.405072
+ned_origin_lon = 8.63092
+ned_origin_alt = 435.0
+dt_hint = 0.01
+[state_machine.states.
+"Control Loop"
+.gnc_config.gnc.inner]
+bounding_polygon = [
+[
+149.704875,
+41.079351,
+],
+[
+26.063571,
+153.322687,
+],
+[
+-108.871476,
+-6.790393,
+],
+[
+15.378971,
+-127.065187,
+],
+[
+149.704875,
+41.079351,
+],
+]
+safety_spiral_timeout = 5.0
+safety_spiral_deflection_left = 0.6
+safety_spiral_deflection_right = 0.95
+[state_machine.states.
+"Control Loop"
+.gnc_config.gnc.inner.inner_config]
+spiral_steps = [[0.4, 0.2], [0.4, 0.15], [0.45, 0.15], [0.45, 0.1]]
+spiral_step_altitude_interval = 150.0
+alignment_trigger_altitude = -350.0
+alignment_target_ned = [191.247898, 294.455103]
+alignment_tolerance = 0.1
+alignment_inner_turn = 0.3
+alignment_outer_turn = 0.0
+min_alignment_duration_secs = 10.0
+max_alignment_duration_secs = 60.0
+braking_schedule = [
+[
+250.0,
+0.0,
+],
+[
+225.0,
+0.8,
+],
+[
+200.0,
+1.0,
+],
+[
+150.0,
+0.2,
+],
+[
+100.0,
+0.4,
+],
+[
+50.0,
+0.6,
+],
+[
+0.0,
+0.3,
+],
+]
 
 [state_machine.states."Safety Spiral"]
 type = "SafetySpiral"
