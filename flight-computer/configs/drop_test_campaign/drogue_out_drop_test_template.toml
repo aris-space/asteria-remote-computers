@@ -66,9 +66,8 @@ on_state_set = "Helicopter Armed - W"
 type = "HeightOrTimeTrigger"
 on_time_limit_reached = "Live Helicopter"
 on_height_limit_reached = "Drogue Descent"
-time_limit_sec = 60
-# TODO Define height limit
-height_limit_m = 3
+time_limit_sec = 180 # armed 60 sec prior
+height_limit_m = -1 # TODO Define height limit ASL
 manual_transitions = [
     { target = "Live Helicopter", display = "Disarm" },
     { target = "Drogue Descent", display = "Countdown" },
@@ -80,9 +79,8 @@ manual_transitions = [
 type = "HeightOrTimeTrigger"
 on_time_limit_reached = "Main Chute Deployment"
 on_height_limit_reached = "Main Chute Deployment"
-time_limit_sec = 60
-# TODO Define height limit
-height_limit_m = 3
+time_limit_sec = 26 # 20s countdown + 6s free fall
+height_limit_m = -1 # TODO Define height limit ASL
 manual_transitions = [
     { target = "Live Helicopter", display = "Disarm" },
     { target = "Main Chute Deployment", display = "Manual Deployment", abort = true },
@@ -91,7 +89,7 @@ manual_transitions = [
 # This state deploys the chute and waits for some time before transitioning
 [state_machine.states."Main Chute Deployment"]
 type = "MainChuteDeployment"
-deploy_time_sec = 10
+deploy_time_sec = 5                  # time to deploy main chute
 on_after_deployment = "Hook Release"
 
 [state_machine.states."Hook Release"]
