@@ -127,9 +127,7 @@ ned_origin_lat = 47.405072
 ned_origin_lon = 8.63092
 ned_origin_alt = 435.0
 dt_hint = 0.01
-[state_machine.states.
-"Control Loop"
-.gnc_config.gnc.inner]
+[state_machine.states."Control Loop".gnc_config.gnc.inner]
 bounding_polygon = [
 [
 149.704875,
@@ -155,8 +153,7 @@ bounding_polygon = [
 safety_spiral_timeout = 5.0
 safety_spiral_deflection_left = 0.6
 safety_spiral_deflection_right = 0.95
-[state_machine.states.
-"Control Loop".gnc_config.gnc.inner.inner_config]
+[state_machine.states."Control Loop".gnc_config.gnc.inner.inner_config]
 spiral_steps = [[0.4, 0.2], [0.4, 0.15], [0.45, 0.15], [0.45, 0.1]]
 spiral_step_altitude_interval = 150.0
 alignment_trigger_altitude = -350.0
