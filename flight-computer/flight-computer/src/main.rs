@@ -122,7 +122,7 @@ mod tests {
         ) {
         }
 
-        let cfg =  gnc_configurations::sysid_hil_duebendorf::hil_sysid_compat_adapter_config_with_safety_spiral();
+        let cfg = gnc_configurations::sysid_gadmen::official_sysid_compat_adapter_config_with_safety_spiral();
         check_type(&cfg);
 
         let ser = toml::to_string(&cfg).expect("has to serialize");
