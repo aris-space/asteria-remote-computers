@@ -65,24 +65,24 @@ impl StateLogic for Diagnostics {
                     is_recovery_board_healthy_no_sep
                 },
             ),
-            self.check_pss_boards
-                && check_board(
+            !(self.check_pss_boards)
+                || check_board(
                     &input.boards_status.fuel_control_board,
                     "fuel control board",
                     now,
                     self.outdated_threshold,
                     is_fuel_control_board_healthy,
                 ),
-            self.check_pss_boards
-                && check_board(
+            !(self.check_pss_boards)
+                || check_board(
                     &input.boards_status.oxidizer_control_board,
                     "oxidizer control board",
                     now,
                     self.outdated_threshold,
                     is_oxidizer_control_board_healthy,
                 ),
-            self.check_pss_boards
-                && check_board(
+            !(self.check_pss_boards)
+                || check_board(
                     &input.boards_status.engine_control_board,
                     "engine control board",
                     now,
