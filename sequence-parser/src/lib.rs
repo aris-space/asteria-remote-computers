@@ -44,7 +44,34 @@ where
     },
 }
 
-pub fn sequence<'a, Actuator, Sensor, State>()
+type ParseResult<'a, Actuator, Sensor, State> =
+    Result<Vec<Command<Actuator, Sensor, State>>, Vec<Rich<'a, char>>>;
+
+/// Try to parse a sequence string into a vector of sequence [`Command`]s.
+/// Should the parsing fail, a list with parser errors is returned in [`Err`].
+pub fn parse_sequence_str<Actuator, Sensor, State>(
+    sequence_str: &str,
+) -> ParseResult<'_, Actuator, Sensor, State>
+where
+    Actuator: Clone + FromStr,
+    <Actuator as FromStr>::Err: Display,
+    Sensor: Clone + FromStr,
+    <Sensor as FromStr>::Err: Display,
+    State: Clone + FromStr,
+    <State as FromStr>::Err: Display,
+{
+    let (commands, errors) = sequence::<Actuator, Sensor, State>()
+        .parse(sequence_str)
+        .into_output_errors();
+
+    if errors.is_empty() {
+        Ok(commands.unwrap_or_default())
+    } else {
+        Err(errors)
+    }
+}
+
+fn sequence<'a, Actuator, Sensor, State>()
 -> impl Parser<'a, &'a str, Vec<Command<Actuator, Sensor, State>>, E<'a>>
 where
     Actuator: Clone + FromStr,

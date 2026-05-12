@@ -1,6 +1,7 @@
 //! Utilities to start a mission binary in a uniform way.
 
 use std::path::{Path, PathBuf};
+use std::sync::OnceLock;
 
 use fs4::fs_std::FileExt;
 use sha1::Digest as _;
@@ -9,6 +10,9 @@ use tracing_subscriber::fmt::format::FmtSpan;
 use tracing_subscriber::{EnvFilter, prelude::*};
 
 use super::log::make_mission_log_folder;
+
+/// The path, git hash, and contents of the active config file.
+pub static CONFIG: OnceLock<(PathBuf, String, String)> = OnceLock::new();
 
 /// Collects the important information from this build.
 #[derive(Debug, serde::Serialize)]
@@ -66,13 +70,23 @@ pub async fn init_binary<C: serde::de::DeserializeOwned + std::fmt::Debug>(
         let blob = format!("blob {}\0{config_content}", config_content.len());
         hex::encode(sha1::Sha1::digest(blob.as_bytes()))
     };
+    // Initialize the `CONFIG` static before parsing the config as
+    // some custom deserializers might rely on contents of this static.
+    CONFIG
+        .set((
+            config_path.as_ref().canonicalize()?,
+            config_hash.clone(),
+            config_content.clone(),
+        ))
+        .expect("The `CONFIG` constant is only initialized here");
+
     let config_file: C = toml::from_str(&config_content)?;
 
     // Setup logging
     let log_name = format!(
         "{name}-{time}-{code_v}-{cfg_hash}",
         name = build_info.binary,
-        code_v = &build_info.git_tag.replace('/', "-"),
+        code_v = build_info.git_tag.replace('/', "-"),
         cfg_hash = &config_hash[..5],
         time = chrono::Local::now().format("%Y-%m-%dT%H-%M"),
     );

@@ -1,11 +1,10 @@
 use std::{fs, path::PathBuf, process::exit};
 
 use ariadne::{Label, Report, ReportKind, Source};
-use chumsky::Parser as _;
+use chumsky::error::Rich;
 use clap::Parser;
 use colored::Colorize;
-use sequence_parser::Command;
-use sequence_parser::sequence;
+use sequence_parser::{Command, parse_sequence_str};
 
 #[derive(Parser)]
 #[command(version, about = "Parser for `.seq` sequence files", long_about = None)]
@@ -33,37 +32,17 @@ fn main() {
         }
     };
 
-    let (commands, errors) = sequence::<String, String, String>()
-        .parse(&sequence_str)
-        .into_output_errors();
-
-    let has_errors = !errors.is_empty();
-
-    let file_id = path.display().to_string();
-
-    for error in errors {
-        Report::build(
-            ReportKind::Error,
-            (file_id.clone(), error.span().into_range()),
-        )
-        .with_message(error.to_string())
-        .with_label(
-            Label::new((file_id.clone(), error.span().into_range()))
-                .with_message("here is the problem"),
-        )
-        .finish()
-        .print((file_id.clone(), Source::from(sequence_str.clone())))
-        .expect("should be able to print");
+    match parse_sequence_str::<String, String, String>(&sequence_str) {
+        Ok(commands) => print_sequence_commands(&commands),
+        Err(errors) => {
+            let file_id = path.display().to_string();
+            print_parser_errors(&file_id, &sequence_str, errors);
+            exit(1)
+        }
     }
+}
 
-    if has_errors {
-        // We don't want to print any parsed commands when we have errors. This is
-        // because we use `Default::default()` when there are errors during argument
-        // parsing.
-        exit(1)
-    }
-
-    let commands = commands.unwrap_or_default();
+fn print_sequence_commands(commands: &[Command<String, String, String>]) {
     let width = commands.len().to_string().len();
 
     commands.iter().enumerate().for_each(|(idx, command)| {
@@ -85,29 +64,37 @@ fn main() {
     });
 }
 
+fn print_parser_errors(file_id: &String, sequence_str: &String, errors: Vec<Rich<'_, char>>) {
+    for error in errors {
+        Report::build(ReportKind::Error, (&file_id, error.span().into_range()))
+            .with_message(error.to_string())
+            .with_label(
+                Label::new((&file_id, error.span().into_range()))
+                    .with_message("here is the problem"),
+            )
+            .finish()
+            .print((&file_id, Source::from(sequence_str)))
+            .expect("should be able to print");
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use chumsky::Parser;
-    use sequence_parser::sequence;
+    use sequence_parser::parse_sequence_str;
 
     #[test]
     fn test_firing3_seq() {
         let sequence_str = include_str!("../tests/firing3.seq");
-        let (commands, errors) = sequence::<String, String, String>()
-            .parse(sequence_str)
-            .into_output_errors();
-        // The sequence should be valid.
-        assert!(errors.is_empty());
-        assert_eq!(commands.unwrap_or_default().len(), 49);
+        let commands = parse_sequence_str::<String, String, String>(sequence_str)
+            .expect("The sequence should be valid");
+        assert_eq!(commands.len(), 49);
     }
 
     #[test]
     fn test_ignition_no_engine_seq() {
         let sequence_str = include_str!("../tests/ignition_no_engine.seq");
-        let (_commands, errors) = sequence::<String, String, String>()
-            .parse(sequence_str)
-            .into_output_errors();
-        // The sequence should be invalid.
+        let errors = parse_sequence_str::<String, String, String>(sequence_str)
+            .expect_err("The sequence should be invalid");
         assert_eq!(errors.len(), 1);
     }
 }

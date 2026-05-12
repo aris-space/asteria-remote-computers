@@ -2,13 +2,17 @@ use std::collections::HashSet;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
+use ariadne::{Label, Report, ReportKind, Source};
 use gnc_interface::CompatGuidanceController;
 use lib_mission::actuator_control::command::ActuatorControl;
 use lib_mission::common_states;
 use lib_mission::config::{BoxableState, MakeState};
 use lib_mission::state_machine::{BoxedState, StateName};
 use lib_mission::transition::ManualTransitions;
-use serde::{Deserialize, Serialize};
+use lib_mission::util::init::CONFIG;
+use pss_drivers::output::ValveName;
+use sequences::{parse_sequence_str, Command};
+use serde::{Deserialize, Deserializer, Serialize};
 
 use crate::io::input::InputTree;
 use crate::io::output::OutputTree;
@@ -113,14 +117,14 @@ pub enum StateLogicConfig<Gnc: CompatGuidanceController> {
     /// Describes a [`state_logic::Separate`].
     Separation {
         /// If the `deploy_time_sec` time passes since transitioning into the state,
-        /// we proceed to the `on_after_separation` state  
+        /// we proceed to the `on_after_separation` state
         deploy_time_sec: f64,
         on_after_separation: String,
     },
     /// Describes a [`state_logic::MainChuteDeployment`].
     MainChuteDeployment {
         /// If the `deploy_time_sec` time passes since transitioning into the state,
-        /// we proceed to the `on_after_deployment` state  
+        /// we proceed to the `on_after_deployment` state
         deploy_time_sec: f64,
         on_after_deployment: String,
     },
@@ -260,6 +264,20 @@ pub enum StateLogicConfig<Gnc: CompatGuidanceController> {
         telemetry_loss_threshold_sec: f32,
         /// The state to transition to when a sensor or telemetry violation occured.
         on_violation: String,
+    },
+    RunSequence {
+        /// The sequence to run.
+        #[serde(deserialize_with = "deserialize_sequence", skip_serializing)]
+        // TODO: Why do we need to be serializable?
+        sequence: Vec<Command<ValveName, String, String>>,
+        /// Thresholds on sensors to watch during the whole of the sequence.
+        /// If any of them are violated, this will end the sequence and proceeds to `on_cancelled`.
+        #[serde(default)]
+        thresholds: ThresholdWatcher,
+        /// The state to transition to when the sequence has been completed.
+        on_completed: String,
+        /// The state to transition to when an action demands the sequence be cancelled.
+        on_cancelled: String,
     },
     /// Describes a [`common_states::Shutdown`].
     Shutdown,
@@ -547,6 +565,19 @@ impl<Gnc: CompatGuidanceController> MakeState for StateLogicConfig<Gnc> {
                 on_violation: StateName::try_new(&on_violation, names)?,
             }
             .into_box(),
+            Self::RunSequence {
+                sequence,
+                thresholds,
+                on_cancelled,
+                on_completed,
+            } => state_logic::RunSequence {
+                manual_transitions,
+                sequence,
+                thresholds,
+                on_completed: StateName::try_new(&on_completed, names)?,
+                on_cancelled: StateName::try_new(&on_cancelled, names)?,
+            }
+            .into_box(),
             StateLogicConfig::Shutdown => common_states::Shutdown::default().into_box(),
         })
     }
@@ -555,4 +586,52 @@ impl<Gnc: CompatGuidanceController> MakeState for StateLogicConfig<Gnc> {
 /// used for serde default.
 fn yes() -> bool {
     true
+}
+
+/// Custom deserializer for inline sequences in TOML strings.
+fn deserialize_sequence<'de, D>(
+    deserializer: D,
+) -> Result<Vec<Command<ValveName, String, String>>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    // Ideally we could use the config spans but I think this is an issue with the `toml` crate right now:
+    // <https://github.com/toml-rs/toml/discussions/1159>
+
+    // let spanned_sequence_str = toml::Spanned::<String>::deserialize(deserializer)?;
+    // let sequence_str = spanned_sequence_str.get_ref();
+    // let sequence_span = spanned_sequence_str.span();
+
+    let spanned_sequence_str = String::deserialize(deserializer)?;
+    let sequence_str = spanned_sequence_str.as_ref();
+    let sequence_span = 0..spanned_sequence_str.len();
+
+    let errors = match parse_sequence_str::<ValveName, String, String>(sequence_str) {
+        Ok(commands) => return Ok(commands),
+        Err(errors) => errors,
+    };
+
+    let (config_path, _, _) = CONFIG.get().expect("Static should be initialized");
+    let config_file_id = config_path.display().to_string();
+
+    let mut outputs = Vec::new();
+    for err in errors {
+        Report::build(ReportKind::Error, (&config_file_id, sequence_span.clone()))
+            .with_message(err.to_string())
+            .with_label(
+                Label::new((
+                    &config_file_id,
+                    (sequence_span.start + err.span().start)
+                        ..(sequence_span.start + err.span().end),
+                ))
+                .with_message("here is the problem"),
+            )
+            .finish()
+            .write_for_stdout((&config_file_id, Source::from(sequence_str)), &mut outputs)
+            .expect("Should be able to write bytes");
+    }
+
+    Err(serde::de::Error::custom(
+        String::from_utf8(outputs).expect("Should be a valid string"),
+    ))
 }

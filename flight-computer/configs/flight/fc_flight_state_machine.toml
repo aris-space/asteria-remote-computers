@@ -16,6 +16,16 @@ diagram_path = "state-machines/fc-flight-state-machine.drawio.svg"
 
 # ======================================= Preparation =======================================
 
+[state_machine.states."Idle3"]
+type = "RunSequence"
+on_completed = "Waiting for Filling 3"
+on_cancelled = "Waiting for Filling 3"
+sequence = """
+# Firing sequence
+sys.msg(text='Firing Sequence initiated');
+sys.msg(text='Firing Sequence completed');
+"""
+
 # State machine's starting point. Simply waits for a manual command.
 # ECU config is sent automatically.
 [state_machine.states."Idle"]
