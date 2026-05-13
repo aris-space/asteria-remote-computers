@@ -595,18 +595,10 @@ fn deserialize_sequence<'de, D>(
 where
     D: Deserializer<'de>,
 {
-    // Ideally we could use the config spans but I think this is an issue with the `toml` crate right now:
-    // <https://github.com/toml-rs/toml/discussions/1159>
+    let sequence_str = String::deserialize(deserializer)?;
+    let sequence_span = 0..sequence_str.len();
 
-    // let spanned_sequence_str = toml::Spanned::<String>::deserialize(deserializer)?;
-    // let sequence_str = spanned_sequence_str.get_ref();
-    // let sequence_span = spanned_sequence_str.span();
-
-    let spanned_sequence_str = String::deserialize(deserializer)?;
-    let sequence_str = spanned_sequence_str.as_ref();
-    let sequence_span = 0..spanned_sequence_str.len();
-
-    let errors = match parse_sequence_str::<ValveName, String, String>(sequence_str) {
+    let errors = match parse_sequence_str::<ValveName, String, String>(&sequence_str) {
         Ok(commands) => return Ok(commands),
         Err(errors) => errors,
     };
@@ -614,24 +606,27 @@ where
     let (config_path, _, _) = CONFIG.get().expect("Static should be initialized");
     let config_file_id = config_path.display().to_string();
 
-    let mut outputs = Vec::new();
-    for err in errors {
+    let mut report_builder =
         Report::build(ReportKind::Error, (&config_file_id, sequence_span.clone()))
-            .with_message(err.to_string())
-            .with_label(
-                Label::new((
-                    &config_file_id,
-                    (sequence_span.start + err.span().start)
-                        ..(sequence_span.start + err.span().end),
-                ))
-                .with_message("here is the problem"),
-            )
-            .finish()
-            .write_for_stdout((&config_file_id, Source::from(sequence_str)), &mut outputs)
-            .expect("Should be able to write bytes");
+            .with_message("unable to parse sequences");
+
+    for err in errors {
+        report_builder = report_builder.with_label(
+            Label::new((
+                &config_file_id,
+                (sequence_span.start + err.span().start)..(sequence_span.start + err.span().end),
+            ))
+            .with_message(err.to_string()),
+        );
     }
 
+    let mut output = Vec::new();
+    report_builder
+        .finish()
+        .write_for_stdout((&config_file_id, Source::from(&sequence_str)), &mut output)
+        .expect("Should write bytes");
+
     Err(serde::de::Error::custom(
-        String::from_utf8(outputs).expect("Should be a valid string"),
+        String::from_utf8(output).expect("Should be valid UTF-8"),
     ))
 }
