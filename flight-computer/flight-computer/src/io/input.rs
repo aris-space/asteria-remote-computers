@@ -116,8 +116,13 @@ pub struct InputTree {
     pub orientation: Watchable<OrientationData>,
 
     /// The valve states of the PSS.
+    #[broadcast(flatten)]
+    #[collector(flatten)]
     pub pss_valves: PSSValves,
+
     /// The sensor readings from the PSS.
+    #[broadcast(flatten)]
+    #[collector(flatten)]
     pub pss_sensors: PSSSensors,
 }
 

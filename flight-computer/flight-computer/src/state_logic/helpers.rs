@@ -64,35 +64,15 @@ impl ThresholdWatcher {
     pub async fn watch(&self, input_tree: &InputTree) -> Violation {
         // Because comparision with NAN is always false, unspecified thresholds should never trigger a violation
         let mut fuel_tank_pressure_watcher = input_tree.pss_sensors.fuel_tank_pressure.watched();
-        let mut fuel_tank_pressure_watcher_1 =
-            input_tree.pss_sensors.fuel_tank_pressure_1.watched();
-        let mut fuel_tank_pressure_watcher_2 =
-            input_tree.pss_sensors.fuel_tank_pressure_2.watched();
         let mut oxidizer_tank_pressure_watcher =
             input_tree.pss_sensors.oxidizer_tank_pressure.watched();
-        let mut oxidizer_tank_pressure_watcher_1 =
-            input_tree.pss_sensors.oxidizer_tank_pressure_1.watched();
-        let mut oxidizer_tank_pressure_watcher_2 =
-            input_tree.pss_sensors.oxidizer_tank_pressure_2.watched();
 
         tokio::select! {
-            p = fuel_tank_pressure_watcher.next_satisfying(|p| p.as_f32() > self.upper_thresholds_barg.fuel_tank_pressure) => {
-                Violation(format!("fuel tank pressure ({p}) rose above threshold"))
+            p = fuel_tank_pressure_watcher.next_satisfying(|p| p.fuel_tank_pressure_filtered.0 > self.upper_thresholds_barg.fuel_tank_pressure) => {
+                Violation(format!("fuel tank pressure ({p:?}) rose above threshold"))
             }
-            p = fuel_tank_pressure_watcher_1.next_satisfying(|p| p.as_f32() > self.upper_thresholds_barg.fuel_tank_pressure_1) => {
-                Violation(format!("fuel tank pressure 1 ({p}) rose above threshold"))
-            }
-            p = fuel_tank_pressure_watcher_2.next_satisfying(|p| p.as_f32() > self.upper_thresholds_barg.fuel_tank_pressure_2) => {
-                Violation(format!("fuel tank pressure 2 ({p}) rose above threshold"))
-            }
-             p = oxidizer_tank_pressure_watcher.next_satisfying(|p| p.as_f32() > self.upper_thresholds_barg.oxidizer_tank_pressure) => {
-                Violation(format!("oxidizer tank pressure ({p}) rose above threshold"))
-            }
-            p = oxidizer_tank_pressure_watcher_1.next_satisfying(|p| p.as_f32() > self.upper_thresholds_barg.oxidizer_tank_pressure_1) => {
-                Violation(format!("oxidizer tank pressure 1 ({p}) rose above threshold"))
-            }
-            p = oxidizer_tank_pressure_watcher_2.next_satisfying(|p| p.as_f32() > self.upper_thresholds_barg.oxidizer_tank_pressure_2) => {
-                Violation(format!("oxidizer tank pressure 2 ({p}) rose above threshold"))
+            p = oxidizer_tank_pressure_watcher.next_satisfying(|p| p.oxidizer_tank_differential_pressure.0 > self.upper_thresholds_barg.oxidizer_tank_pressure) => {
+                Violation(format!("oxidizer tank pressure ({p:?}) rose above threshold"))
             }
         }
     }

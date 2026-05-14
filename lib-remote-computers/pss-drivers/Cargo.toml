@@ -9,8 +9,13 @@ workspace = true
 [dependencies]
 watchable = "1.1.2"
 lib-mission = { path = "../lib-mission" }
-messages = { path = "../../data-definitions/messages", features = ["can"] }
+io-utils = { path = "../io-utils" }
 datatypes = { path = "../../data-definitions/datatypes" }
 tracing = "0.1.41"
 serde = { version = "1.0.219", features = ["derive"] }
 tokio = { version = "1.45.1", features = ["time", "rt"] }
+messages = { path = "../../data-definitions/messages", features = [
+    "derive_debug",
+    "derive_serde",
+    "mavlink",
+], default-features = false }
