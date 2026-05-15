@@ -1,14 +1,8 @@
-use datatypes::{
-    actuator::{DPRValve, NormallyClosedValve, NormallyOpenValve},
-    units::BarG,
-};
-use messages::datapoints::dp_engine_control_board::{
-    EngineBayTemperature, EnginePressure, Message as ECBMessage,
-};
-use messages::datapoints::dp_fuel_control_board::{FuelTankPressure, Message as FCBMessage};
-use messages::datapoints::dp_oxidizer_control_board::{
-    Message as OCBMessage, OxidizerTankPressure,
-};
+use datatypes::actuator::{DPRValve, NormallyClosedValve, NormallyOpenValve};
+use datatypes::units::{BarG, Celsius};
+use messages::datapoints::dp_engine_control_board::Message as ECBMessage;
+use messages::datapoints::dp_fuel_control_board::Message as FCBMessage;
+use messages::datapoints::dp_oxidizer_control_board::Message as OCBMessage;
 
 use io_utils::{Broadcast, Collector};
 use messages::Message;
@@ -74,25 +68,79 @@ pub struct PSSSensors {
     )]
     #[broadcast(min_freq_hz = 5., max_freq_hz = 15.)]
     pub pressurization_line_pressure: Watchable<BarG>,
-    /// Fuel Tank Pressure filtered from both sensors in barg.
-    #[datapoint(pattern = "Message::FuelControlBoard(FCBMessage::FuelTankPressure(#value))")]
-    #[broadcast(min_freq_hz = 5., max_freq_hz = 15.)]
-    pub fuel_tank_pressure: Watchable<FuelTankPressure>,
-    /// Oxidizer Tank Pressure filtered from both sensors in barg.
+
+    /// Fuel Tank Pressure filtered from sensor 1 in barg.
     #[datapoint(
-        pattern = "Message::OxidizerControlBoard(OCBMessage::OxidizerTankPressure(#value))"
+        pattern = "Message::FuelControlBoard(FCBMessage::FuelTankPressureSensor1(#value))"
     )]
     #[broadcast(min_freq_hz = 5., max_freq_hz = 15.)]
-    pub oxidizer_tank_pressure: Watchable<OxidizerTankPressure>,
-    /// Injector fuel pressure in barg `eng_inj_p`
-    #[datapoint(pattern = "Message::EngineControlBoard(ECBMessage::EnginePressure(#value))")]
-    #[broadcast(min_freq_hz = 5., max_freq_hz = 15.)]
-    pub engine_chamber_pressure: Watchable<EnginePressure>,
+    pub fuel_tank_pressure_sensor1: Watchable<BarG>,
 
-    /// Engine bay Temperature Sensor `oss_tnk_t`
-    #[datapoint(pattern = "Message::EngineControlBoard(ECBMessage::EngineBayTemperature(#value))")]
+    /// Fuel Tank Pressure filtered from sensor 2 in barg.
+    #[datapoint(
+        pattern = "Message::FuelControlBoard(FCBMessage::FuelTankPressureSensor2(#value))"
+    )]
     #[broadcast(min_freq_hz = 5., max_freq_hz = 15.)]
-    pub engine_bay_temperature: Watchable<EngineBayTemperature>,
+    pub fuel_tank_pressure_sensor2: Watchable<BarG>,
+
+    /// Fuel Tank Pressure filtered from both sensors in barg.
+    #[datapoint(
+        pattern = "Message::FuelControlBoard(FCBMessage::FuelTankPressureFiltered(#value))"
+    )]
+    #[broadcast(min_freq_hz = 5., max_freq_hz = 15.)]
+    pub fuel_tank_pressure_filtered: Watchable<BarG>,
+
+    /// Oxidizer Tank Pressure filtered from sensor 1 in barg.
+    #[datapoint(
+        pattern = "Message::OxidizerControlBoard(OCBMessage::OxidizerTankPressureSensor1(#value))"
+    )]
+    #[broadcast(min_freq_hz = 5., max_freq_hz = 15.)]
+    pub oxidizer_tank_pressure_sensor1: Watchable<BarG>,
+
+    /// Oxidizer Tank Pressure filtered from sensor 2 in barg.
+    #[datapoint(
+        pattern = "Message::OxidizerControlBoard(OCBMessage::OxidizerTankPressureSensor2(#value))"
+    )]
+    #[broadcast(min_freq_hz = 5., max_freq_hz = 15.)]
+    pub oxidizer_tank_pressure_sensor2: Watchable<BarG>,
+
+    /// Oxidizer Differential Tank Pressure in absolute barg. Used to infer fill level
+    #[datapoint(
+        pattern = "Message::OxidizerControlBoard(OCBMessage::OxidizerTankDifferentialPressure(#value))"
+    )]
+    #[broadcast(min_freq_hz = 5., max_freq_hz = 15.)]
+    pub oxidizer_tank_differential_pressure: Watchable<BarG>,
+
+    /// Engine chamber pressure in barg.
+    #[datapoint(pattern = "Message::EngineControlBoard(ECBMessage::ChamberPressure(#value))")]
+    #[broadcast(min_freq_hz = 5., max_freq_hz = 15.)]
+    pub chamber_pressure: Watchable<BarG>,
+
+    /// Fuel Injector pressure at the engine in barg.
+    #[datapoint(pattern = "Message::EngineControlBoard(ECBMessage::InjectorFuelPressure(#value))")]
+    #[broadcast(min_freq_hz = 5., max_freq_hz = 15.)]
+    pub injector_fuel_pressure: Watchable<BarG>,
+
+    /// Oxidizer Injector pressure at the engine in barg.
+    #[datapoint(
+        pattern = "Message::EngineControlBoard(ECBMessage::InjectorOxidizerPressure(#value))"
+    )]
+    #[broadcast(min_freq_hz = 5., max_freq_hz = 15.)]
+    pub injector_oxidizer_pressure: Watchable<BarG>,
+
+    /// Temperature of the fuel in the injector.
+    #[datapoint(
+        pattern = "Message::EngineControlBoard(ECBMessage::InjectorFuelTemperature(#value))"
+    )]
+    #[broadcast(min_freq_hz = 5., max_freq_hz = 15.)]
+    pub injector_fuel_temperature: Watchable<Celsius>,
+
+    /// Temperature of the liquid at the bottom of the oxidizer tank.
+    #[datapoint(
+        pattern = "Message::EngineControlBoard(ECBMessage::OxidizerTankTemperature(#value))"
+    )]
+    #[broadcast(min_freq_hz = 5., max_freq_hz = 15.)]
+    pub oxidizer_tank_temperature: Watchable<Celsius>,
 }
 
 impl PSSValves {
@@ -179,7 +227,7 @@ impl PSSSensors {
         &self,
         folder: &std::path::Path,
         time: &Watchable<lib_mission::util::time::MissionTime>,
-    ) -> Result<[tokio::task::AbortHandle; 5], Box<dyn std::error::Error>> {
+    ) -> Result<[tokio::task::AbortHandle; 12], Box<dyn std::error::Error>> {
         use lib_mission::reactive::IntoWatched as _;
         /// Helper macro to spawn a task for a single sensor, capturing `time` and `folder`.
         macro_rules! spawn_serializable_logger {
@@ -195,10 +243,17 @@ impl PSSSensors {
 
         let Self {
             pressurization_line_pressure,
-            fuel_tank_pressure,
-            oxidizer_tank_pressure,
-            engine_chamber_pressure,
-            engine_bay_temperature,
+            fuel_tank_pressure_sensor1,
+            fuel_tank_pressure_sensor2,
+            fuel_tank_pressure_filtered,
+            oxidizer_tank_pressure_sensor1,
+            oxidizer_tank_pressure_sensor2,
+            oxidizer_tank_differential_pressure,
+            chamber_pressure,
+            injector_fuel_pressure,
+            injector_oxidizer_pressure,
+            injector_fuel_temperature,
+            oxidizer_tank_temperature,
         } = self;
 
         Ok([
@@ -208,32 +263,55 @@ impl PSSSensors {
                 ["pressurization_line_pressure [barg?]"],
             ),
             spawn_serializable_logger!(
-                "sensors_fuel_tank_p",
-                fuel_tank_pressure,
-                [
-                    "fuel_tank_pressure_sensor_1 [barg?]",
-                    "fuel_tank_pressure_sensor_2 [barg?]",
-                    "fuel_tank_pressure_filtered [barg?]"
-                ],
+                "sensor_fuel_tank_p_1",
+                fuel_tank_pressure_sensor1,
+                ["fuel_tank_pressure_sensor_1 [barg?]"],
             ),
             spawn_serializable_logger!(
-                "sensors_oxidizer_tank_p",
-                oxidizer_tank_pressure,
-                [
-                    "oxidizer_tank_pressure1 [barg?]",
-                    "oxidizer_tank_pressure1 [barg?]",
-                    "oxidizer_diff_tank_pressure [barg?]",
-                ],
+                "sensor_fuel_tank_p_2",
+                fuel_tank_pressure_sensor2,
+                ["fuel_tank_pressure_sensor_2 [barg?]"],
             ),
             spawn_serializable_logger!(
-                "sensors_engine_p",
-                engine_chamber_pressure,
-                ["eng_cc_p [barg?]", "eng_inj_p [barg?]", "oss_inj_p [barg?]",],
+                "sensor_fuel_tank_p_filtered",
+                fuel_tank_pressure_filtered,
+                ["fuel_tank_pressure_filtered [barg?]"],
             ),
             spawn_serializable_logger!(
-                "sensors_engine_t",
-                engine_bay_temperature,
-                ["eng_inj_t [°C?]", "oss_tnk_t [°C?]"],
+                "sensor_oxidizer_tank_p_1",
+                oxidizer_tank_pressure_sensor1,
+                ["oxidizer_tank_pressure_sensor1 [barg?]"],
+            ),
+            spawn_serializable_logger!(
+                "sensor_oxidizer_tank_p_2",
+                oxidizer_tank_pressure_sensor2,
+                ["oxidizer_tank_pressure_sensor2 [barg?]"],
+            ),
+            spawn_serializable_logger!(
+                "sensor_oxidizer_tank_dp",
+                oxidizer_tank_differential_pressure,
+                ["oxidizer_tank_differential_pressure [barg?]"],
+            ),
+            spawn_serializable_logger!("sensor_eng_cc_p", chamber_pressure, ["eng_cc_p [barg?]"],),
+            spawn_serializable_logger!(
+                "sensor_eng_inj_p",
+                injector_fuel_pressure,
+                ["eng_inj_p [barg?]"],
+            ),
+            spawn_serializable_logger!(
+                "sensor_oss_inj_p",
+                injector_oxidizer_pressure,
+                ["oss_inj_p [barg?]"],
+            ),
+            spawn_serializable_logger!(
+                "sensor_eng_inj_t",
+                injector_fuel_temperature,
+                ["eng_inj_t [°C?]"],
+            ),
+            spawn_serializable_logger!(
+                "sensor_oss_tnk_t",
+                oxidizer_tank_temperature,
+                ["oss_tnk_t [°C?]"],
             ),
         ])
     }
