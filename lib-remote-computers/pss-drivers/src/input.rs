@@ -1,14 +1,10 @@
 use datatypes::{
     actuator::{DPRValve, NormallyClosedValve, NormallyOpenValve},
-    units::BarG,
+    units::{BarG, Celsius},
 };
-use messages::datapoints::dp_engine_control_board::{
-    EngineBayTemperature, EnginePressure, Message as ECBMessage,
-};
-use messages::datapoints::dp_fuel_control_board::{FuelTankPressure, Message as FCBMessage};
-use messages::datapoints::dp_oxidizer_control_board::{
-    Message as OCBMessage, OxidizerTankPressure,
-};
+use messages::datapoints::dp_engine_control_board::Message as ECBMessage;
+use messages::datapoints::dp_fuel_control_board::Message as FCBMessage;
+use messages::datapoints::dp_oxidizer_control_board::Message as OCBMessage;
 
 use io_utils::{Broadcast, Collector};
 use messages::Message;
@@ -68,31 +64,76 @@ pub struct PSSValves {
     update_expr = "let _ = #field.update(#value);"
 )]
 pub struct PSSSensors {
-    /// Pressurization Line Pressure in barg `prz_copv_p`
+    /// Pressurization Line Pressure Sensor in barg `prz_copv_p`.
     #[datapoint(
         pattern = "Message::FuelControlBoard(FCBMessage::PressurizationLinePressure(#value))"
     )]
     #[broadcast(min_freq_hz = 5., max_freq_hz = 15.)]
     pub pressurization_line_pressure: Watchable<BarG>,
-    /// Fuel Tank Pressure filtered from both sensors in barg.
-    #[datapoint(pattern = "Message::FuelControlBoard(FCBMessage::FuelTankPressure(#value))")]
-    #[broadcast(min_freq_hz = 5., max_freq_hz = 15.)]
-    pub fuel_tank_pressure: Watchable<FuelTankPressure>,
-    /// Oxidizer Tank Pressure filtered from both sensors in barg.
+    /// Fuel Tank Pressure Sensor 1 in barg `fss_tnk_p1`.
     #[datapoint(
-        pattern = "Message::OxidizerControlBoard(OCBMessage::OxidizerTankPressure(#value))"
+        pattern = "Message::FuelControlBoard(FCBMessage::FuelTankPressureSensor1(#value))"
     )]
     #[broadcast(min_freq_hz = 5., max_freq_hz = 15.)]
-    pub oxidizer_tank_pressure: Watchable<OxidizerTankPressure>,
-    /// Injector fuel pressure in barg `eng_inj_p`
-    #[datapoint(pattern = "Message::EngineControlBoard(ECBMessage::EnginePressure(#value))")]
+    pub fuel_tank_pressure1: Watchable<BarG>,
+    /// Fuel Tank Pressure Sensor 2 in barg `fss_tnk_p2`.
+    #[datapoint(
+        pattern = "Message::FuelControlBoard(FCBMessage::FuelTankPressureSensor2(#value))"
+    )]
     #[broadcast(min_freq_hz = 5., max_freq_hz = 15.)]
-    pub engine_chamber_pressure: Watchable<EnginePressure>,
+    pub fuel_tank_pressure2: Watchable<BarG>,
+    /// Fuel Tank Pressure Filtered in barg `fss_tnk_p_flt`.
+    #[datapoint(
+        pattern = "Message::FuelControlBoard(FCBMessage::FuelTankPressureFiltered(#value))"
+    )]
+    #[broadcast(min_freq_hz = 5., max_freq_hz = 15.)]
+    pub fuel_tank_pressure_filtered: Watchable<BarG>,
 
-    /// Engine bay Temperature Sensor `oss_tnk_t`
-    #[datapoint(pattern = "Message::EngineControlBoard(ECBMessage::EngineBayTemperature(#value))")]
+    /// Oxidizer Tank Pressure Sensor 1 in barg `oss_tnk_p1`.
+    #[datapoint(
+        pattern = "Message::OxidizerControlBoard(OCBMessage::OxidizerTankPressureSensor1(#value))"
+    )]
     #[broadcast(min_freq_hz = 5., max_freq_hz = 15.)]
-    pub engine_bay_temperature: Watchable<EngineBayTemperature>,
+    pub oxidizer_tank_pressure1: Watchable<BarG>,
+    /// Oxidizer Tank Pressure Sensor 2 in barg `oss_tnk_p2`.
+    #[datapoint(
+        pattern = "Message::OxidizerControlBoard(OCBMessage::OxidizerTankPressureSensor2(#value))"
+    )]
+    #[broadcast(min_freq_hz = 5., max_freq_hz = 15.)]
+    pub oxidizer_tank_pressure2: Watchable<BarG>,
+    /// Oxidizer Tank Differential Pressure Sensor in barg `oss_tnk_dps`.
+    #[datapoint(
+        pattern = "Message::OxidizerControlBoard(OCBMessage::OxidizerTankDifferentialPressure(#value))"
+    )]
+    #[broadcast(min_freq_hz = 5., max_freq_hz = 15.)]
+    pub oxidizer_tank_differential_pressure: Watchable<BarG>,
+
+    /// Engine Chamber Pressure Sensor in barg `eng_cc_p`.
+    #[datapoint(pattern = "Message::EngineControlBoard(ECBMessage::ChamberPressure(#value))")]
+    #[broadcast(min_freq_hz = 5., max_freq_hz = 15.)]
+    pub engine_chamber_pressure: Watchable<BarG>,
+    /// Engine Injector Fuel Pressure Sensor in barg `eng_inj_p`.
+    #[datapoint(pattern = "Message::EngineControlBoard(ECBMessage::InjectorFuelPressure(#value))")]
+    #[broadcast(min_freq_hz = 5., max_freq_hz = 15.)]
+    pub engine_injector_fuel_pressure: Watchable<BarG>,
+    /// Engine Injector Oxidizer Pressure Sensor in barg `oss_inj_p`.
+    #[datapoint(
+        pattern = "Message::EngineControlBoard(ECBMessage::InjectorOxidizerPressure(#value))"
+    )]
+    #[broadcast(min_freq_hz = 5., max_freq_hz = 15.)]
+    pub engine_injector_oxidizer_pressure: Watchable<BarG>,
+    /// Engine Injector Fuel Temperature Sensor in °C `eng_inj_t`.
+    #[datapoint(
+        pattern = "Message::EngineControlBoard(ECBMessage::InjectorFuelTemperature(#value))"
+    )]
+    #[broadcast(min_freq_hz = 5., max_freq_hz = 15.)]
+    pub engine_injector_fuel_temperature: Watchable<Celsius>,
+    /// Engine Oxidizer Tank Temperature Sensor in °C `oss_tnk_t`.
+    #[datapoint(
+        pattern = "Message::EngineControlBoard(ECBMessage::OxidizerTankTemperature(#value))"
+    )]
+    #[broadcast(min_freq_hz = 5., max_freq_hz = 15.)]
+    pub engine_oxidizer_tank_temperature: Watchable<Celsius>,
 }
 
 impl PSSValves {
@@ -195,10 +236,19 @@ impl PSSSensors {
 
         let Self {
             pressurization_line_pressure,
-            fuel_tank_pressure,
-            oxidizer_tank_pressure,
+            fuel_tank_pressure1,
+            fuel_tank_pressure2,
+            fuel_tank_pressure_filtered,
+
+            oxidizer_tank_pressure1,
+            oxidizer_tank_pressure2,
+            oxidizer_tank_differential_pressure,
+
+            engine_injector_fuel_pressure,
+            engine_injector_oxidizer_pressure,
             engine_chamber_pressure,
-            engine_bay_temperature,
+            engine_oxidizer_tank_temperature,
+            engine_injector_fuel_temperature,
         } = self;
 
         Ok([

@@ -583,7 +583,7 @@ checksum = "1435fa1053d8b2fbbe9be7e97eca7f33d37b28409959813daefc1446a14247f1"
 
 [[package]]
 name = "dp-engine-control-board"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "arbitrary",
  "bincode",
@@ -611,7 +611,7 @@ dependencies = [
 
 [[package]]
 name = "dp-fuel-control-board"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "arbitrary",
  "bincode",
@@ -625,7 +625,7 @@ dependencies = [
 
 [[package]]
 name = "dp-oxidizer-control-board"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "arbitrary",
  "bincode",
@@ -1154,6 +1154,7 @@ dependencies = [
  "nalgebra 0.34.2",
  "nav-types",
  "serde",
+ "serde_json",
  "tracing",
 ]
 
