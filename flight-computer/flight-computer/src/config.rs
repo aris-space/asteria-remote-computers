@@ -81,6 +81,10 @@ pub enum StateLogicConfig<Gnc: CompatGuidanceController> {
         /// If `true`, also checks the PSS boards, as is usual during a flight.
         /// Else, only the AV stack boards and recovery board are checked.
         check_pss_boards: bool,
+        /// If `true`, include checks for the separation, as is usual during a flight.
+        /// Else, only the only the deployment and steering are checked in the recovery board
+        #[serde(default = "yes")]
+        check_separation: bool,
         /// If the diagnostics succeed, we will transition to the state with the name of `on_tests_pass`.
         on_tests_pass: String,
         /// If the diagnostics fail, we will transition to the state with the name of `on_tests_fail`.
@@ -297,11 +301,13 @@ impl<Gnc: CompatGuidanceController> MakeState for StateLogicConfig<Gnc> {
             StateLogicConfig::Diagnostics {
                 outdated_threshold_sec,
                 check_pss_boards,
+                check_separation,
                 on_tests_pass,
                 on_tests_fail,
             } => state_logic::Diagnostics {
                 outdated_threshold: Duration::from_secs_f64(outdated_threshold_sec),
                 check_pss_boards,
+                check_separation,
                 on_tests_pass: StateName::try_new(&on_tests_pass, names)?,
                 on_tests_fail: StateName::try_new(&on_tests_fail, names)?,
             }
@@ -544,4 +550,9 @@ impl<Gnc: CompatGuidanceController> MakeState for StateLogicConfig<Gnc> {
             StateLogicConfig::Shutdown => common_states::Shutdown::default().into_box(),
         })
     }
+}
+
+/// used for serde default.
+fn yes() -> bool {
+    true
 }

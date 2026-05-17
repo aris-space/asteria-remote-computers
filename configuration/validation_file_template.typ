@@ -1,5 +1,7 @@
 #import "base.typ": page-layout 
 #show: page-layout.with(subteam: "SFW", title: "Config Validation File")
+#show "TODO": highlight
+#show "FIXME": highlight
 
 #let data = json(sys.inputs.metadata-file)
 #let bin = data.binary
@@ -55,7 +57,7 @@
 
 = Configuration Validation File
 
-== Binary
+== Flight Computer
 
 // #raw(bin.name)
 
@@ -65,6 +67,18 @@
   highlight(raw(bin.commit), fill: orange.lighten(70%)),
   raw(bin.branch),
   [#bin.last_change],
+)
+
+== GNC
+
+#let gnc = data.gnc
+
+#table(
+  columns: (1fr, 1fr, 4fr),
+  [git commit], [branch], [latest change],
+  highlight(raw(gnc.commit), fill: orange.lighten(70%)),
+  raw(gnc.branch),
+  [#gnc.last_change],
 )
 
 == Config
