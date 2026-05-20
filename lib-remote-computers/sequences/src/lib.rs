@@ -55,7 +55,10 @@ pub async fn run_sequence(
                     return ControlFlow::Break(SequenceError::MissingOutputSettable(*actuator));
                 }
             }
-            Command::DprActivate { name: actuator, setpoint } => {
+            Command::DprActivate {
+                name: actuator,
+                setpoint,
+            } => {
                 if let Some(settable) = settables.get_mut(actuator) {
                     tracing::info!("Command {i}: Activating DPR actuator {actuator:?}");
                     if let Err(err) = settable.set_value(*setpoint) {

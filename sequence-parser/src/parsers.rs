@@ -238,7 +238,8 @@ pub fn func<'a>(
 
 /// Parse an identifier and convert it into a specific type which implements
 /// [`FromStr`].
-pub fn ident<'a, Transform>() -> impl Parser<'a, &'a str, Option<Spanned<(Transform, &'a str)>>, E<'a>>
+pub fn ident<'a, Transform>()
+-> impl Parser<'a, &'a str, Option<Spanned<(Transform, &'a str)>>, E<'a>>
 where
     Transform: FromStr,
     <Transform as FromStr>::Err: Display,
