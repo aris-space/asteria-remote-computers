@@ -173,12 +173,15 @@ fn spawn_can_threads(
             socketcan::CanFdSocket::from(sock_rx.as_fd().try_clone_to_owned().expect("dup fd"))
         };
 
+        let shared_tx = Arc::clone(&shared);
         std::thread::spawn(move || {
             let mut sock = sock_rx;
             loop {
                 let frame = match sock.receive() {
                     Ok(f) => f,
-                    Err(_) => {
+                    Err(e) => {
+                        shared.lock().expect("lock").status =
+                            format!("CAN receive error: {e:?}");
                         std::thread::sleep(Duration::from_millis(1));
                         continue;
                     }
@@ -187,6 +190,7 @@ fn spawn_can_threads(
                     embedded_can::Id::Standard(id) => id,
                     embedded_can::Id::Extended(e) => e.standard_id(),
                 };
+                // Unknown IDs are normal (other bus traffic) — skip silently.
                 let Ok(msg) = messages::Message::from_parts(id, frame.data()) else {
                     continue;
                 };
@@ -213,7 +217,10 @@ fn spawn_can_threads(
                 let Some(frame) = socketcan::CanAnyFrame::new(id, &buf[..len as usize]) else {
                     continue;
                 };
-                let _ = sock.transmit(&frame);
+                if let Err(e) = sock.transmit(&frame) {
+                    shared_tx.lock().expect("lock").status =
+                        format!("CAN transmit error: {e:?}");
+                }
             }
         });
     }
