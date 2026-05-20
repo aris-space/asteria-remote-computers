@@ -26,6 +26,10 @@ members = [
     "sequence-parser",
 ]
 
+exclude = [
+    "flight-computer/dpr-tuner"
+]
+
 [workspace.lints.clippy]
 unwrap_used = "deny"
 pedantic = { level = "warn", priority = -1 }
