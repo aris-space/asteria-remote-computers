@@ -5,19 +5,19 @@
 //!
 //! On non-linux the backend is intentionally disabled.
 
+use std::io::{Result as IoResult, Write};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
+use crossterm::cursor::MoveTo;
 use crossterm::event::{self, Event, KeyCode, KeyEventKind, KeyModifiers};
+use crossterm::style::{Color, Print, ResetColor, SetBackgroundColor, SetForegroundColor};
 use crossterm::terminal::{
-    disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen,
+    self, disable_raw_mode, enable_raw_mode, Clear, ClearType, EnterAlternateScreen,
+    LeaveAlternateScreen,
 };
-use crossterm::ExecutableCommand;
+use crossterm::{ExecutableCommand, QueueableCommand as _};
 use datatypes::status::DprGainInfo;
-use ratatui::prelude::*;
-use ratatui::widgets::*;
-
-// ─── Domain types ─────────────────────────────────────────────────────────────
 
 /// Which control board is currently focused.
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -62,8 +62,6 @@ impl Field {
     }
 }
 
-// ─── App state ────────────────────────────────────────────────────────────────
-
 /// Shared mutable state updated by the CAN receive thread and read by the render loop.
 struct AppState {
     /// Latest gain values received from the Fuel Control Board, `None` until first status arrives.
@@ -83,8 +81,6 @@ impl AppState {
         }
     }
 }
-
-// ─── UI cursor ────────────────────────────────────────────────────────────────
 
 /// Tracks which cell is focused and holds the in-progress edit buffer.
 struct Cursor {
@@ -128,8 +124,6 @@ impl Cursor {
         };
     }
 }
-
-// ─── CAN I/O ──────────────────────────────────────────────────────────────────
 
 /// Build the `messages::Message` for sending a single gain value.
 fn build_message(board: Board, field: Field, value: f32) -> messages::Message {
@@ -231,70 +225,60 @@ fn spawn_can_threads(
     tx
 }
 
-// ─── Rendering ────────────────────────────────────────────────────────────────
+/// Redraws the full screen: two board panels side by side, then status and help lines.
+fn render(out: &mut impl Write, state: &AppState, cursor: &Cursor) -> IoResult<()> {
+    let (cols, rows) = terminal::size()?;
+    let col_width = cols / 2;
 
-/// Top-level render: splits the area into two board panels plus status/help rows.
-fn render(frame: &mut Frame, state: &AppState, cursor: &Cursor) {
-    let area = frame.area();
+    out.queue(Clear(ClearType::All))?;
 
-    let outer = Layout::vertical([
-        Constraint::Min(0),
-        Constraint::Length(1),
-        Constraint::Length(1),
-    ])
-    .split(area);
+    draw_board(out, 0, col_width, "FUEL", Board::Fuel, state, cursor)?;
+    draw_board(out, col_width, col_width, "OXIDIZER", Board::Oxidizer, state, cursor)?;
 
-    let panels = Layout::horizontal([Constraint::Percentage(50), Constraint::Percentage(50)])
-        .split(outer[0]);
-
-    render_board(frame, panels[0], "FUEL", Board::Fuel, state, cursor);
-    render_board(frame, panels[1], "OXIDIZER", Board::Oxidizer, state, cursor);
-
-    frame.render_widget(
-        Paragraph::new(state.status.as_str()).style(Style::default().fg(Color::Yellow)),
-        outer[1],
-    );
+    out.queue(MoveTo(0, rows - 2))?
+        .queue(SetForegroundColor(Color::Yellow))?
+        .queue(Print(&state.status))?
+        .queue(ResetColor)?;
 
     let help = if cursor.editing {
         " [Enter] Send  [Esc] Cancel"
     } else {
         " [↑↓] Navigate  [←→] Switch board  [Enter] Edit  [Q] Quit"
     };
-    frame.render_widget(
-        Paragraph::new(help).style(Style::default().fg(Color::DarkGray)),
-        outer[2],
-    );
+    out.queue(MoveTo(0, rows - 1))?
+        .queue(SetForegroundColor(Color::DarkGrey))?
+        .queue(Print(help))?
+        .queue(ResetColor)?;
+
+    out.flush()?;
+    Ok(())
 }
 
-/// Renders a single board panel (bordered box with one row per [`Field`]).
-fn render_board(
-    frame: &mut Frame,
-    area: Rect,
+/// Draws one board panel starting at the given column offset with the given width.
+fn draw_board(
+    out: &mut impl Write,
+    col: u16,
+    col_width: u16,
     title: &str,
     board: Board,
     state: &AppState,
     cursor: &Cursor,
-) {
+) -> IoResult<()> {
+    let width = col_width as usize;
     let is_active = cursor.board == board;
-    let border_style = if is_active {
-        Style::default().fg(Color::Cyan)
-    } else {
-        Style::default().fg(Color::DarkGray)
-    };
-
-    let block = Block::bordered()
-        .title(format!(" {title} DPR "))
-        .border_style(border_style);
-    let inner = block.inner(area);
-    frame.render_widget(block, area);
-
+    let title_color = if is_active { Color::Cyan } else { Color::DarkGrey };
     let gains = match board {
         Board::Fuel => &state.fuel,
         Board::Oxidizer => &state.oxidizer,
     };
 
-    let rows: Vec<Constraint> = Field::ALL.iter().map(|_| Constraint::Length(2)).collect();
-    let cells = Layout::vertical(rows).split(inner);
+    out.queue(MoveTo(col, 0))?
+        .queue(SetForegroundColor(title_color))?
+        .queue(Print(format!(
+            "─── {title} DPR {}",
+            "─".repeat(width.saturating_sub(title.len() + 9))
+        )))?
+        .queue(ResetColor)?;
 
     for (i, field) in Field::ALL.iter().enumerate() {
         let selected = is_active && cursor.field == i;
@@ -303,31 +287,27 @@ fn render_board(
             .map(|g| format!("{:.4}", field.from_gain(g)))
             .unwrap_or_else(|| "--".to_string());
 
-        let row_style = if selected {
-            Style::default().bg(Color::DarkGray)
+        let line = if selected && cursor.editing {
+            format!(" {:<12} {:>8}  > {}_", field.label(), current_val, cursor.input)
         } else {
-            Style::default()
+            format!(" {:<12} {:>8}", field.label(), current_val)
         };
 
-        let display = if selected && cursor.editing {
-            format!(
-                "{:<12} current: {:<12} > {}_",
-                field.label(),
-                current_val,
-                cursor.input
-            )
-        } else {
-            format!("{:<12} current: {:<12}", field.label(), current_val)
-        };
-
-        frame.render_widget(Paragraph::new(display).style(row_style), cells[i]);
+        out.queue(MoveTo(col, (i as u16) + 1))?;
+        if selected {
+            out.queue(SetBackgroundColor(Color::DarkGrey))?;
+        }
+        out.queue(Print(format!("{line:<width$}")))?;
+        if selected {
+            out.queue(ResetColor)?;
+        }
     }
+
+    Ok(())
 }
 
-// ─── Main ─────────────────────────────────────────────────────────────────────
-
 /// Entry point: opens the CAN socket and runs the TUI event loop.
-fn main() -> std::io::Result<()> {
+fn main() -> IoResult<()> {
     let interface = std::env::args()
         .nth(1)
         .unwrap_or_else(|| "can0".to_string());
@@ -335,17 +315,16 @@ fn main() -> std::io::Result<()> {
     let shared = Arc::new(Mutex::new(AppState::new()));
     let tx = spawn_can_threads(Arc::clone(&shared), &interface);
 
-    enable_raw_mode()?;
     let mut stdout = std::io::stdout();
+    enable_raw_mode()?;
     stdout.execute(EnterAlternateScreen)?;
-    let mut terminal = Terminal::new(ratatui::backend::CrosstermBackend::new(stdout))?;
 
     let mut cursor = Cursor::new();
 
     loop {
         {
             let st = shared.lock().expect("lock");
-            terminal.draw(|f| render(f, &st, &cursor))?;
+            render(&mut stdout, &st, &cursor)?;
         }
 
         if event::poll(Duration::from_millis(100))? {
@@ -380,7 +359,7 @@ fn main() -> std::io::Result<()> {
                                     shared.lock().expect("lock").status = format!(
                                         "Sent {} {} = {v}",
                                         board_name,
-                                        cursor.current_field().label()
+                                        cursor.current_field().label(),
                                     );
                                 }
                                 Err(_) => {
@@ -414,6 +393,6 @@ fn main() -> std::io::Result<()> {
     }
 
     disable_raw_mode()?;
-    terminal.backend_mut().execute(LeaveAlternateScreen)?;
+    stdout.execute(LeaveAlternateScreen)?;
     Ok(())
 }
