@@ -18,6 +18,8 @@ use crossterm::terminal::{
 };
 use crossterm::{ExecutableCommand, QueueableCommand as _};
 use datatypes::status::DprGainInfo;
+#[cfg(target_os = "linux")]
+use socketcan::BlockingCan as _;
 
 /// Which control board is currently focused.
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -208,7 +210,7 @@ fn spawn_can_threads(
                 let Ok((id, len)) = msg.encode_into(&mut buf) else {
                     continue;
                 };
-                let Some(frame) = socketcan::CanFdFrame::new(id, &buf[..len as usize]) else {
+                let Some(frame) = socketcan::CanAnyFrame::new(id, &buf[..len as usize]) else {
                     continue;
                 };
                 let _ = sock.transmit(&frame);
@@ -233,7 +235,15 @@ fn render(out: &mut impl Write, state: &AppState, cursor: &Cursor) -> IoResult<(
     out.queue(Clear(ClearType::All))?;
 
     draw_board(out, 0, col_width, "FUEL", Board::Fuel, state, cursor)?;
-    draw_board(out, col_width, col_width, "OXIDIZER", Board::Oxidizer, state, cursor)?;
+    draw_board(
+        out,
+        col_width,
+        col_width,
+        "OXIDIZER",
+        Board::Oxidizer,
+        state,
+        cursor,
+    )?;
 
     out.queue(MoveTo(0, rows - 2))?
         .queue(SetForegroundColor(Color::Yellow))?
@@ -266,7 +276,11 @@ fn draw_board(
 ) -> IoResult<()> {
     let width = col_width as usize;
     let is_active = cursor.board == board;
-    let title_color = if is_active { Color::Cyan } else { Color::DarkGrey };
+    let title_color = if is_active {
+        Color::Cyan
+    } else {
+        Color::DarkGrey
+    };
     let gains = match board {
         Board::Fuel => &state.fuel,
         Board::Oxidizer => &state.oxidizer,
@@ -288,7 +302,12 @@ fn draw_board(
             .unwrap_or_else(|| "--".to_string());
 
         let line = if selected && cursor.editing {
-            format!(" {:<12} {:>8}  > {}_", field.label(), current_val, cursor.input)
+            format!(
+                " {:<12} {:>8}  > {}_",
+                field.label(),
+                current_val,
+                cursor.input
+            )
         } else {
             format!(" {:<12} {:>8}", field.label(), current_val)
         };
