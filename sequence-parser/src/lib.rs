@@ -417,7 +417,7 @@ where
             Some(Command::SensorDetect {
                 name: sensor?.inner.0,
                 value: value.inner,
-                rising: rising.inner.unwrap_or_default(),
+                rising: rising.inner.unwrap_or(true),
                 abort_state: abort?.inner,
                 patience: patience.inner,
                 duration: duration.inner,
