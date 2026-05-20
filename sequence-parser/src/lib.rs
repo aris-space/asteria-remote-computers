@@ -20,8 +20,13 @@ where
     Wait(Duration),
     ToState(State),
     // ----- Actuator functions -----
-    AcutatorOpen(Actuator),
+    ActuatorOpen(Actuator),
     ActuatorClose(Actuator),
+    DprActivate {
+        name: Actuator,
+        setpoint: f32,
+    },
+    DprDeactivate(Actuator),
     // ----- Sensor functions -----
     SensorWatch {
         name: Sensor,
@@ -89,6 +94,8 @@ where
         .or(to_state())
         .or(actuator_open())
         .or(actuator_close())
+        .or(dpr_activate())
+        .or(dpr_deactivate())
         .or(sensor_watch())
         .or(sensor_ignore())
         .or(sensor_detect());
@@ -218,7 +225,17 @@ where
             // Ensure that we don't have any arguments.
             extract_args! { args, emitter, e => {} };
 
-            Some(Command::AcutatorOpen(actuator?.inner))
+            let actuator = actuator?;
+            if !actuator.1.to_lowercase().contains("dpr") {
+                return Some(Command::ActuatorOpen(actuator.inner.0));
+            }
+
+            emitter.emit(Rich::custom(
+                actuator.span,
+                "`open` can only be used to open non-DPR actuators",
+            ));
+
+            None
         })
 }
 
@@ -238,7 +255,81 @@ where
             // Ensure that we don't have any arguments.
             extract_args! { args, emitter, e => {} };
 
-            Some(Command::ActuatorClose(actuator?.inner))
+            let actuator = actuator?;
+            if !actuator.1.to_lowercase().contains("dpr") {
+                return Some(Command::ActuatorClose(actuator.inner.0));
+            }
+
+            emitter.emit(Rich::custom(
+                actuator.span,
+                "`close` can only be used to close non-DPR actuators",
+            ));
+
+            None
+        })
+}
+
+/// Parser for the `<actuator_name>.activate(setpoint = <float>)` command.
+fn dpr_activate<'a, Actuator, Sensor, State>()
+-> impl Parser<'a, &'a str, Option<Command<Actuator, Sensor, State>>, E<'a>>
+where
+    Actuator: Clone + FromStr,
+    <Actuator as FromStr>::Err: Display,
+    Sensor: Clone + FromStr,
+    State: Clone + FromStr,
+{
+    ident::<Actuator>()
+        .then_ignore(just("."))
+        .then(func("activate"))
+        .validate(|(actuator, args), e, emitter| {
+            let setpoint = extract_args! { args, emitter, e => {
+                setpoint: Float
+            } };
+
+            let actuator = actuator?;
+            if actuator.1.to_lowercase().contains("dpr") {
+                return Some(Command::DprActivate {
+                    name: actuator.inner.0,
+                    setpoint: setpoint.inner,
+                });
+            }
+
+            emitter.emit(Rich::custom(
+                actuator.span,
+                "`activate` can only be used to activate DPR actuators",
+            ));
+
+            None
+        })
+}
+
+/// Parser for the `<actuator_name>.deactivate()` command.
+fn dpr_deactivate<'a, Actuator, Sensor, State>()
+-> impl Parser<'a, &'a str, Option<Command<Actuator, Sensor, State>>, E<'a>>
+where
+    Actuator: Clone + FromStr,
+    <Actuator as FromStr>::Err: Display,
+    Sensor: Clone + FromStr,
+    State: Clone + FromStr,
+{
+    ident::<Actuator>()
+        .then_ignore(just("."))
+        .then(func("deactivate"))
+        .validate(|(actuator, args), _e, emitter| {
+            // Ensure that we don't have any arguments.
+            extract_args! { args, emitter, e => {} };
+
+            let actuator = actuator?;
+            if actuator.1.to_lowercase().contains("dpr") {
+                return Some(Command::DprDeactivate(actuator.inner.0));
+            }
+
+            emitter.emit(Rich::custom(
+                actuator.span,
+                "`deactivate` can only be used to deactivate DPR actuators",
+            ));
+
+            None
         })
 }
 
@@ -266,7 +357,7 @@ where
             };
 
             Some(Command::SensorWatch {
-                name: sensor?.inner,
+                name: sensor?.inner.0,
                 abort_state: abort?.inner,
                 max: max.inner.unwrap_or(f32::INFINITY),
                 min: min.inner.unwrap_or(f32::INFINITY),
@@ -293,7 +384,7 @@ where
             };
 
             Some(Command::SensorIgnore {
-                name: sensor?.inner,
+                name: sensor?.inner.0,
                 key: key.inner,
             })
         })
@@ -324,7 +415,7 @@ where
             };
 
             Some(Command::SensorDetect {
-                name: sensor?.inner,
+                name: sensor?.inner.0,
                 value: value.inner,
                 rising: rising.inner.unwrap_or_default(),
                 abort_state: abort?.inner,

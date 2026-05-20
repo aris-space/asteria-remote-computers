@@ -46,7 +46,7 @@ impl StateLogic for RunSequence {
                 tracing::warn!("Violation: {violation}");
                 self.on_cancelled.clone()
             }
-            outcome = run_sequence(&self.sequence, &output.valves, &input.pss_valves, &input.pss_sensors) => match outcome {
+            outcome = run_sequence(&self.sequence, &output.valves, &input.pss_sensors) => match outcome {
                 ControlFlow::Continue(_) => self.on_completed.clone(),
                 ControlFlow::Break(err) => {
                     tracing::error!("Sequence aborted: {err}");

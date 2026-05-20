@@ -15,11 +15,10 @@ type StateName = String;
 /// Run a sequence of [`Command`]s on a remote computer.
 pub async fn run_sequence(
     sequence: impl IntoIterator<Item = &Command<ValveName, SensorName, StateName>>,
-    output_actuators: &pss_drivers::output::PSSValves,
-    _input_actuators: &pss_drivers::input::PSSValves,
-    _input_sensors: &pss_drivers::input::PSSSensors,
+    actuators: &pss_drivers::output::PSSValves,
+    _sensors: &pss_drivers::input::PSSSensors,
 ) -> ControlFlow<SequenceError> {
-    let mut output_settables = output_actuators.as_settables();
+    let mut settables = actuators.as_settables();
     for (i, command) in sequence.into_iter().enumerate() {
         match command {
             Command::Msg(msg) => tracing::info!("Command {i}: [LOG] {msg}"),
@@ -30,8 +29,8 @@ pub async fn run_sequence(
                 tokio::time::sleep(*duration).await;
             }
             Command::ToState(_state) => todo!("unsupported sequence command"),
-            Command::AcutatorOpen(actuator) => {
-                if let Some(settable) = output_settables.get_mut(actuator) {
+            Command::ActuatorOpen(actuator) => {
+                if let Some(settable) = settables.get_mut(actuator) {
                     tracing::info!("Command {i}: Opening actuator {actuator:?}");
                     if let Err(err) = settable.set_value(1.0) {
                         tracing::error!("Command {i}: Could not open {actuator:?}: {err}");
@@ -44,7 +43,7 @@ pub async fn run_sequence(
                 }
             }
             Command::ActuatorClose(actuator) => {
-                if let Some(settable) = output_settables.get_mut(actuator) {
+                if let Some(settable) = settables.get_mut(actuator) {
                     tracing::info!("Command {i}: Closing actuator {actuator:?}");
                     if let Err(err) = settable.set_value(0.0) {
                         tracing::error!("Command {i}: Could not close {actuator:?}: {err}");
@@ -52,6 +51,32 @@ pub async fn run_sequence(
                 } else {
                     tracing::error!(
                         "Command {i}: Could not find settable for actuator {actuator:?} to close it"
+                    );
+                    return ControlFlow::Break(SequenceError::MissingOutputSettable(*actuator));
+                }
+            }
+            Command::DprActivate { name: actuator, setpoint } => {
+                if let Some(settable) = settables.get_mut(actuator) {
+                    tracing::info!("Command {i}: Activating DPR actuator {actuator:?}");
+                    if let Err(err) = settable.set_value(*setpoint) {
+                        tracing::error!("Command {i}: Could not activate {actuator:?}: {err}");
+                    }
+                } else {
+                    tracing::error!(
+                        "Command {i}: Could not find settable for DPR actuator {actuator:?} to activate it"
+                    );
+                    return ControlFlow::Break(SequenceError::MissingOutputSettable(*actuator));
+                }
+            }
+            Command::DprDeactivate(actuator) => {
+                if let Some(settable) = settables.get_mut(actuator) {
+                    tracing::info!("Command {i}: Deactivating DPR actuator {actuator:?}");
+                    if let Err(err) = settable.set_value(f32::NAN) {
+                        tracing::error!("Command {i}: Could not deactivate {actuator:?}: {err}");
+                    }
+                } else {
+                    tracing::error!(
+                        "Command {i}: Could not find settable for DPR actuator {actuator:?} to deactivate it"
                     );
                     return ControlFlow::Break(SequenceError::MissingOutputSettable(*actuator));
                 }

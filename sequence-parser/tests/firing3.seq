@@ -78,14 +78,14 @@ sys.wait(time=6s); # +1s from igniter shutdown
 
 # shutdown
 FSS_MNL_VLV.close();
-FSS_PRZ_DPR.close();
+FSS_PRZ_DPR.deactivate();
 FSS_PRG_VLV.open();
 sys.wait(time=0.5s);
 
 # purge oss
 OSS_PRG_VLV.open();
 OSS_MNL_VLV.close();
-OSS_PRZ_DPR.close();
+OSS_PRZ_DPR.deactivate();
 
 # purging igniter lines
 IGN_PRG_VLV.open();

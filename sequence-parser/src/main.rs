@@ -52,7 +52,10 @@ fn print_sequence_commands(commands: &[Command<String, String, String>]) {
             }
             Command::Wait(_) => format!("{command:?}").bright_black(),
             Command::ToState(_) => format!("{command:?}").bright_red(),
-            Command::AcutatorOpen(_) | Command::ActuatorClose(_) => format!("{command:?}").yellow(),
+            Command::ActuatorOpen(_)
+            | Command::ActuatorClose(_)
+            | Command::DprActivate { .. }
+            | Command::DprDeactivate(_) => format!("{command:?}").yellow(),
             Command::SensorWatch { .. }
             | Command::SensorIgnore { .. }
             | Command::SensorDetect { .. } => format!("{command:?}").cyan(),
