@@ -22,6 +22,7 @@ gnc-interface = { path = "../asteria-gnc/gnc-interface" }
 gnc-configurations = { path = "../asteria-gnc/gnc-configurations", optional = true }
 gnc-algorithms = { path = "../asteria-gnc/gnc-algorithms", optional = true }
 pss-drivers = { path = "../../lib-remote-computers/pss-drivers" }
+sequences = { path = "../../lib-remote-computers/sequences" }
 tokio = { version = "1.37.0", features = ["full"] }
 watchable = "1.1.2"
 serde = { version = "1.0", features = ["derive"] }
@@ -30,6 +31,7 @@ thiserror = "1.0.64"
 async-trait = "0.1.83"
 tracing = "0.1.41"
 mavio = { version = "0.5.10", features = ["std", "tokio"] }
+ariadne = "0.6.0"
 
 [target.'cfg(target_os = "linux")'.dependencies]
 socketcan = "3.5.0"

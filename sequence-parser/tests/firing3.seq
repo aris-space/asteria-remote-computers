@@ -1,0 +1,101 @@
+# Firing sequence
+
+sys.msg(text='Firing Sequence initiated');
+
+# Purge OSS to prepare for pre CF
+OSS_PRG_VLV.open();
+sys.wait(time=5s);
+OSS_PRG_VLV.close();
+
+# pre CF while purging FSS
+FSS_PRG_VLV.open();
+OSS_MNL_VLV.open();
+
+sys.wait(time=1s);
+
+# OSS Purge initiation
+OSS_PRG_VLV.open();
+
+# Closing OSS main
+OSS_MNL_VLV.close();
+
+# IGN purge (whole system purging now)
+IGN_PRG_VLV.open();
+sys.wait(time=1s);
+
+# stop IGN purge
+IGN_PRG_VLV.close();
+
+# start Ignition sequence
+sys.warning(text='Starting Ignition');
+
+IGN_SPK_PLG.open();
+sys.wait(time=0.5s);
+
+IGN_OXD_VLV.open();
+sys.wait(time=0.5s);
+
+IGN_FUE_VLV.open();
+
+# detecting ignition and starting a watcher on the pressure
+IGN_CC_P.detect(value=4.5, rising=true, abort=firing_abort, patience=1s);
+IGN_CC_P.watch(key=ign_detect, min=4, abort=firing_abort);
+
+# Ignition confirmed
+FSS_PRG_VLV.close();
+
+# open OSS main and afterwards stop purge
+OSS_MNL_VLV.open();
+OSS_PRG_VLV.close();
+
+sys.wait(time=0.5s);
+
+# open FSS main
+FSS_MNL_VLV.open();
+
+# Combustion initiated, confirming
+ENG_CC_P1.detect(value=6.75, rising=true, abort=firing_abort, patience=1.5s);
+
+# turning off ign pressure watcher
+IGN_CC_P.ignore(key=ign_detect);
+
+# turn off igniter
+IGN_FUE_VLV.close();
+sys.wait(time=0.5s);
+
+IGN_OXD_VLV.close();
+sys.wait(time=0.5s);
+
+IGN_SPK_PLG.close();
+
+#Increase DPR setpoints to full throttle
+
+sys.msg(text='Go for throttle up');
+sys.msg(text='Going Full Send');
+
+# fire for desired time
+sys.wait(time=6s); # +1s from igniter shutdown
+
+# shutdown
+FSS_MNL_VLV.close();
+FSS_PRZ_DPR.deactivate();
+FSS_PRG_VLV.open();
+sys.wait(time=0.5s);
+
+# purge oss
+OSS_PRG_VLV.open();
+OSS_MNL_VLV.close();
+OSS_PRZ_DPR.deactivate();
+
+# purging igniter lines
+IGN_PRG_VLV.open();
+
+sys.wait(time=12s);
+
+# end purge
+FSS_PRG_VLV.close();
+IGN_PRG_VLV.close();
+sys.wait(time=0.5s);
+OSS_PRG_VLV.close();
+
+sys.msg(text='Firing Sequence completed');

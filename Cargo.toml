@@ -5,6 +5,7 @@ members = [
     "lib-remote-computers/io-utils/macros/*",
     "lib-remote-computers/lib-mission",
     "lib-remote-computers/pss-drivers",
+    "lib-remote-computers/sequences",
     # "rfs-computer/rfs-computer",
     # "rfs-computer/uremote-electronics",
     "rfs-computer/keller23sx",
@@ -13,6 +14,7 @@ members = [
     "flight-computer/flight-computer",
     "flight-computer/asteria-gnc/gnc-interface",
     "flight-computer/asteria-gnc/gnc-configurations",
+    "flight-computer/deployment/mavlink-heartbeat",
     "data-definitions/can-hal",
     "data-definitions/core",
     "data-definitions/datapoints/*",
@@ -21,6 +23,7 @@ members = [
     "data-definitions/macros",
     "data-definitions/mavlink-hal",
     "data-definitions/messages",
+    "sequence-parser",
 ]
 
 [workspace.lints.clippy]

@@ -1,0 +1,44 @@
+sys.msg(text='Ignition Sequence initiated');
+
+IGN_OXD_P.watch(max=15, abort=ign_abort);
+IGN_FUE_P.watch(max=15, abort=ign_abort);
+
+IGN_CC_P.watch(max=10, abort=ign_abort);
+
+THIS_IS_NOT_VALID;
+
+IGN_CC_T.watch(max=200, abort=ign_abort);
+
+IGN_PRG_VLV.open();
+sys.wait(time=5s);
+IGN_PRG_VLV.close();
+
+IGN_SPK_PLG.open();
+sys.wait(time=0.5s);
+
+IGN_OXD_VLV.open();
+sys.wait(time=0.5s);
+
+IGN_FUE_VLV.open();
+
+IGN_CC_P.detect(value=6, rising=true, abort=ign_abort, patience=1s);
+IGN_CC_P.watch(min=5, key=ign_detect, abort=ign_abort);
+
+sys.wait(time=4s);
+
+IGN_CC_P.ignore(key=ign_detect);
+
+IGN_FUE_VLV.close();
+IGN_PRG_VLV.open();
+sys.wait(time=0.5s);
+
+IGN_OXD_VLV.close();
+sys.wait(time=0.5s);
+
+IGN_SPK_PLG.close();
+
+sys.wait(time=5s);
+
+IGN_PRG_VLV.close();
+
+sys.msg(text='Ignition Sequence Successful');

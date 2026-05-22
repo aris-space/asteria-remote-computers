@@ -1,0 +1,25 @@
+[package]
+name = "sequences"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+datatypes = { path = "../../data-definitions/datatypes", features = [
+  "std",
+  "watchable_settable",
+] }
+lib-mission = { path = "../lib-mission" }
+messages = { path = "../../data-definitions/messages", default-features = false, features = [
+  "derive_debug",
+  "derive_serde",
+] }
+pss-drivers = { path = "../pss-drivers" }
+sequence-parser = { path = "../../sequence-parser" }
+serde = { version = "1.0", features = ["derive"] }
+tokio = { version = "1.37.0", features = ["full"] }
+tracing = "0.1.41"
+watchable = "1.1.2"
+thiserror = "1.0.64"
+
+[lints]
+workspace = true

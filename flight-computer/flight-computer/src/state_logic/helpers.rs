@@ -63,15 +63,18 @@ impl ThresholdWatcher {
     #[allow(clippy::similar_names)] // don't care
     pub async fn watch(&self, input_tree: &InputTree) -> Violation {
         // Because comparision with NAN is always false, unspecified thresholds should never trigger a violation
-        let mut fuel_tank_pressure_watcher = input_tree.pss_sensors.fuel_tank_pressure.watched();
-        let mut oxidizer_tank_pressure_watcher =
-            input_tree.pss_sensors.oxidizer_tank_pressure.watched();
+        let mut fuel_tank_pressure_watcher =
+            input_tree.pss_sensors.fuel_tank_pressure_filtered.watched();
+        let mut oxidizer_tank_pressure_watcher = input_tree
+            .pss_sensors
+            .oxidizer_tank_pressure_sensor1
+            .watched();
 
         tokio::select! {
-            p = fuel_tank_pressure_watcher.next_satisfying(|p| p.fuel_tank_pressure_filtered.0 > self.upper_thresholds_barg.fuel_tank_pressure) => {
+            p = fuel_tank_pressure_watcher.next_satisfying(|p| p.0 > self.upper_thresholds_barg.fuel_tank_pressure) => {
                 Violation(format!("fuel tank pressure ({p:?}) rose above threshold"))
             }
-            p = oxidizer_tank_pressure_watcher.next_satisfying(|p| p.oxidizer_tank_differential_pressure.0 > self.upper_thresholds_barg.oxidizer_tank_pressure) => {
+            p = oxidizer_tank_pressure_watcher.next_satisfying(|p| p.0 > self.upper_thresholds_barg.oxidizer_tank_pressure) => {
                 Violation(format!("oxidizer tank pressure ({p:?}) rose above threshold"))
             }
         }
