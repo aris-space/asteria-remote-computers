@@ -151,7 +151,7 @@ safety_spiral_timeout = 5.0
 safety_spiral_deflection_left = 0.6
 safety_spiral_deflection_right = 0.95
 [state_machine.states."Control Loop".gnc_config.gnc.inner.inner_config.guidance_config]
-emp = [-32.7, -27.4]
+emp = [46.7, 36.1]
 ipi = [160.5, 232.4, 0.0]
 holding_radius = 5.0
 convergence_rate = 0.15
