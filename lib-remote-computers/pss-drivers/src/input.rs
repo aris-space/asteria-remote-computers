@@ -55,6 +55,53 @@ pub struct PSSValves {
     pub oxidizer_main_valve: Watchable<NormallyClosedValve>,
 }
 
+/// See the matching types in [`PSSSensors`].
+///
+/// ```
+/// use pss_drivers::input::SensorName;
+/// assert_eq!("prz_copv_p".parse::<SensorName>().unwrap(), SensorName::prz_copv_p)
+/// ```
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, serde::Deserialize, serde::Serialize, Hash,
+)]
+#[allow(non_camel_case_types)]
+pub enum SensorName {
+    /// Name of the pressurization line pressure sensor.
+    prz_copv_p,
+    /// Name of the fuel tank pressure sensor 1.
+    fss_tnk_p1,
+    /// Name of the fuel tank pressure sensor 2.
+    fss_tnk_p2,
+    /// Name of the filtered fuel tank pressure sensor.
+    fss_tnk_p_flt,
+    /// Name of the oxidizer tank pressure sensor 1.
+    oss_tnk_p1,
+    /// Name of the oxidizer tank pressure sensor 2.
+    oss_tnk_p2,
+    /// Name of the oxidizer differential pressure sensor.
+    oss_tnk_dps,
+    /// Name of the chamber pressure sensor.
+    eng_cc_p,
+    /// Name of the injector fuel pressure sensor.
+    eng_inj_p,
+    /// Name of the injector oxidizer pressure sensor.
+    oss_inj_p,
+    /// Name of the injector fuel temperature sensor.
+    eng_inj_t,
+    /// Name of the injector oxidizer temperature sensor.
+    oss_tnk_t,
+}
+
+impl std::str::FromStr for SensorName {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        use serde::Deserialize as _;
+        Self::deserialize(<&str as serde::de::IntoDeserializer>::into_deserializer(s))
+            .map_err(|e| e.to_string())
+    }
+}
+
 #[derive(Debug, Default, Clone, Broadcast, Collector)]
 #[broadcast(message_type = "Message")]
 #[collector(
@@ -218,6 +265,38 @@ impl PSSValves {
 }
 
 impl PSSSensors {
+    /// Get a watchable for a pressure sensor by it's [`SensorName`].
+    /// Returns [`None`] if the provided `name` is not the name of a pressure sensor.
+    pub fn get_pressure_datapoint(&self, name: &SensorName) -> Option<&Watchable<BarG>> {
+        let watchable = match name {
+            SensorName::prz_copv_p => &self.pressurization_line_pressure,
+            SensorName::fss_tnk_p1 => &self.fuel_tank_pressure_sensor1,
+            SensorName::fss_tnk_p2 => &self.fuel_tank_pressure_sensor2,
+            SensorName::fss_tnk_p_flt => &self.fuel_tank_pressure_filtered,
+            SensorName::oss_tnk_p1 => &self.oxidizer_tank_pressure_sensor1,
+            SensorName::oss_tnk_p2 => &self.oxidizer_tank_pressure_sensor2,
+            SensorName::oss_tnk_dps => &self.oxidizer_tank_differential_pressure,
+            SensorName::eng_cc_p => &self.chamber_pressure,
+            SensorName::eng_inj_p => &self.injector_fuel_pressure,
+            SensorName::oss_inj_p => &self.injector_oxidizer_pressure,
+            // `name` is not the name of a pressure sensor.
+            _ => return None,
+        };
+        Some(watchable)
+    }
+
+    /// Get a watchable for a temperature sensor by it's [`SensorName`].
+    /// Returns [`None`] if the provided `name` is not the name of a temperature sensor.
+    pub fn get_temperature_datapoint(&self, name: &SensorName) -> Option<&Watchable<Celsius>> {
+        let watchable = match name {
+            SensorName::eng_inj_t => &self.injector_fuel_temperature,
+            SensorName::oss_tnk_t => &self.oxidizer_tank_temperature,
+            // `name` is not the name of a temperature sensor.
+            _ => return None,
+        };
+        Some(watchable)
+    }
+
     /// Starts logging sensors timeseries to csv files in `folder`.
     /// Used for data analysis.
     ///
