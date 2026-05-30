@@ -271,14 +271,8 @@ pub enum StateLogicConfig<Gnc: CompatGuidanceController> {
         #[serde(deserialize_with = "deserialize_sequence", skip_serializing)]
         // TODO: Why do we need to be serializable?
         sequence: Vec<Command<ValveName, SensorName, String>>,
-        /// Thresholds on sensors to watch during the whole of the sequence.
-        /// If any of them are violated, this will end the sequence and proceeds to `on_cancelled`.
-        #[serde(default)]
-        thresholds: ThresholdWatcher,
         /// The state to transition to when the sequence has been completed.
         on_completed: String,
-        /// The state to transition to when an action demands the sequence be cancelled.
-        on_cancelled: String,
     },
     /// Describes a [`common_states::Shutdown`].
     Shutdown,
@@ -568,17 +562,24 @@ impl<Gnc: CompatGuidanceController> MakeState for StateLogicConfig<Gnc> {
             .into_box(),
             Self::RunSequence {
                 sequence,
-                thresholds,
-                on_cancelled,
                 on_completed,
-            } => state_logic::RunSequence {
-                manual_transitions,
-                sequence,
-                thresholds,
-                on_completed: StateName::try_new(&on_completed, names)?,
-                on_cancelled: StateName::try_new(&on_cancelled, names)?,
+            } => {
+                for command in &sequence {
+                    if let Command::SensorWatch { abort_state, .. }
+                    | Command::SensorDetect { abort_state, .. } = command
+                    {
+                        // Ensure that hte abort state is a valid state name.
+                        StateName::try_new(abort_state, names)?;
+                    }
+                }
+
+                state_logic::RunSequence {
+                    manual_transitions,
+                    sequence,
+                    on_completed: StateName::try_new(&on_completed, names)?,
+                }
+                .into_box()
             }
-            .into_box(),
             StateLogicConfig::Shutdown => common_states::Shutdown::default().into_box(),
         })
     }
