@@ -258,6 +258,7 @@ impl InputTree {
                 (
                     rep.current_status.common.errors,
                     rep.current_status.common.micros_since_restart,
+                    rep.current_status.has_pss_control,
                     rep.current_status.is_ignition_armed == datatypes::status::ArmingState::Armed,
                 )
             }),
