@@ -2753,6 +2753,7 @@ name = "sequences"
 version = "0.1.0"
 dependencies = [
  "datatypes",
+ "futures",
  "lib-mission",
  "messages",
  "pss-drivers",

@@ -2,8 +2,9 @@ use std::ops::ControlFlow;
 
 use lib_mission::state_machine::{AdditionalState, StateLogic, StateName};
 use lib_mission::transition::ManualTransitions;
+use pss_drivers::input::SensorName;
 use pss_drivers::output::ValveName;
-use sequences::{run_sequence, Command};
+use sequences::{Command, run_sequence};
 
 use crate::state_logic::helpers::ThresholdWatcher;
 
@@ -17,7 +18,7 @@ pub struct RunSequence {
     /// If any of them are violated, this will end the sequence and proceeds to `on_cancelled`.
     pub thresholds: ThresholdWatcher,
     /// The sequence to run.
-    pub sequence: Vec<Command<ValveName, String, String>>,
+    pub sequence: Vec<Command<ValveName, SensorName, String>>,
     /// The state to transition to when the sequence has been completed.
     pub on_completed: StateName,
     /// The state to transition to when an action demands the sequence be cancelled.
@@ -48,9 +49,9 @@ impl StateLogic for RunSequence {
             }
             outcome = run_sequence(&self.sequence, &output.valves, &input.pss_sensors) => match outcome {
                 ControlFlow::Continue(_) => self.on_completed.clone(),
-                ControlFlow::Break(err) => {
-                    tracing::error!("Sequence aborted: {err}");
-                    self.on_cancelled.clone()
+                ControlFlow::Break(abort_state) => {
+                    tracing::error!("Sequence aborted, transitioning into {abort_state}");
+                    todo!("transition into abort state")
                 }
             }
         }

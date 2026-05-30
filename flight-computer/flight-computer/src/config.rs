@@ -10,6 +10,7 @@ use lib_mission::config::{BoxableState, MakeState};
 use lib_mission::state_machine::{BoxedState, StateName};
 use lib_mission::transition::ManualTransitions;
 use lib_mission::util::init::CONFIG;
+use pss_drivers::input::SensorName;
 use pss_drivers::output::ValveName;
 use sequences::{parse_sequence_str, Command};
 use serde::{Deserialize, Deserializer, Serialize};
@@ -269,7 +270,7 @@ pub enum StateLogicConfig<Gnc: CompatGuidanceController> {
         /// The sequence to run.
         #[serde(deserialize_with = "deserialize_sequence", skip_serializing)]
         // TODO: Why do we need to be serializable?
-        sequence: Vec<Command<ValveName, String, String>>,
+        sequence: Vec<Command<ValveName, SensorName, String>>,
         /// Thresholds on sensors to watch during the whole of the sequence.
         /// If any of them are violated, this will end the sequence and proceeds to `on_cancelled`.
         #[serde(default)]
@@ -591,14 +592,14 @@ fn yes() -> bool {
 /// Custom deserializer for inline sequences in TOML strings.
 fn deserialize_sequence<'de, D>(
     deserializer: D,
-) -> Result<Vec<Command<ValveName, String, String>>, D::Error>
+) -> Result<Vec<Command<ValveName, SensorName, String>>, D::Error>
 where
     D: Deserializer<'de>,
 {
     let sequence_str = String::deserialize(deserializer)?;
     let sequence_span = 0..sequence_str.len();
 
-    let errors = match parse_sequence_str::<ValveName, String, String>(&sequence_str) {
+    let errors = match parse_sequence_str::<ValveName, SensorName, String>(&sequence_str) {
         Ok(commands) => return Ok(commands),
         Err(errors) => errors,
     };

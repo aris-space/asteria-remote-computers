@@ -92,6 +92,18 @@ pub enum SensorName {
     oss_tnk_t,
 }
 
+impl SensorName {
+    /// Boolean whether the [`SensorName`] is for a pressure sensor.
+    pub fn is_pressure_sensor(&self) -> bool {
+        !self.is_temperature_sensor()
+    }
+
+    /// Boolean whether the [`SensorName`] is for a temperature sensor.
+    pub fn is_temperature_sensor(&self) -> bool {
+        matches!(self, SensorName::eng_inj_t | SensorName::oss_tnk_t)
+    }
+}
+
 impl std::str::FromStr for SensorName {
     type Err = String;
 
