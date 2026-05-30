@@ -92,7 +92,7 @@ impl StateLogic for SetNormalState {
         fuel_pressurization_valve.replace(Default::default());
         fuel_vent_valve.replace(Default::default());
         oxidizer_pressurization_valve.replace(Default::default());
-        oxidizer_vent_valve.replace(NormallyClosedValve::Open);
+        oxidizer_vent_valve.replace(NormallyOpenValve::default());
         fuel_main_valve.replace(Default::default());
         oxidizer_main_valve.replace(Default::default());
 

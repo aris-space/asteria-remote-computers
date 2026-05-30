@@ -42,7 +42,7 @@ pub struct PSSValves {
         pattern = "Message::OxidizerControlBoard(OCBMessage::OxidizerVentValveState(#value))"
     )]
     #[broadcast(min_freq_hz = 5., max_freq_hz = 15.)]
-    pub oxidizer_vent_valve: Watchable<NormallyClosedValve>,
+    pub oxidizer_vent_valve: Watchable<NormallyOpenValve>,
     /// The current state for the Fuel Main Valve (`fss_ml_vlv`).
     #[datapoint(pattern = "Message::EngineControlBoard(ECBMessage::FuelMainValveState(#value))")]
     #[broadcast(min_freq_hz = 5., max_freq_hz = 15.)]
