@@ -29,7 +29,7 @@ impl StateLogic for SetNormalState {
     ) -> StateName {
         tracing::info!("Setting normal state of all valves");
 
-        output.valves.set_oxidizer_vent(NormallyClosedValve::Open);
+        output.valves.set_oxidizer_vent(Default::default());
         output.valves.set_pressurization_vent(Default::default());
         output.valves.set_fuel_pressurization(Default::default());
         output.valves.set_fuel_vent(Default::default());
