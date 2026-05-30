@@ -67,7 +67,7 @@ impl PSSValves {
     }
 
     /// Controls the oxidizer vent valve (`ValveName::oss_tnk_vnt`).
-    pub fn set_oxidizer_vent(&self, state: NormallyClosedValve) {
+    pub fn set_oxidizer_vent(&self, state: NormallyOpenValve) {
         can_helper(
             self.tx.clone(),
             messages::Message::OxidizerControlBoard(
@@ -193,7 +193,7 @@ impl PSSValves {
 
         map.insert(
             ValveName::oss_tnk_vnt,
-            make_setter(self.tx.clone(), |s: NormallyClosedValve| {
+            make_setter(self.tx.clone(), |s: NormallyOpenValve| {
                 messages::Message::OxidizerControlBoard(
                     dp_oxidizer_control_board::Message::OxidizerVentValveControlFC(s),
                 )
