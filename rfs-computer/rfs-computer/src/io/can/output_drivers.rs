@@ -1,7 +1,7 @@
 use std::time::Duration;
 
 use datatypes::status::{BuildInformationCommon, StatusCommonMessage};
-use datatypes::units::{BarG, Celsius};
+use datatypes::units::BarG;
 use lib_mission::reactive::Watched;
 use lib_mission::util::init::BuildInfo;
 use messages::datapoints::dp_rfs_computer;
@@ -31,8 +31,6 @@ pub fn spawn_rfsc_status_driver(
                             .as_micros() as u64,
                     },
                     is_ignition_armed: rfsc_status.read().is_ignition_armed,
-                    // here would really use the .current() method but cannot manage to
-                    // do it (҂◡_◡) ᕤ. I guess is equivalent
                 };
 
                 let _ = rfsc_status.update(status.clone());
@@ -116,35 +114,6 @@ pub fn spawn_fc_igniter_pressure_driver(
             }
         }
         .instrument(tracing::info_span!("drivers::FCIgniterPressure")),
-    )
-    .abort_handle()
-}
-
-/// Sends `IgniterTemperature` at 10Hz to the FC.
-#[allow(clippy::cast_possible_truncation)] // u64 micros since start
-pub fn spawn_fc_igniter_temperature_driver(
-    igniter_temperature: impl Watched<Celsius> + Send + 'static,
-    tx: std::sync::mpsc::Sender<messages::Message>,
-) -> AbortHandle {
-    const TEMP_RATE: f32 = 10.;
-
-    tokio::spawn(
-        async move {
-            let mut interval = tokio::time::interval(Duration::from_secs_f32(1. / TEMP_RATE));
-            interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
-            loop {
-                interval.tick().await;
-                let msg = messages::Message::RfsComputer(
-                    dp_rfs_computer::Message::IgniterTemperature(igniter_temperature.current()),
-                );
-
-                if tx.send(msg).is_err() {
-                    tracing::warn!("CAN channel was closed. Shutting down!");
-                    break;
-                }
-            }
-        }
-        .instrument(tracing::info_span!("drivers::FCIgniterTemperature")),
     )
     .abort_handle()
 }

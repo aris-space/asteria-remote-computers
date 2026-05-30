@@ -77,11 +77,6 @@ fn init_output_drivers(
             input_tree.igniter_pressure.watched(),
             tx.clone(),
         ),
-        // FIXME: not required anymore maybe
-        // output_drivers::spawn_fc_igniter_temperature_driver(
-        //     input_tree.uremote_sensors.igniter_temperature.watched(),
-        //     tx.clone(),
-        // ),
     ];
     handles
 }

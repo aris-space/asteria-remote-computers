@@ -5,7 +5,6 @@ use lib_mission::state_machine::StateMachine;
 use lib_mission::util::init::init_binary;
 use rfs_computer::build_info;
 use rfs_computer::config::Config;
-use rfs_computer::io::can::init_can_drivers;
 use rfs_computer::io::driver::init_drivers;
 use rfs_computer::io::input::InputTree;
 use rfs_computer::io::output::OutputTree;
@@ -23,7 +22,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let mut input_tree = InputTree::default();
 
-    let (can_tx, can_rx) = std::sync::mpsc::channel();
+    let (can_tx, _can_rx) = std::sync::mpsc::channel();
     let output_tree = OutputTree::new(can_tx.clone());
     let config_hash = ConfigHash {
         hash: run_info.config_hash.as_bytes()[..5]
