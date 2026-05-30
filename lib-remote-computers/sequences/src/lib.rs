@@ -12,18 +12,10 @@ use pss_drivers::{input::SensorName, output::ValveName};
 pub use sequence_parser::{Command, parse_sequence_str};
 use watchable::Watchable;
 
-#[derive(Debug, thiserror::Error)]
-pub enum SequenceError {
-    #[error("Actuator '{0:?}' is not part of the output settables")]
-    MissingOutputSettable(ValveName),
-    #[error("Sequence aborted into the '{0}' state")]
-    Abort(StateName),
-}
-
 type StateName = String;
 
 /// Run a sequence of [`Command`]s on a remote computer.
-#[allow(clippy::too_many_lines)] // yeeeeah a bit ugly.
+#[expect(clippy::too_many_lines)] // yeeeeah a bit ugly.
 pub async fn run_sequence(
     sequence: impl IntoIterator<Item = &Command<ValveName, SensorName, StateName>>,
     actuators: &pss_drivers::output::PSSValves,
@@ -197,7 +189,7 @@ impl SensorWatcher {
     }
 
     /// Remove a sensor from being watched. When `key` is [`Some`], only a specific watched
-    /// sensor will be removed; otherwise all watches of the `name` sensor are removed.
+    /// sensor will be removed; otherwise all watchers of the `name` sensor are removed.
     pub fn remove_pressure_watcher(&mut self, name: SensorName, key: Option<&String>) {
         let Some(key) = key else {
             self.0.remove(&name);
