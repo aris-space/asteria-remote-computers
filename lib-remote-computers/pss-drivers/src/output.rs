@@ -6,19 +6,26 @@ use std::sync::mpsc;
 use std::{collections::BTreeMap, marker::PhantomData};
 use tokio::time::Duration;
 
+/// Whether the valve commands originate from the Flight Computer or the Remote Filling Station.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CommandSender {
+    FC,
+    RFS,
+}
+
 /// The valves in the propellant supply system.
 #[derive(Debug, Clone)]
 pub struct PSSValves {
-    /// Sender
     tx: std::sync::mpsc::Sender<messages::Message>,
+    sender: CommandSender,
 }
 
 impl PSSValves {
     /// This method is needed for the OutputTree constructor.
     /// We cannot derive Default for PSSValves because channels do
     /// not have a sensible default value.
-    pub fn new(tx: mpsc::Sender<messages::Message>) -> Self {
-        Self { tx }
+    pub fn new(tx: mpsc::Sender<messages::Message>, sender: CommandSender) -> Self {
+        Self { tx, sender }
     }
 }
 
@@ -28,85 +35,114 @@ impl PSSValves {
 impl PSSValves {
     /// Controls the pressurization vent valve (`ValveName::prz_copv_vnt`).
     pub fn set_pressurization_vent(&self, state: NormallyOpenValve) {
-        can_helper(
+        send_can_message(
             self.tx.clone(),
-            messages::Message::FuelControlBoard(
-                dp_fuel_control_board::Message::PressurizationVentValveControlFC(state),
-            ),
+            messages::Message::FuelControlBoard(match self.sender {
+                CommandSender::FC => {
+                    dp_fuel_control_board::Message::PressurizationVentValveControlFC(state)
+                }
+                CommandSender::RFS => {
+                    dp_fuel_control_board::Message::PressurizationVentValveControlRFS(state)
+                }
+            }),
         );
     }
 
     /// Controls the fuel pressurization valve (`ValveName::prz_fss_dpr`).
     pub fn set_fuel_pressurization(&self, state: DPRValve) {
-        can_helper(
+        send_can_message(
             self.tx.clone(),
-            messages::Message::FuelControlBoard(
-                dp_fuel_control_board::Message::FuelDprValveControlFC(state),
-            ),
+            messages::Message::FuelControlBoard(match self.sender {
+                CommandSender::FC => dp_fuel_control_board::Message::FuelDprValveControlFC(state),
+                CommandSender::RFS => dp_fuel_control_board::Message::FuelDprValveControlRFS(state),
+            }),
         );
     }
 
     /// Controls the fuel vent valve (`ValveName::fss_tnk_vnt`).
     pub fn set_fuel_vent(&self, state: NormallyOpenValve) {
-        can_helper(
+        send_can_message(
             self.tx.clone(),
-            messages::Message::FuelControlBoard(
-                dp_fuel_control_board::Message::FuelVentValveControlFC(state),
-            ),
+            messages::Message::FuelControlBoard(match self.sender {
+                CommandSender::FC => dp_fuel_control_board::Message::FuelVentValveControlFC(state),
+                CommandSender::RFS => {
+                    dp_fuel_control_board::Message::FuelVentValveControlRFS(state)
+                }
+            }),
         );
     }
 
     /// Controls the oxidizer pressurization valve (`ValveName::prz_oss_dpr`).
     pub fn set_oxidizer_pressurization(&self, state: DPRValve) {
-        can_helper(
+        send_can_message(
             self.tx.clone(),
-            messages::Message::OxidizerControlBoard(
-                dp_oxidizer_control_board::Message::OxidizerDprValveControlFC(state),
-            ),
+            messages::Message::OxidizerControlBoard(match self.sender {
+                CommandSender::FC => {
+                    dp_oxidizer_control_board::Message::OxidizerDprValveControlFC(state)
+                }
+                CommandSender::RFS => {
+                    dp_oxidizer_control_board::Message::OxidizerDprValveControlRFS(state)
+                }
+            }),
         );
     }
 
     /// Controls the oxidizer vent valve (`ValveName::oss_tnk_vnt`).
     pub fn set_oxidizer_vent(&self, state: NormallyOpenValve) {
-        can_helper(
+        send_can_message(
             self.tx.clone(),
-            messages::Message::OxidizerControlBoard(
-                dp_oxidizer_control_board::Message::OxidizerVentValveControlFC(state),
-            ),
+            messages::Message::OxidizerControlBoard(match self.sender {
+                CommandSender::FC => {
+                    dp_oxidizer_control_board::Message::OxidizerVentValveControlFC(state)
+                }
+                CommandSender::RFS => {
+                    dp_oxidizer_control_board::Message::OxidizerVentValveControlRFS(state)
+                }
+            }),
         );
     }
 
     /// Controls the fuel main valve (`ValveName::fss_ml_vlv`).
     pub fn set_fuel_main(&self, state: NormallyClosedValve) {
-        can_helper(
+        send_can_message(
             self.tx.clone(),
-            messages::Message::EngineControlBoard(
-                dp_engine_control_board::Message::FuelMainValveControlFC(state),
-            ),
+            messages::Message::EngineControlBoard(match self.sender {
+                CommandSender::FC => {
+                    dp_engine_control_board::Message::FuelMainValveControlFC(state)
+                }
+                CommandSender::RFS => {
+                    dp_engine_control_board::Message::FuelMainValveControlRFS(state)
+                }
+            }),
         );
     }
 
     /// Controls the oxidizer main valve (`ValveName::oss_ml_vlv`).
     pub fn set_oxidizer_main(&self, state: NormallyClosedValve) {
-        can_helper(
+        send_can_message(
             self.tx.clone(),
-            messages::Message::EngineControlBoard(
-                dp_engine_control_board::Message::OxidizerMainValveControlFC(state),
-            ),
+            messages::Message::EngineControlBoard(match self.sender {
+                CommandSender::FC => {
+                    dp_engine_control_board::Message::OxidizerMainValveControlFC(state)
+                }
+                CommandSender::RFS => {
+                    dp_engine_control_board::Message::OxidizerMainValveControlRFS(state)
+                }
+            }),
         );
     }
 }
 
 /// Helper function for sending CAN messages twice with interval of 100ms
-fn can_helper(tx: mpsc::Sender<messages::Message>, can_msg: messages::Message) {
+fn send_can_message(tx: mpsc::Sender<messages::Message>, can_msg: messages::Message) {
+    if tx.send(can_msg.clone()).is_err() {
+        tracing::warn!("CAN channel closed; dropping PSS message");
+        return;
+    }
     tokio::spawn(async move {
-        for _ in 0..2 {
-            let msg = can_msg.clone();
-            if tx.send(msg).is_err() {
-                tracing::warn!("CAN channel closed; dropping PSS burst");
-                return;
-            }
-            tokio::time::sleep(Duration::from_millis(100)).await;
+        tokio::time::sleep(Duration::from_millis(100)).await;
+        if tx.send(can_msg).is_err() {
+            tracing::warn!("CAN channel closed; dropping PSS burst");
         }
     });
 }
@@ -154,67 +190,97 @@ impl PSSValves {
     /// `set_value` is called.
     pub fn as_settables(&self) -> BTreeMap<ValveName, Box<dyn Settable + Send>> {
         let mut map: BTreeMap<ValveName, Box<dyn Settable + Send>> = BTreeMap::new();
+        let sender = self.sender;
 
         map.insert(
             ValveName::prz_copv_vnt,
-            make_setter(self.tx.clone(), |s: NormallyOpenValve| {
-                messages::Message::FuelControlBoard(
-                    dp_fuel_control_board::Message::PressurizationVentValveControlFC(s),
-                )
+            make_setter(self.tx.clone(), move |s: NormallyOpenValve| {
+                messages::Message::FuelControlBoard(match sender {
+                    CommandSender::FC => {
+                        dp_fuel_control_board::Message::PressurizationVentValveControlFC(s)
+                    }
+                    CommandSender::RFS => {
+                        dp_fuel_control_board::Message::PressurizationVentValveControlRFS(s)
+                    }
+                })
             }),
         );
 
         map.insert(
             ValveName::prz_fss_dpr,
-            make_setter(self.tx.clone(), |s: DPRValve| {
-                messages::Message::FuelControlBoard(
-                    dp_fuel_control_board::Message::FuelDprValveControlFC(s),
-                )
+            make_setter(self.tx.clone(), move |s: DPRValve| {
+                messages::Message::FuelControlBoard(match sender {
+                    CommandSender::FC => dp_fuel_control_board::Message::FuelDprValveControlFC(s),
+                    CommandSender::RFS => dp_fuel_control_board::Message::FuelDprValveControlRFS(s),
+                })
             }),
         );
 
         map.insert(
             ValveName::fss_tnk_vnt,
-            make_setter(self.tx.clone(), |s: NormallyOpenValve| {
-                messages::Message::FuelControlBoard(
-                    dp_fuel_control_board::Message::FuelVentValveControlFC(s),
-                )
+            make_setter(self.tx.clone(), move |s: NormallyOpenValve| {
+                messages::Message::FuelControlBoard(match sender {
+                    CommandSender::FC => dp_fuel_control_board::Message::FuelVentValveControlFC(s),
+                    CommandSender::RFS => {
+                        dp_fuel_control_board::Message::FuelVentValveControlRFS(s)
+                    }
+                })
             }),
         );
 
         map.insert(
             ValveName::prz_oss_dpr,
-            make_setter(self.tx.clone(), |s: DPRValve| {
-                messages::Message::OxidizerControlBoard(
-                    dp_oxidizer_control_board::Message::OxidizerDprValveControlFC(s),
-                )
+            make_setter(self.tx.clone(), move |s: DPRValve| {
+                messages::Message::OxidizerControlBoard(match sender {
+                    CommandSender::FC => {
+                        dp_oxidizer_control_board::Message::OxidizerDprValveControlFC(s)
+                    }
+                    CommandSender::RFS => {
+                        dp_oxidizer_control_board::Message::OxidizerDprValveControlRFS(s)
+                    }
+                })
             }),
         );
 
         map.insert(
             ValveName::oss_tnk_vnt,
-            make_setter(self.tx.clone(), |s: NormallyOpenValve| {
-                messages::Message::OxidizerControlBoard(
-                    dp_oxidizer_control_board::Message::OxidizerVentValveControlFC(s),
-                )
+            make_setter(self.tx.clone(), move |s: NormallyOpenValve| {
+                messages::Message::OxidizerControlBoard(match sender {
+                    CommandSender::FC => {
+                        dp_oxidizer_control_board::Message::OxidizerVentValveControlFC(s)
+                    }
+                    CommandSender::RFS => {
+                        dp_oxidizer_control_board::Message::OxidizerVentValveControlRFS(s)
+                    }
+                })
             }),
         );
 
         map.insert(
             ValveName::fss_ml_vlv,
-            make_setter(self.tx.clone(), |s: NormallyClosedValve| {
-                messages::Message::EngineControlBoard(
-                    dp_engine_control_board::Message::FuelMainValveControlFC(s),
-                )
+            make_setter(self.tx.clone(), move |s: NormallyClosedValve| {
+                messages::Message::EngineControlBoard(match sender {
+                    CommandSender::FC => {
+                        dp_engine_control_board::Message::FuelMainValveControlFC(s)
+                    }
+                    CommandSender::RFS => {
+                        dp_engine_control_board::Message::FuelMainValveControlRFS(s)
+                    }
+                })
             }),
         );
 
         map.insert(
             ValveName::oss_ml_vlv,
-            make_setter(self.tx.clone(), |s: NormallyClosedValve| {
-                messages::Message::EngineControlBoard(
-                    dp_engine_control_board::Message::OxidizerMainValveControlFC(s),
-                )
+            make_setter(self.tx.clone(), move |s: NormallyClosedValve| {
+                messages::Message::EngineControlBoard(match sender {
+                    CommandSender::FC => {
+                        dp_engine_control_board::Message::OxidizerMainValveControlFC(s)
+                    }
+                    CommandSender::RFS => {
+                        dp_engine_control_board::Message::OxidizerMainValveControlRFS(s)
+                    }
+                })
             }),
         );
 

@@ -1,10 +1,12 @@
 use crate::io::output::ActuatorName;
+use datatypes::actuator::DigitalOut;
+use datatypes::actuator::NormallyOpenValve;
+use datatypes::sensor::DigitalIn;
+use datatypes::status::ArmingState;
 use lib_mission::actuator_control::command::{ActuatorControl, NeverReturns};
-use lib_mission::actuator_control::valves::NormallyOpenValve;
 use lib_mission::reactive::{IntoWatched, WatchedExt as _};
 use lib_mission::state_machine::{AdditionalState, StateLogic, StateName};
 use lib_mission::transition::ManualTransitions;
-use uremote_electronics::types::SparkPlug;
 
 /// This state enable the ECU to start ignition if the FC and RFS are ready.
 /// Once it happens, it transitions to `on_ignition`. Otherwise to `on_not_ready` or any manual transition.
@@ -35,18 +37,18 @@ impl StateLogic for WaitForIgnition {
     ) -> StateName {
         if matches!(
             input.flight_computer_status.get().is_software_armed,
-            hermes_can::messages::board_status::ArmingState::Safe
+            ArmingState::Safe
         ) {
             tracing::warn!("FC isn't armed, preventing arming state");
             return self.on_not_ready.clone();
         }
-        if !input.uremote_sensors.igniter_armed.get() {
+        if matches!(input.uremote_sensors.igniter_armed.get(), DigitalIn::Off) {
             tracing::warn!("Igniter circuit isn't armed, preventing arming state");
             return self.on_not_ready.clone();
         }
 
         tracing::info!("Arming the igniter");
-        output.is_software_armed.replace(true);
+        output.rfs_computer_status.write().is_ignition_armed = ArmingState::Armed;
         output
             .rfs_actuators
             .h2_bleed_valve
@@ -58,7 +60,8 @@ impl StateLogic for WaitForIgnition {
 
         // Prepares a background task to listen for (and act upon) manual actuator inputs.
         let actuator_future = self.actuator_control.act(
-            param.current_state().1,
+            // really ugly, also u32 does not make sense if we can use usize (imo)
+            param.current_state().1 as usize,
             &input.actuator_command,
             output.as_settables(),
         );
@@ -69,15 +72,15 @@ impl StateLogic for WaitForIgnition {
         let mut ign_watcher = input.uremote_sensors.igniter_armed.watched();
 
         tokio::select! {
-            _ = spark_plug_watcher.next_satisfying(|s| matches!(s, SparkPlug::On)) => {
+            _ = spark_plug_watcher.next_satisfying(|s| matches!(s, DigitalOut::On)) => {
                 tracing::info!("Spark plug turned on, continueing");
                 self.on_ignition.clone()
             },
-            _ = fc_watcher.next_satisfying(|s| matches!(s.is_software_armed, hermes_can::messages::board_status::ArmingState::Safe)) => {
+            _ = fc_watcher.next_satisfying(|s| matches!(s.is_software_armed, ArmingState::Safe)) => {
                 tracing::info!("FC got disarmed, disarming");
                 self.on_not_ready.clone()
             },
-            _ = ign_watcher.next_satisfying(|s| !s) => {
+            _ = ign_watcher.next_satisfying(|s| matches!(s, DigitalIn::Off)) => {
                 tracing::info!("Spark plug got disarmed, disarming");
                 self.on_not_ready.clone()
             },

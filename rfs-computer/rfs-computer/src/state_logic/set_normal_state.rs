@@ -1,10 +1,9 @@
-use lib_mission::actuator_control::valves::NormallyClosedValve;
+use datatypes::actuator::NormallyClosedValve;
 use lib_mission::state_machine::{AdditionalState, StateLogic, StateName};
 
 /// This state sets all RFS and PSS valves to normal(*) position.
 /// Then proceeds to the `on_done` state.
 ///
-/// Note that if the RFS is in passive mode, the PSS valves have no effect, and only RFS valves are affected.
 /// (*) Normal state affects only valves, the decouplers are decouplers deliberatly skipped.
 /// Additionally, the throttable valves are closed (which they wouldn't do on power loss, but it is their initial state)
 /// and the rockets OSS vent valve is opened despite its normally closed state.
@@ -54,22 +53,12 @@ impl StateLogic for SetNormalState {
             lox_decoupler_retract_valve: _, // not affected
             n2_decoupler_extend_valve: _,   // not affected
             n2_decoupler_retract_valve: _,  // not affected
-            n2_release_valve,
+            n2_shower_valve,
+            n2_engine_purge_valve,
             h2_igniter_valve,
             gox_igniter_valve,
             igniter_spark,
         } = &output.rfs_actuators;
-
-        let pss_drivers::output::PSSValves {
-            pressurization_vent_valve,
-            fuel_pressurization_valve,
-            fuel_vent_valve,
-            oxidizer_pressurization_valve,
-            oxidizer_vent_valve,
-            fuel_main_valve,
-            oxidizer_main_valve,
-            .. // catches the private `is_active` field
-        } = &output.pss_valves;
 
         // RFS
         output.lox_fill_valve.replace(Default::default());
@@ -83,18 +72,27 @@ impl StateLogic for SetNormalState {
         n2_fill_valve.replace(Default::default());
         h2_bleed_valve.replace(Default::default());
         booster_valve.replace(Default::default());
-        n2_release_valve.replace(Default::default());
+        n2_shower_valve.replace(Default::default());
+        n2_engine_purge_valve.replace(Default::default());
         h2_igniter_valve.replace(Default::default());
         gox_igniter_valve.replace(Default::default());
         igniter_spark.replace(Default::default());
         // PSS
-        pressurization_vent_valve.replace(Default::default());
-        fuel_pressurization_valve.replace(Default::default());
-        fuel_vent_valve.replace(Default::default());
-        oxidizer_pressurization_valve.replace(Default::default());
-        oxidizer_vent_valve.replace(NormallyOpenValve::default());
-        fuel_main_valve.replace(Default::default());
-        oxidizer_main_valve.replace(Default::default());
+        output
+            .pss_valves
+            .set_oxidizer_vent(Default::default());
+        output
+            .pss_valves
+            .set_pressurization_vent(Default::default());
+        output
+            .pss_valves
+            .set_fuel_pressurization(Default::default());
+        output.pss_valves.set_fuel_vent(Default::default());
+        output
+            .pss_valves
+            .set_oxidizer_pressurization(Default::default());
+        output.pss_valves.set_fuel_main(Default::default());
+        output.pss_valves.set_oxidizer_main(Default::default());
 
         self.on_done.clone()
     }

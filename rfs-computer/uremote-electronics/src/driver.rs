@@ -1,9 +1,8 @@
 use std::collections::HashMap;
 use std::time::Duration;
 
-use lib_mission::actuator_control::Energizable;
+use datatypes::{actuator::Energizable, sensor::DigitalIn, units::Celsius};
 use lib_mission::reactive::{IntoWatched, Watched, WatchedExt as _};
-use lib_mission::util::types::Celsius;
 use ur20::ModuleType;
 use ur20_modbus::Coupler;
 use watchable::Watchable;
@@ -115,7 +114,7 @@ mod channels {
         module: 5,
         channel: 5,
     };
-    pub const N2_RELEASE_VALVE: ur20::Address = ur20::Address {
+    pub const N2_SHOWER_VALVE: ur20::Address = ur20::Address {
         module: 6,
         channel: 2,
     };
@@ -431,7 +430,7 @@ impl output::Actuators {
                 &self.n2_decoupler_retract_valve,
                 channels::N2_DECOUPLER_RETRACT_VALVE,
             ),
-            box_actuator(&self.n2_release_valve, channels::N2_RELEASE_VALVE),
+            box_actuator(&self.n2_shower_valve, channels::N2_SHOWER_VALVE),
             box_actuator(&self.h2_igniter_valve, channels::H2_IGNITER_VALVE),
             box_actuator(&self.gox_igniter_valve, channels::GOX_IGNITER_VALVE),
             box_actuator(&self.igniter_spark, channels::IGNITER_SPARK),
@@ -508,7 +507,7 @@ impl input::Actuators {
             &self.n2_decoupler_retract_valve,
             channels::N2_DECOUPLER_RETRACT_VALVE,
         );
-        update_out(outputs, &self.n2_release_valve, channels::N2_RELEASE_VALVE);
+        update_out(outputs, &self.n2_shower_valve, channels::N2_SHOWER_VALVE);
         update_out(outputs, &self.h2_igniter_valve, channels::H2_IGNITER_VALVE);
         update_out(
             outputs,
@@ -532,12 +531,12 @@ impl input::Sensors {
             let _ = target.update(Celsius(*t_celsius));
         };
         // Helper function to read a single digital channel and write it to the target watchable.
-        let read_coil = move |target: &Watchable<bool>, channel: ur20::Address| {
+        let read_coil = move |target: &Watchable<DigitalIn>, channel: ur20::Address| {
             let Some(ur20::ChannelValue::Bit(val)) = values.get(&channel) else {
                 tracing::warn!(?channel, value = ?values.get(&channel), "Coil reading failed, invalid channel type");
                 return;
             };
-            let _ = target.update(*val);
+            let _ = target.update(if *val { DigitalIn::On } else { DigitalIn::Off });
         };
 
         let Self {
@@ -564,6 +563,10 @@ impl input::Sensors {
             tracing::warn!(value = ?values.get(&channels::IGNITER_ARMING_CIRCUIT), "SIL PF reading failed, invalid channel type");
             return;
         };
-        let _ = igniter_armed.update(sil.volt_24_safe_output);
+        let _ = igniter_armed.update(if sil.volt_24_safe_output {
+            DigitalIn::On
+        } else {
+            DigitalIn::Off
+        });
     }
 }

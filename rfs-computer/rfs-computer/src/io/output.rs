@@ -2,9 +2,13 @@
 
 use std::collections::BTreeMap;
 
-use lib_mission::actuator_control::Settable;
+use datatypes::actuator::Settable;
+use datatypes::actuator::ThrottleableValve;
+use datatypes::status::ConfigHash;
+use io_utils::Broadcast;
+use messages::Message;
+use messages::datapoints::dp_rfs_computer::{Message as RFSMessage, RfsComputerStatus};
 use pss_drivers::output::PSSValves;
-use pss_drivers::types::ThrottleableValve;
 use uremote_electronics::output as uremote;
 use watchable::Watchable;
 
@@ -18,17 +22,27 @@ pub enum ActuatorName {
 }
 
 /// Holds the things we want to set
-#[derive(Debug, Default, Clone)]
+#[derive(Debug, Clone, Broadcast)]
+#[broadcast(message_type = "messages::Message")]
 pub struct OutputTree {
     /// A grouping of all the valves and actuators attached to the weidmüller u-remote coupler.
     pub rfs_actuators: uremote::Actuators,
     /// The target states of the tank and engine valves in the rocket.
     pub pss_valves: PSSValves,
+
     /// The target state for the lox fill valve (`lox_fll_vlv`).
     pub lox_fill_valve: Watchable<ThrottleableValve>,
-    /// If the system is in a software armed state. That includes the `Armed` and `Ignition` state.
+
+    /// First 5 hex chars of the config file Git object hash. Set once at startup.
+    #[datapoint(pattern = "Message::RfsComputer(RFSMessage::ConfigHash(#value))")]
+    #[broadcast(min_freq_hz = 0.2, max_freq_hz = 0.2)]
+    pub hash_config: Watchable<ConfigHash>,
+
+    /// If the system is in a software armed state.
     /// This will allow the ECU to control the igniter actuators.
-    pub is_software_armed: Watchable<bool>,
+    #[datapoint(pattern = "Message::RfsComputer(RFSMessage::Status(#value))")]
+    #[broadcast(min_freq_hz = 1.0, max_freq_hz = 1.0)]
+    pub rfs_computer_status: Watchable<RfsComputerStatus>, // more appropriate I think
 }
 
 impl OutputTree {
@@ -72,6 +86,20 @@ pub enum LoxFillValveName {
     lox_fll_vlv,
 }
 
+impl OutputTree {
+    /// The constructor for OutputTree. It must be provided
+    /// given that Default cannot be derived for every field.
+    pub fn new(tx: std::sync::mpsc::Sender<Message>) -> Self {
+        Self {
+            rfs_actuators: uremote::Actuators::default(),
+            pss_valves: PSSValves::new(tx, pss_drivers::output::CommandSender::RFS),
+            lox_fill_valve: Watchable::default(),
+            hash_config: Watchable::default(),
+            rfs_computer_status: Watchable::default(),
+        }
+    }
+}
+
 #[test]
 fn test_name_from_str() {
     assert_eq!(
@@ -79,8 +107,8 @@ fn test_name_from_str() {
         ActuatorName::URValve(uremote::ActuatorName::gox_prg_vlv)
     );
     assert_eq!(
-        "pnm_n2dec_ret".parse::<ActuatorName>().expect("must parse"),
-        ActuatorName::URValve(uremote::ActuatorName::pnm_n2dec_ret)
+        "n2_dec_ret".parse::<ActuatorName>().expect("must parse"),
+        ActuatorName::URValve(uremote::ActuatorName::n2_dec_ret)
     );
     assert_eq!(
         "oss_ml_vlv".parse::<ActuatorName>().expect("must parse"),

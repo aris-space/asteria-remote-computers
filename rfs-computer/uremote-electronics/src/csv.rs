@@ -12,7 +12,7 @@ impl output::Actuators {
         &self,
         folder: &std::path::Path,
         time: &Watchable<lib_mission::util::time::MissionTime>,
-    ) -> Result<[tokio::task::AbortHandle; 26], Box<dyn std::error::Error>> {
+    ) -> Result<[tokio::task::AbortHandle; 27], Box<dyn std::error::Error>> {
         use lib_mission::reactive::IntoWatched as _;
         macro_rules! spawn_serializable_logger {
             ($name:literal, $e:expr, $headers:expr,) => {
@@ -48,7 +48,8 @@ impl output::Actuators {
             lox_decoupler_retract_valve,
             n2_decoupler_extend_valve,
             n2_decoupler_retract_valve,
-            n2_release_valve,
+            n2_shower_valve,
+            n2_engine_purge_valve,
             h2_igniter_valve,
             gox_igniter_valve,
             igniter_spark,
@@ -130,33 +131,38 @@ impl output::Actuators {
                 ["target state [open|closed]"],
             ),
             spawn_serializable_logger!(
-                "target_state_pnm_bstr_vlv",
+                "target_state_n2_bst_vlv",
                 booster_valve,
                 ["target state [open|closed]"],
             ),
             spawn_serializable_logger!(
-                "target_state_pnm_loxdec_ret",
+                "target_state_lox_dec_ret",
                 lox_decoupler_retract_valve,
                 ["target state of retract valve [open|closed]"],
             ),
             spawn_serializable_logger!(
-                "target_state_pnm_loxdec_ext",
+                "target_state_lox_dec_ext",
                 lox_decoupler_extend_valve,
                 ["target state of extend valve [open|closed]"],
             ),
             spawn_serializable_logger!(
-                "target_state_pnm_n2dec_ret",
+                "target_state_n2_dec_ret",
                 n2_decoupler_retract_valve,
                 ["target state of retract valve [open|closed]"],
             ),
             spawn_serializable_logger!(
-                "target_state_pnm_n2dec_ext",
+                "target_state_n2_dec_ext",
                 n2_decoupler_extend_valve,
                 ["target state of extend valve [open|closed]"],
             ),
             spawn_serializable_logger!(
-                "target_state_pnm_n2rls_vlv",
-                n2_release_valve,
+                "target_state_n2_shw_vlv",
+                n2_shower_valve,
+                ["target state [open|closed]"],
+            ),
+            spawn_serializable_logger!(
+                "target_state_eng_prg_vlv",
+                n2_engine_purge_valve,
                 ["target state [open|closed]"],
             ),
             spawn_serializable_logger!(
@@ -188,7 +194,7 @@ impl input::Actuators {
         &self,
         folder: &std::path::Path,
         time: &Watchable<lib_mission::util::time::MissionTime>,
-    ) -> Result<[tokio::task::AbortHandle; 26], Box<dyn std::error::Error>> {
+    ) -> Result<[tokio::task::AbortHandle; 27], Box<dyn std::error::Error>> {
         use lib_mission::reactive::IntoWatched as _;
         macro_rules! spawn_serializable_logger {
             ($name:literal, $e:expr, $headers:expr,) => {
@@ -224,7 +230,8 @@ impl input::Actuators {
             lox_decoupler_retract_valve,
             n2_decoupler_extend_valve,
             n2_decoupler_retract_valve,
-            n2_release_valve,
+            n2_shower_valve,
+            n2_engine_purge_valve,
             h2_igniter_valve,
             gox_igniter_valve,
             igniter_spark,
@@ -318,33 +325,38 @@ impl input::Actuators {
                 ["observed state [open|closed]"],
             ),
             spawn_serializable_logger!(
-                "observed_state_pnm_bstr_vlv",
+                "observed_state_n2_bst_vlv",
                 booster_valve,
                 ["observed state [open|closed]"],
             ),
             spawn_serializable_logger!(
-                "observed_state_pnm_loxdec_ret",
+                "observed_state_lox_dec_ret",
                 lox_decoupler_retract_valve,
                 ["observed state of retract valve [open|closed]"],
             ),
             spawn_serializable_logger!(
-                "observed_state_pnm_loxdec_ext",
+                "observed_state_lox_dec_ext",
                 lox_decoupler_extend_valve,
                 ["observed state of extend valve [open|closed]"],
             ),
             spawn_serializable_logger!(
-                "observed_state_pnm_n2dec_ret",
+                "observed_state_n2_dec_ret",
                 n2_decoupler_retract_valve,
                 ["observed state of retract valve [open|closed]"],
             ),
             spawn_serializable_logger!(
-                "observed_state_pnm_n2dec_ext",
+                "observed_state_n2_dec_ext",
                 n2_decoupler_extend_valve,
                 ["observed state of extend valve [open|closed]"],
             ),
             spawn_serializable_logger!(
-                "observed_state_pnm_n2rls_vlv",
-                n2_release_valve,
+                "observed_state_n2_shw_vlv",
+                n2_shower_valve,
+                ["observed state [open|closed]"],
+            ),
+            spawn_serializable_logger!(
+                "observed_state_eng_prg_vlv",
+                n2_engine_purge_valve,
                 ["observed state [open|closed]"],
             ),
             spawn_serializable_logger!(

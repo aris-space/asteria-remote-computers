@@ -188,7 +188,7 @@ where
             if matches!(msg, Message::FlightComputer(_))
                 != matches!(this_system, RemoteSystem::FlightComputer)
             {
-                tracing::trace!("skipping transition command for other system");
+                tracing::warn!("skipping transition command for other system");
                 return false;
             }
 
@@ -218,7 +218,7 @@ where
             if matches!(msg, Message::FlightComputer(_))
                 != matches!(this_system, RemoteSystem::FlightComputer)
             {
-                tracing::trace!("skipping actuator command for other system");
+                tracing::warn!("skipping actuator command for other system");
                 return false;
             }
 

@@ -3,15 +3,7 @@
 system_time_rate_hz = 200
 
 [telemetry]
-mavlink_address = "udpout:127.0.0.1:5761"
-
-[telemetry.downlink_rates]
-# slowened telemetry.
-state_hz = 0.5
-actuator_feedback_hz = 1
-temperature_sensors_hz = 3
-pressure_sensors_hz = 15
-fill_levels_hz = 0.5
+mavlink_address = "127.0.0.1:5761"
 
 [uremote]
 address = "192.168.0.222:502"
@@ -29,6 +21,9 @@ socket_address = "can0"
 [state_machine]
 name = "Idle State machine"
 initial_state = "Idle"
+
+# Path in the repo to the state machine diagram to be used by mission control.
+diagram_path = "state-machines/rfs-flight-state-machine.drawio.svg"
 
 [state_machine.states."Idle"]
 type = "Waiting"

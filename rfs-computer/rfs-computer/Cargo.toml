@@ -12,11 +12,17 @@ uremote-electronics = { path = "../uremote-electronics" }
 keller23sx = { path = "../keller23sx" }
 lox-fill-valve = { path = "../lox-fill-valve" }
 tokio-modbus-shared = { path = "../tokio-modbus-shared" }
-hermes-can = { path = "../../data-definitions/can", features = [
-    "all",
-    "serde",
-], version = "0.3.0" }
+messages = { path = "../../data-definitions/messages", features = [
+    "derive_debug",
+    "derive_serde",
+    "mavlink",
+], default-features = false }
+datatypes = { path = "../../data-definitions/datatypes", features = [
+    "std",
+    "watchable_settable",
+] }
 pss-drivers = { path = "../../lib-remote-computers/pss-drivers" }
+io-utils = { path = "../../lib-remote-computers/io-utils" }
 
 mavlink-core = { version = "0.13.1" }
 tokio = { version = "1.37.0", features = ["full"] }

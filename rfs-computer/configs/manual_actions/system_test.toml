@@ -3,7 +3,7 @@
 system_time_rate_hz = 200
 
 [telemetry]
-mavlink_address = "udpout:127.0.0.1:5761"
+mavlink_address = "127.0.0.1:5761"
 always_allowed_actuators = [
     "rocket_power",
     "maxon_board_power",
@@ -14,12 +14,6 @@ always_allowed_actuators = [
     "custom2",
     "custom3",
 ]
-[telemetry.downlink_rates]
-state_hz = 4
-actuator_feedback_hz = 2
-temperature_sensors_hz = 3
-pressure_sensors_hz = 15
-fill_levels_hz = 0.5
 
 [uremote]
 address = "192.168.0.222:502"
@@ -38,6 +32,9 @@ socket_address = "can0"
 [state_machine]
 name = "System Test"
 initial_state = "Idle"
+
+# Path in the repo to the state machine diagram to be used by mission control.
+diagram_path = "state-machines/rfs-flight-state-machine.drawio.svg"
 
 # Initial state which does nothing
 [state_machine.states."Idle"]
@@ -68,10 +65,6 @@ manual_transitions = [{ target = "System Normal", display = "Reset" }]
 
 # This state is compose of 3 substates and sets the system in a known state before waiting
 [state_machine.states."System Normal"]
-type = "SetPSSMode"
-mode = "RFSPassive"         # the default
-on_done = "System Normal 2"
-[state_machine.states."System Normal 2"]
 type = "SetNormalState"
 on_done = "System Normal 3"
 [state_machine.states."System Normal 3"]
@@ -94,25 +87,25 @@ manual_transitions = [
 [state_machine.states."System Controllable"]
 type = "ManualControl"
 allowed_actuators = [
-    "lox_fll_vlv",    # LOx fill valve
-    "gox_prg_vlv",    # GOx purge valve
-    "h2_prg_vlv",     # H2 purge valve
-    "n2_bld_vlv",     # N2 bleed valve
-    "lox_prg_vlv",    # LOx purge valve
-    "gox_bld_vlv",    # GOx bleed valve
-    "n2_prg_vlv",     # N2 purge valve
-    "n2_fll_vlv",     # N2 fill valve
-    "h2_bld_vlv",     # H2 bleed valve
-    "lox_bld_vlv",    # LOx bleed valve
-    "pnm_bstr_vlv",   # Booster valve
-    "pnm_loxdec_ext", # LOX decoupler
-    "pnm_loxdec_ret", # LOX decoupler
-    "pnm_n2dec_ext",  # N2 decoupler
-    "pnm_n2dec_ret",  # N2 decoupler
-    "pnm_n2rls_vlv",  # N2 release valve
-    "h2_ign_vlv",     # H2 igniter valve
-    "gox_ign_vlv",    # GOx igniter valve
-    "ign_spk_plg",    # Igniter spark
+    "lox_fll_vlv", # LOx fill valve
+    "gox_prg_vlv", # GOx purge valve
+    "h2_prg_vlv",  # H2 purge valve
+    "n2_bld_vlv",  # N2 bleed valve
+    "lox_prg_vlv", # LOx purge valve
+    "gox_bld_vlv", # GOx bleed valve
+    "n2_prg_vlv",  # N2 purge valve
+    "n2_fll_vlv",  # N2 fill valve
+    "h2_bld_vlv",  # H2 bleed valve
+    "lox_bld_vlv", # LOx bleed valve
+    "n2_bst_vlv",  # Booster valve
+    "lox_dec_ext", # LOX decoupler
+    "lox_dec_ret", # LOX decoupler
+    "n2_dec_ext",  # N2 decoupler
+    "n2_dec_ret",  # N2 decoupler
+    "n2_shw_vlv",  # N2 shower valves
+    "h2_ign_vlv",  # H2 igniter valve
+    "gox_ign_vlv", # GOx igniter valve
+    "ign_spk_plg", # Igniter spark
 ]
 manual_transitions = [
     { target = "System Idle", display = "Lock" },

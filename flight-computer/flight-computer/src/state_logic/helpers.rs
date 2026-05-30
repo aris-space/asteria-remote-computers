@@ -1,4 +1,5 @@
 use crate::io::input::InputTree;
+use datatypes::units::BarG;
 use lib_mission::reactive::{IntoWatched, WatchedExt};
 
 /// A struct which can be configured with certain sensor thresholds.
@@ -14,33 +15,14 @@ pub struct ThresholdWatcher {
 
 /// Parts of [`pss_drivers::input::PSSSensors`], see that.
 /// Can be extended as needed.
-#[derive(Debug, serde::Deserialize, serde::Serialize)]
+#[derive(Debug, serde::Deserialize, serde::Serialize, Default)]
 struct PressureThresholds {
-    #[serde(default = "nan")]
-    fuel_tank_pressure: f32,
-    #[serde(default = "nan")]
-    fuel_tank_pressure_1: f32,
-    #[serde(default = "nan")]
-    fuel_tank_pressure_2: f32,
-    #[serde(default = "nan")]
-    oxidizer_tank_pressure: f32,
-    #[serde(default = "nan")]
-    oxidizer_tank_pressure_1: f32,
-    #[serde(default = "nan")]
-    oxidizer_tank_pressure_2: f32,
-}
-
-impl Default for PressureThresholds {
-    fn default() -> Self {
-        Self {
-            fuel_tank_pressure: f32::NAN,
-            fuel_tank_pressure_1: f32::NAN,
-            fuel_tank_pressure_2: f32::NAN,
-            oxidizer_tank_pressure: f32::NAN,
-            oxidizer_tank_pressure_1: f32::NAN,
-            oxidizer_tank_pressure_2: f32::NAN,
-        }
-    }
+    fuel_tank_pressure: BarG,
+    fuel_tank_pressure_1: BarG,
+    fuel_tank_pressure_2: BarG,
+    oxidizer_tank_pressure: BarG,
+    oxidizer_tank_pressure_1: BarG,
+    oxidizer_tank_pressure_2: BarG,
 }
 
 /// What has been violated.
@@ -51,11 +33,6 @@ impl std::fmt::Display for Violation {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         self.0.fmt(f)
     }
-}
-
-/// Because `serde(default)` requires a function
-fn nan() -> f32 {
-    f32::NAN
 }
 
 impl ThresholdWatcher {
@@ -71,10 +48,10 @@ impl ThresholdWatcher {
             .watched();
 
         tokio::select! {
-            p = fuel_tank_pressure_watcher.next_satisfying(|p| p.0 > self.upper_thresholds_barg.fuel_tank_pressure) => {
+            p = fuel_tank_pressure_watcher.next_satisfying(|p| p.0 > self.upper_thresholds_barg.fuel_tank_pressure.0) => {
                 Violation(format!("fuel tank pressure ({p:?}) rose above threshold"))
             }
-            p = oxidizer_tank_pressure_watcher.next_satisfying(|p| p.0 > self.upper_thresholds_barg.oxidizer_tank_pressure) => {
+            p = oxidizer_tank_pressure_watcher.next_satisfying(|p| p.0 > self.upper_thresholds_barg.oxidizer_tank_pressure.0) => {
                 Violation(format!("oxidizer tank pressure ({p:?}) rose above threshold"))
             }
         }

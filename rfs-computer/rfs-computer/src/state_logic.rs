@@ -25,12 +25,6 @@ pub use set_normal_state::SetNormalState;
 pub mod diagnostics_gate;
 pub use diagnostics_gate::DiagnosticsGate;
 
-pub mod set_pss_mode;
-pub use set_pss_mode::SetPSSMode;
-
-pub mod await_fc_passive;
-pub use await_fc_passive::AwaitFCPassive;
-
 pub mod pss_diagnostics_gate;
 pub use pss_diagnostics_gate::PSSDiagnosticsGate;
 
