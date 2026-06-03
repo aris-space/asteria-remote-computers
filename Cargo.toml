@@ -8,6 +8,7 @@ members = [
     "lib-remote-computers/sequences",
     "rfs-computer/rfs-computer",
     "rfs-computer/uremote-electronics",
+    "rfs-computer/controllino",
     "rfs-computer/keller23sx",
     "rfs-computer/lox-fill-valve",
     "rfs-computer/tokio-modbus-shared",

@@ -1,0 +1,26 @@
+[package]
+name = "controllino"
+version = "0.1.0"
+edition = "2024"
+
+[lints]
+workspace = true
+
+[dependencies]
+datatypes = { path = "../../data-definitions/datatypes" }
+io-utils = { path = "../../lib-remote-computers/io-utils" }
+messages = { path = "../../data-definitions/messages", features = [
+    "derive_debug",
+    "derive_serde",
+    "mavlink",
+], default-features = false }
+tokio-modbus = "0.16.1"
+watchable = "1.1.2"
+tracing = "0.1.41"
+thiserror = "2.0.12"
+serde = { version = "1.0.219", features = ["derive"] }
+tokio = { version = "1.45.0", features = ["time"] }
+
+[dev-dependencies]
+serde_json = "1.0.140"
+tokio = { version = "1.45.0", features = ["rt-multi-thread", "macros", "time"] }
