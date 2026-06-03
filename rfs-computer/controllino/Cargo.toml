@@ -14,7 +14,7 @@ messages = { path = "../../data-definitions/messages", features = [
     "derive_serde",
     "mavlink",
 ], default-features = false }
-tokio-modbus = "0.16.1"
+tokio-modbus = { version = "0.16.1", features = ["tcp"] }
 watchable = "1.1.2"
 tracing = "0.1.41"
 thiserror = "2.0.12"
