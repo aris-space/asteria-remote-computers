@@ -32,6 +32,9 @@ pub struct Sensors {
     #[datapoint(pattern = "Message::RfsComputer(RFSCMessage::IgniterTemperature(#value))")]
     #[broadcast(min_freq_hz = 1., max_freq_hz = 3.)]
     pub igniter_temperature: Watchable<Celsius>,
+    /// The last received ambient temperature inside the SMART box.
+    // TODO: datapoint
+    pub smart_box_temperature: Watchable<Celsius>,
 }
 
 /// The states of the actuators connected to the SMART box Controllino.
@@ -77,7 +80,7 @@ pub struct Actuators {
     #[broadcast(min_freq_hz = 1.5, max_freq_hz = 20.)]
     pub n2_engine_purge_valve: Watchable<NormallyClosedValve>,
 
-    /// The state of the FSS_HEATING.
+    /// The state of the rocket heating.
     #[datapoint(pattern = "Message::RfsComputer(RFSCMessage::FssHeatingState(#value))")]
     #[broadcast(min_freq_hz = 1.5, max_freq_hz = 20.)]
     pub fss_heating: Watchable<DigitalOut>,

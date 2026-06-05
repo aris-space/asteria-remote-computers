@@ -1,17 +1,15 @@
 use std::collections::BTreeMap;
 use std::marker::PhantomData;
-use std::sync::Arc;
-use std::time::Duration;
 
 use datatypes::actuator::{DigitalOut, Energizable, InvertedDigitalOut, NormallyClosedValve};
 use datatypes::actuator::{OutOfRange, Settable};
-use tokio::sync::Mutex as AsyncMutex;
-use tokio_modbus::client::{Context, Writer as _};
+
+use crate::driver;
 
 #[derive(Debug, Clone)]
 pub struct CoilSettable<T> {
     coil: tokio_modbus::Address,
-    context: Arc<AsyncMutex<Context>>,
+    driver: driver::Client,
     _phantom: PhantomData<T>,
 }
 
@@ -22,27 +20,9 @@ impl<T: Default + Settable + Energizable> Settable for CoilSettable<T> {
         let high = typed.is_active();
 
         // send to coil, need async, so spawn a task
-        let context = self.context.clone();
+        let context = self.driver.clone();
         let coil = self.coil;
-        tokio::spawn(async move {
-            match tokio::time::timeout(
-                Duration::from_millis(100), // TODO: constant
-                context.lock().await.write_single_coil(coil, high),
-            )
-            .await
-            {
-                Ok(Ok(Ok(()))) => tracing::debug!("Set coil {coil:x} to {high}"),
-                Ok(Ok(Err(code))) => {
-                    tracing::warn!("modbus server denied coil write to {coil:x}: {code}");
-                }
-                Ok(Err(err)) => {
-                    tracing::warn!("Cannot reach modbus server: {err}");
-                }
-                Err(_elapsed) => {
-                    tracing::warn!("Timed out modbus server");
-                }
-            }
-        });
+        tokio::spawn(async move { context.write_coil(coil, high).await });
 
         Ok(())
     }
