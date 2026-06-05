@@ -9,6 +9,12 @@ use watchable::Watchable;
 #[derive(Debug, Default, Clone, Broadcast)]
 #[broadcast(message_type = "Message")]
 pub struct Sensors {
+    /// `On` if the valves of the SMART box are getting power.
+    // FIXME: datapoint
+    pub valve_power_interlock: Watchable<DigitalIn>,
+    /// `On` if the rocket is receiving power and connection is detected.
+    // FIXME: datapoint
+    pub rocket_connection_detect: Watchable<DigitalIn>,
     /// `On` if proximity of the lox decoupler to the retracted state is detected.
     #[datapoint(pattern = "Message::RfsComputer(RFSCMessage::LoxDecouplerProximity(#value))")]
     #[broadcast(min_freq_hz = 0.5, max_freq_hz = 5.)]
