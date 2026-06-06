@@ -21,7 +21,7 @@ pub struct ThresholdWatcher {
     upper_thresholds_celsius: TemperatureThresholds,
 }
 
-/// Parts of [`crate::io::input::PressureSensors`], see that.
+/// Parts of [`crate::io::input::InputTree`], see that.
 /// Referrs to pressure channel 1
 /// Can be extended as needed.
 #[derive(Debug, serde::Deserialize, serde::Serialize)]
