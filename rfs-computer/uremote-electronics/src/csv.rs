@@ -12,7 +12,7 @@ impl output::Actuators {
         &self,
         folder: &std::path::Path,
         time: &Watchable<lib_mission::util::time::MissionTime>,
-    ) -> Result<[tokio::task::AbortHandle; 27], Box<dyn std::error::Error>> {
+    ) -> Result<[tokio::task::AbortHandle; 17], Box<dyn std::error::Error>> {
         use lib_mission::reactive::IntoWatched as _;
         macro_rules! spawn_serializable_logger {
             ($name:literal, $e:expr, $headers:expr,) => {
@@ -26,11 +26,7 @@ impl output::Actuators {
         }
 
         let Self {
-            rocket_power,
             maxon_board_power,
-            fss_heating,
-            pressure_sensor_heating,
-            eth_pump_power,
             custom1,
             custom2,
             custom3,
@@ -44,12 +40,6 @@ impl output::Actuators {
             h2_bleed_valve,
             lox_bleed_valve,
             booster_valve,
-            lox_decoupler_extend_valve,
-            lox_decoupler_retract_valve,
-            n2_decoupler_extend_valve,
-            n2_decoupler_retract_valve,
-            n2_shower_valve,
-            n2_engine_purge_valve,
             h2_igniter_valve,
             gox_igniter_valve,
             igniter_spark,
@@ -58,28 +48,8 @@ impl output::Actuators {
         // Log valve target states
         Ok([
             spawn_serializable_logger!(
-                "target_state_rocket_power",
-                rocket_power,
-                ["target state [On|Off]"],
-            ),
-            spawn_serializable_logger!(
                 "target_state_maxon_board_power",
                 maxon_board_power,
-                ["target state [On|Off]"],
-            ),
-            spawn_serializable_logger!(
-                "target_state_fss_heating",
-                fss_heating,
-                ["target state [On|Off]"],
-            ),
-            spawn_serializable_logger!(
-                "target_state_pressure_sensor_heating",
-                pressure_sensor_heating,
-                ["target state [On|Off]"],
-            ),
-            spawn_serializable_logger!(
-                "target_state_eth_pump_power",
-                eth_pump_power,
                 ["target state [On|Off]"],
             ),
             spawn_serializable_logger!("target_state_custom1", custom1, ["target state [On|Off]"],),
@@ -136,36 +106,6 @@ impl output::Actuators {
                 ["target state [open|closed]"],
             ),
             spawn_serializable_logger!(
-                "target_state_lox_dec_ret",
-                lox_decoupler_retract_valve,
-                ["target state of retract valve [open|closed]"],
-            ),
-            spawn_serializable_logger!(
-                "target_state_lox_dec_ext",
-                lox_decoupler_extend_valve,
-                ["target state of extend valve [open|closed]"],
-            ),
-            spawn_serializable_logger!(
-                "target_state_n2_dec_ret",
-                n2_decoupler_retract_valve,
-                ["target state of retract valve [open|closed]"],
-            ),
-            spawn_serializable_logger!(
-                "target_state_n2_dec_ext",
-                n2_decoupler_extend_valve,
-                ["target state of extend valve [open|closed]"],
-            ),
-            spawn_serializable_logger!(
-                "target_state_n2_shw_vlv",
-                n2_shower_valve,
-                ["target state [open|closed]"],
-            ),
-            spawn_serializable_logger!(
-                "target_state_eng_prg_vlv",
-                n2_engine_purge_valve,
-                ["target state [open|closed]"],
-            ),
-            spawn_serializable_logger!(
                 "target_state_h2_ign_vlv",
                 h2_igniter_valve,
                 ["target state [open|closed]"],
@@ -194,7 +134,7 @@ impl input::Actuators {
         &self,
         folder: &std::path::Path,
         time: &Watchable<lib_mission::util::time::MissionTime>,
-    ) -> Result<[tokio::task::AbortHandle; 27], Box<dyn std::error::Error>> {
+    ) -> Result<[tokio::task::AbortHandle; 17], Box<dyn std::error::Error>> {
         use lib_mission::reactive::IntoWatched as _;
         macro_rules! spawn_serializable_logger {
             ($name:literal, $e:expr, $headers:expr,) => {
@@ -208,11 +148,7 @@ impl input::Actuators {
         }
 
         let Self {
-            rocket_power,
             maxon_board_power,
-            fss_heating,
-            pressure_sensor_heating,
-            eth_pump_power,
             custom1,
             custom2,
             custom3,
@@ -226,12 +162,6 @@ impl input::Actuators {
             h2_bleed_valve,
             lox_bleed_valve,
             booster_valve,
-            lox_decoupler_extend_valve,
-            lox_decoupler_retract_valve,
-            n2_decoupler_extend_valve,
-            n2_decoupler_retract_valve,
-            n2_shower_valve,
-            n2_engine_purge_valve,
             h2_igniter_valve,
             gox_igniter_valve,
             igniter_spark,
@@ -240,28 +170,8 @@ impl input::Actuators {
         // Log valve observed states
         Ok([
             spawn_serializable_logger!(
-                "observed_state_rocket_power",
-                rocket_power,
-                ["observed state [On|Off]"],
-            ),
-            spawn_serializable_logger!(
                 "observed_state_maxon_board_power",
                 maxon_board_power,
-                ["observed state [On|Off]"],
-            ),
-            spawn_serializable_logger!(
-                "observed_state_fss_heating",
-                fss_heating,
-                ["observed state [On|Off]"],
-            ),
-            spawn_serializable_logger!(
-                "observed_state_pressure_sensor_heating",
-                pressure_sensor_heating,
-                ["observed state [On|Off]"],
-            ),
-            spawn_serializable_logger!(
-                "observed_state_eth_pump_power",
-                eth_pump_power,
                 ["observed state [On|Off]"],
             ),
             spawn_serializable_logger!(
@@ -327,36 +237,6 @@ impl input::Actuators {
             spawn_serializable_logger!(
                 "observed_state_n2_bst_vlv",
                 booster_valve,
-                ["observed state [open|closed]"],
-            ),
-            spawn_serializable_logger!(
-                "observed_state_lox_dec_ret",
-                lox_decoupler_retract_valve,
-                ["observed state of retract valve [open|closed]"],
-            ),
-            spawn_serializable_logger!(
-                "observed_state_lox_dec_ext",
-                lox_decoupler_extend_valve,
-                ["observed state of extend valve [open|closed]"],
-            ),
-            spawn_serializable_logger!(
-                "observed_state_n2_dec_ret",
-                n2_decoupler_retract_valve,
-                ["observed state of retract valve [open|closed]"],
-            ),
-            spawn_serializable_logger!(
-                "observed_state_n2_dec_ext",
-                n2_decoupler_extend_valve,
-                ["observed state of extend valve [open|closed]"],
-            ),
-            spawn_serializable_logger!(
-                "observed_state_n2_shw_vlv",
-                n2_shower_valve,
-                ["observed state [open|closed]"],
-            ),
-            spawn_serializable_logger!(
-                "observed_state_eng_prg_vlv",
-                n2_engine_purge_valve,
                 ["observed state [open|closed]"],
             ),
             spawn_serializable_logger!(

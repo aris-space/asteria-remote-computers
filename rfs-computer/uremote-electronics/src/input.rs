@@ -51,26 +51,10 @@ pub struct Sensors {
 #[broadcast(message_type = "Message")]
 #[allow(clippy::struct_field_names)]
 pub struct Actuators {
-    /// The state of the ROCKET_POWER.
-    #[datapoint(pattern = "Message::RfsComputer(RFSCMessage::RocketPowerState(#value))")]
-    #[broadcast(min_freq_hz = 1.5, max_freq_hz = 20.)]
-    pub rocket_power: Watchable<InvertedDigitalOut>,
     /// The state of the MAXON_BOARD_POWER.
     #[datapoint(pattern = "Message::RfsComputer(RFSCMessage::MaxonBoardPowerState(#value))")]
     #[broadcast(min_freq_hz = 1.5, max_freq_hz = 20.)]
     pub maxon_board_power: Watchable<InvertedDigitalOut>,
-    /// The state of the FSS_HEATING.
-    #[datapoint(pattern = "Message::RfsComputer(RFSCMessage::FssHeatingState(#value))")]
-    #[broadcast(min_freq_hz = 1.5, max_freq_hz = 20.)]
-    pub fss_heating: Watchable<DigitalOut>,
-    /// The state of the PRESSURE_SENSOR_HEATING.
-    #[datapoint(pattern = "Message::RfsComputer(RFSCMessage::PressureSensorHeatingState(#value))")]
-    #[broadcast(min_freq_hz = 1.5, max_freq_hz = 20.)]
-    pub pressure_sensor_heating: Watchable<DigitalOut>,
-    /// The state of the ETH_PUMP_POWER.
-    #[datapoint(pattern = "Message::RfsComputer(RFSCMessage::EthPumpPowerState(#value))")]
-    #[broadcast(min_freq_hz = 1.5, max_freq_hz = 20.)]
-    pub eth_pump_power: Watchable<DigitalOut>,
     /// The state of the CUSTOM1.
     #[datapoint(pattern = "Message::RfsComputer(RFSCMessage::Custom1State(#value))")]
     #[broadcast(min_freq_hz = 1.5, max_freq_hz = 20.)]
@@ -124,38 +108,6 @@ pub struct Actuators {
     #[datapoint(pattern = "Message::RfsComputer(RFSCMessage::BoosterValveState(#value))")]
     #[broadcast(min_freq_hz = 1.5, max_freq_hz = 20.)]
     pub booster_valve: Watchable<NormallyClosedValve>,
-    /// The state of the LOX decoupler extend valve.
-    #[datapoint(
-        pattern = "Message::RfsComputer(RFSCMessage::LoxDecouplerExtendValveState(#value))"
-    )]
-    #[broadcast(min_freq_hz = 1.5, max_freq_hz = 20.)]
-    pub lox_decoupler_extend_valve: Watchable<NormallyClosedValve>,
-    /// The state of the LOX decoupler retract valve.
-    #[datapoint(
-        pattern = "Message::RfsComputer(RFSCMessage::LoxDecouplerRetractValveState(#value))"
-    )]
-    #[broadcast(min_freq_hz = 1.5, max_freq_hz = 20.)]
-    pub lox_decoupler_retract_valve: Watchable<NormallyClosedValve>,
-    /// The state of the N2 decoupler extend valve.
-    #[datapoint(
-        pattern = "Message::RfsComputer(RFSCMessage::N2DecouplerExtendValveState(#value))"
-    )]
-    #[broadcast(min_freq_hz = 1.5, max_freq_hz = 20.)]
-    pub n2_decoupler_extend_valve: Watchable<NormallyClosedValve>,
-    /// The state of the N2 decoupler retract valve.
-    #[datapoint(
-        pattern = "Message::RfsComputer(RFSCMessage::N2DecouplerRetractValveState(#value))"
-    )]
-    #[broadcast(min_freq_hz = 1.5, max_freq_hz = 20.)]
-    pub n2_decoupler_retract_valve: Watchable<NormallyClosedValve>,
-    /// The state of the N2 shower valve.
-    #[datapoint(pattern = "Message::RfsComputer(RFSCMessage::N2ShowerValvesState(#value))")]
-    #[broadcast(min_freq_hz = 1.5, max_freq_hz = 20.)]
-    pub n2_shower_valve: Watchable<NormallyClosedValve>,
-    /// The state of the N2 engine purge valve.
-    #[datapoint(pattern = "Message::RfsComputer(RFSCMessage::N2RocketPurgeValveState(#value))")]
-    #[broadcast(min_freq_hz = 1.5, max_freq_hz = 20.)]
-    pub n2_engine_purge_valve: Watchable<NormallyClosedValve>,
     /// The state of the H2 igniter valve.
     #[datapoint(pattern = "Message::RfsComputer(RFSCMessage::H2IgniterValveState(#value))")]
     #[broadcast(min_freq_hz = 1.5, max_freq_hz = 20.)]
