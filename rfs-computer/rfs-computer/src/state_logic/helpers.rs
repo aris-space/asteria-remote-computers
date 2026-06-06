@@ -158,7 +158,7 @@ pub enum Value {
     SetpointBarG(f32),
 }
 
-/// To be used as a value for [`lib_mission::actuator_control::Settable`].
+/// To be used as a value for `Settable`.
 impl From<Value> for f32 {
     fn from(value: Value) -> Self {
         match value {

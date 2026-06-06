@@ -1,4 +1,3 @@
-use datatypes::actuator::NormallyClosedValve;
 use lib_mission::state_machine::{AdditionalState, StateLogic, StateName};
 
 /// This state sets all RFS and PSS valves to normal(*) position.
