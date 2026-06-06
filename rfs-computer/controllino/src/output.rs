@@ -8,7 +8,7 @@ use crate::driver::CoilSettable;
 /// The target states of the actuators connected to the u-remote.
 ///
 /// From `Instrumentation Naming` Excel sheet
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 #[allow(clippy::struct_field_names)]
 pub struct Actuators {
     /// The target state of the ROCKET_POWER.

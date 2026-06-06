@@ -4,14 +4,18 @@
 //! Output data is directly written
 
 use std::marker::PhantomData;
+use std::net::{SocketAddr, ToSocketAddrs};
 use std::sync::Arc;
 use std::time::Duration;
 
 use datatypes::actuator::{Energizable, OutOfRange, Settable};
+use datatypes::status::SensorStatus;
 use datatypes::units::{BarG, Celsius};
+use messages::datapoints::dp_rfs_computer::RfsComputerStatus;
 use tokio::sync::Mutex as AsyncMutex;
 use tokio_modbus::Address;
 use tokio_modbus::client::{Context, Reader, Writer as _};
+use watchable::Watchable;
 
 use crate::input;
 
@@ -49,16 +53,20 @@ mod addresses {
     pub const TEMPERATURE_QUANTITY: Quantity = 2;
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct Client {
     /// Timeout for the Modbus requests using `poll_*` functions.
     /// Does not include locking time, thus if `context` stays locked, the functions will wait.
     timeout: Duration,
     /// Underlying connection to the Controllino
     context: Arc<AsyncMutex<Context>>,
+    /// The address of the uremote, usually `192.168.0.222:502`.
+    socket_addr: SocketAddr,
+    /// The shared variable where the controllino health should be stored in.
+    health: Watchable<RfsComputerStatus>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct CoilSettable<T> {
     coil: tokio_modbus::Address,
     driver: Client,
@@ -97,6 +105,57 @@ impl<T: Default + Settable + Energizable> Settable for CoilSettable<T> {
 }
 
 impl Client {
+    // / Creates a lazy client.
+    // / Does not connect yet.
+    // pub fn new(
+    //     socket_addr: &str,
+    //     timeout: Duration,
+    //     health_callback: Watchable<RfsComputerStatus>,
+    // ) -> std::io::Result<Self> {
+    //     let socket_addr = singleton(socket_addr.to_socket_addrs()?).ok_or_else(|| {
+    //         std::io::Error::other("Expected socket address to parse to exactly one element")
+    //     })?;
+    //     Ok(Self {
+    //         timeout,
+    //         context: Arc::default(),
+    //         socket_addr,
+    //         health: health_callback,
+    //     })
+    // }
+
+    /// Connects to the modbus server.
+    /// TODO: make it lazy and reconnectable.
+    pub async fn connect(
+        socket_addr: &str,
+        timeout: Duration,
+        health_callback: Watchable<RfsComputerStatus>,
+    ) -> std::io::Result<Self> {
+        let socket_addr = singleton(socket_addr.to_socket_addrs()?).ok_or_else(|| {
+            std::io::Error::other("Expected socket address to parse to exactly one element")
+        })?;
+        let ctx = tokio_modbus::client::tcp::connect(socket_addr).await?;
+        Ok(Self {
+            timeout,
+            context: Arc::new(AsyncMutex::new(ctx)),
+            socket_addr,
+            health: health_callback,
+        })
+    }
+
+    fn mark_error(&self) {
+        let mut x = self.health.write();
+        if x.controllino.online != SensorStatus::Offline {
+            x.controllino.online = SensorStatus::Offline;
+        }
+    }
+
+    fn mark_connected(&self) {
+        let mut x = self.health.write();
+        if x.controllino.online != SensorStatus::Online {
+            x.controllino.online = SensorStatus::Online;
+        }
+    }
+
     /// Reads all actuator states from the modbus server at once and writes them to `actuators`
     pub async fn poll_actuators(&self, actuators: &input::Actuators) {
         let mut ctx = self.context.lock().await;
@@ -150,15 +209,19 @@ impl Client {
                 let _ = actuators.rocket_heating.update(Energizable::from_active(
                     vals[(HEATING_PADS_POWER - COIL_BASE) as usize],
                 ));
+                self.mark_connected();
             }
             Ok(Ok(Err(code))) => {
                 tracing::warn!("modbus server rejected actuator coil read: {code}");
+                self.mark_connected(); // it responded, but weirdly
             }
             Ok(Err(err)) => {
                 tracing::warn!("Cannot reach modbus server: {err}");
+                self.mark_error();
             }
             Err(_elapsed) => {
                 tracing::warn!("Timed out modbus server");
+                self.mark_error();
             }
         }
     }
@@ -202,15 +265,19 @@ impl Client {
                     .update(Energizable::from_active(
                         vals[(N2_DECOUPLER_PROXIMITY - DISCRETE_IN_BASE) as usize],
                     ));
+                self.mark_connected();
             }
             Ok(Ok(Err(code))) => {
                 tracing::warn!("modbus server rejected discrete input read: {code}");
+                self.mark_connected(); // it responded, but weirdly
             }
             Ok(Err(err)) => {
                 tracing::warn!("Cannot reach modbus server: {err}");
+                self.mark_error();
             }
             Err(_elapsed) => {
                 tracing::warn!("Timed out modbus server");
+                self.mark_error();
             }
         }
     }
@@ -245,15 +312,19 @@ impl Client {
                         vals[(HOLDING_REGISTER_FLOAT_HI_OFFSET) as usize],
                         vals[(HOLDING_REGISTER_FLOAT_LO_OFFSET) as usize],
                     )));
+                self.mark_connected();
             }
             Ok(Ok(Err(code))) => {
                 tracing::warn!("modbus server rejected holding register read: {code}");
+                self.mark_connected(); // it responded, but weirdly
             }
             Ok(Err(err)) => {
                 tracing::warn!("Cannot reach modbus server: {err}");
+                self.mark_error();
             }
             Err(_elapsed) => {
                 tracing::warn!("Timed out modbus server");
+                self.mark_error();
             }
         }
     }
@@ -298,15 +369,19 @@ impl Client {
                             as usize],
                     ),
                 ));
+                self.mark_connected();
             }
             Ok(Ok(Err(code))) => {
                 tracing::warn!("modbus server rejected holding register read: {code}");
+                self.mark_connected(); // it responded, but weirdly
             }
             Ok(Err(err)) => {
                 tracing::warn!("Cannot reach modbus server: {err}");
+                self.mark_error();
             }
             Err(_elapsed) => {
                 tracing::warn!("Timed out modbus server");
+                self.mark_error();
             }
         }
     }
@@ -321,9 +396,11 @@ impl Client {
             }
             Ok(Err(err)) => {
                 tracing::warn!("Cannot reach modbus server: {err}");
+                self.mark_error();
             }
             Err(_elapsed) => {
                 tracing::warn!("Timed out modbus server");
+                self.mark_error();
             }
         }
     }
@@ -354,4 +431,14 @@ impl Client {
 
 fn decode_f32_from_holding_registers(data_hi: u16, data_lo: u16) -> f32 {
     f32::from_bits(u32::from(data_lo) | (u32::from(data_hi) << 16))
+}
+
+fn singleton<T>(mut iter: impl Iterator<Item = T>) -> Option<T> {
+    if let Some(n) = iter.next()
+        && let None = iter.next()
+    {
+        Some(n)
+    } else {
+        None
+    }
 }
