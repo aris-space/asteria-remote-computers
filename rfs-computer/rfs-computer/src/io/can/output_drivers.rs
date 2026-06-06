@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use datatypes::status::{BuildInformationCommon, StatusCommonMessage};
+use datatypes::status::{BuildInformationCommon, SensorStatus, StatusCommonMessage};
 use datatypes::units::BarG;
 use lib_mission::reactive::Watched;
 use lib_mission::util::init::BuildInfo;
@@ -31,6 +31,7 @@ pub fn spawn_rfsc_status_driver(
                             .as_micros() as u64,
                     },
                     is_ignition_armed: rfsc_status.read().is_ignition_armed,
+                    controllino_connection: SensorStatus::Offline, // TODO
                 };
 
                 let _ = rfsc_status.update(status.clone());

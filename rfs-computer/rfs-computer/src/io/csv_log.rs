@@ -227,6 +227,7 @@ impl OutputTree {
         // This destructure is used so that we don't forget later additions.
         let OutputTree {
             rfs_actuators,
+            controllino_actuators: _, // TODO kind of
             pss_valves: _,
             lox_fill_valve,
             hash_config: _,

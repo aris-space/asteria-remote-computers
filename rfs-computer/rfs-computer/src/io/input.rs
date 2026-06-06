@@ -62,6 +62,13 @@ pub struct InputTree {
     #[broadcast(flatten)]
     pub uremote_actuators: uremote::Actuators,
 
+    /// The valve states of controllio attached eletronics.
+    #[broadcast(flatten)]
+    pub controllino_valves: controllino::input::Actuators,
+    /// The sensor readings from controllio attached eletronics.
+    #[broadcast(flatten)]
+    pub controllino_sensors: controllino::input::Sensors,
+
     // The state of the pressure sensors that communicate on the serial bus:
     #[datapoint(pattern = "Message::RfsComputer(RFSCMessage::N2PreBoosterPressure(#value))")]
     #[broadcast(min_freq_hz = 6., max_freq_hz = 14.)]

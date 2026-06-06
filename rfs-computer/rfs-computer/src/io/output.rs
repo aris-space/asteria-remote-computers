@@ -17,6 +17,7 @@ use watchable::Watchable;
 #[serde(untagged)]
 pub enum ActuatorName {
     URValve(uremote::ActuatorName),
+    ControllinoValve(controllino::output::ActuatorName),
     PSSValve(pss_drivers::output::ValveName),
     LoxFillValve(LoxFillValveName),
 }
@@ -27,6 +28,8 @@ pub enum ActuatorName {
 pub struct OutputTree {
     /// A grouping of all the valves and actuators attached to the weidmüller u-remote coupler.
     pub rfs_actuators: uremote::Actuators,
+    /// A grouping of all the valves and actuators attached to the SMART box Controllino.
+    pub controllino_actuators: controllino::output::Actuators,
     /// The target states of the tank and engine valves in the rocket.
     pub pss_valves: PSSValves,
 
@@ -89,10 +92,14 @@ pub enum LoxFillValveName {
 impl OutputTree {
     /// The constructor for OutputTree. It must be provided
     /// given that Default cannot be derived for every field.
-    pub fn new(tx: std::sync::mpsc::Sender<Message>) -> Self {
+    pub fn new(
+        can: std::sync::mpsc::Sender<Message>,
+        controllino: controllino::driver::Client,
+    ) -> Self {
         Self {
             rfs_actuators: uremote::Actuators::default(),
-            pss_valves: PSSValves::new(tx, pss_drivers::output::CommandSender::RFS),
+            controllino_actuators: controllino.into_output_tree(),
+            pss_valves: PSSValves::new(can, pss_drivers::output::CommandSender::RFS),
             lox_fill_valve: Watchable::default(),
             hash_config: Watchable::default(),
             rfs_computer_status: Watchable::default(),

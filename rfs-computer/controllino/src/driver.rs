@@ -3,10 +3,11 @@
 //! Helper functions can poll data and write it into input trees.
 //! Output data is directly written
 
+use std::marker::PhantomData;
 use std::sync::Arc;
 use std::time::Duration;
 
-use datatypes::actuator::Energizable;
+use datatypes::actuator::{Energizable, OutOfRange, Settable};
 use datatypes::units::{BarG, Celsius};
 use tokio::sync::Mutex as AsyncMutex;
 use tokio_modbus::Address;
@@ -55,6 +56,44 @@ pub struct Client {
     timeout: Duration,
     /// Underlying connection to the Controllino
     context: Arc<AsyncMutex<Context>>,
+}
+
+#[derive(Debug, Clone)]
+pub struct CoilSettable<T> {
+    coil: tokio_modbus::Address,
+    driver: Client,
+    _phantom: PhantomData<T>,
+}
+
+impl<T> CoilSettable<T> {
+    pub fn new(driver: Client, coil: tokio_modbus::Address) -> Self {
+        Self {
+            coil,
+            driver,
+            _phantom: PhantomData,
+        }
+    }
+}
+
+impl<T: Energizable> CoilSettable<T> {
+    #[allow(clippy::needless_pass_by_value)] // typically u8
+    pub fn set(&self, value: T) {
+        let high = value.is_active();
+
+        // send to coil, need async, so spawn a task
+        let context = self.driver.clone();
+        let coil = self.coil;
+        tokio::spawn(async move { context.write_coil(coil, high).await });
+    }
+}
+
+impl<T: Default + Settable + Energizable> Settable for CoilSettable<T> {
+    fn set_value(&mut self, value: f32) -> Result<(), OutOfRange> {
+        let mut typed = T::default();
+        typed.set_value(value)?;
+        self.set(typed);
+        Ok(())
+    }
 }
 
 impl Client {
@@ -286,6 +325,29 @@ impl Client {
             Err(_elapsed) => {
                 tracing::warn!("Timed out modbus server");
             }
+        }
+    }
+
+    /// Make an output tree that directly talks to this driver
+    pub fn into_output_tree(self) -> crate::output::Actuators {
+        crate::output::Actuators {
+            rocket_power: CoilSettable::new(self.clone(), addresses::ROCKET_POWER),
+            rocket_heating: CoilSettable::new(self.clone(), addresses::LOX_DECOUPLER_EXTEND_VALVE),
+            lox_decoupler_extend_valve: CoilSettable::new(
+                self.clone(),
+                addresses::LOX_DECOUPLER_RETRACT_VALVE,
+            ),
+            lox_decoupler_retract_valve: CoilSettable::new(
+                self.clone(),
+                addresses::N2_DECOUPLER_EXTEND_VALVE,
+            ),
+            n2_decoupler_extend_valve: CoilSettable::new(
+                self.clone(),
+                addresses::N2_DECOUPLER_RETRACT_VALVE,
+            ),
+            n2_decoupler_retract_valve: CoilSettable::new(self.clone(), addresses::N2_SHOWER_VALVE),
+            n2_shower_valve: CoilSettable::new(self.clone(), addresses::N2_ENGINE_PURGE_VALVE),
+            n2_engine_purge_valve: CoilSettable::new(self.clone(), addresses::HEATING_PADS_POWER),
         }
     }
 }

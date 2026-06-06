@@ -1,32 +1,9 @@
 use std::collections::BTreeMap;
-use std::marker::PhantomData;
 
-use datatypes::actuator::{DigitalOut, Energizable, InvertedDigitalOut, NormallyClosedValve};
-use datatypes::actuator::{OutOfRange, Settable};
+use datatypes::actuator::Settable;
+use datatypes::actuator::{DigitalOut, InvertedDigitalOut, NormallyClosedValve};
 
-use crate::driver;
-
-#[derive(Debug, Clone)]
-pub struct CoilSettable<T> {
-    coil: tokio_modbus::Address,
-    driver: driver::Client,
-    _phantom: PhantomData<T>,
-}
-
-impl<T: Default + Settable + Energizable> Settable for CoilSettable<T> {
-    fn set_value(&mut self, value: f32) -> Result<(), OutOfRange> {
-        let mut typed = T::default();
-        typed.set_value(value)?;
-        let high = typed.is_active();
-
-        // send to coil, need async, so spawn a task
-        let context = self.driver.clone();
-        let coil = self.coil;
-        tokio::spawn(async move { context.write_coil(coil, high).await });
-
-        Ok(())
-    }
-}
+use crate::driver::CoilSettable;
 
 /// The target states of the actuators connected to the u-remote.
 ///
