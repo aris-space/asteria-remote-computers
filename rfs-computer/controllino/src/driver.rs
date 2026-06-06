@@ -108,7 +108,7 @@ impl Client {
                     .update(Energizable::from_active(
                         vals[(N2_ENGINE_PURGE_VALVE - COIL_BASE) as usize],
                     ));
-                let _ = actuators.fss_heating.update(Energizable::from_active(
+                let _ = actuators.rocket_heating.update(Energizable::from_active(
                     vals[(HEATING_PADS_POWER - COIL_BASE) as usize],
                 ));
             }

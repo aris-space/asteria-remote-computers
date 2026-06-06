@@ -36,8 +36,8 @@ impl<T: Default + Settable + Energizable> Settable for CoilSettable<T> {
 pub struct Actuators {
     /// The target state of the ROCKET_POWER.
     pub rocket_power: CoilSettable<InvertedDigitalOut>,
-    /// The target state of the FSS_HEATING.
-    pub fss_heating: CoilSettable<DigitalOut>,
+    /// The target state of the ROCKET_HEATING.
+    pub rocket_heating: CoilSettable<DigitalOut>,
     /// The target state of the LOX decoupler extend valve.
     pub lox_decoupler_extend_valve: CoilSettable<NormallyClosedValve>,
     /// The target state of the LOX decoupler retract valve.
@@ -95,7 +95,7 @@ impl Actuators {
         }
         BTreeMap::from([
             (ActuatorName::rocket_power, boxx!(self.rocket_power)),
-            (ActuatorName::fss_heating, boxx!(self.fss_heating)),
+            (ActuatorName::fss_heating, boxx!(self.rocket_heating)),
             (
                 ActuatorName::lox_dec_ext,
                 boxx!(self.lox_decoupler_extend_valve),

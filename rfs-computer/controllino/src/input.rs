@@ -1,5 +1,6 @@
 use datatypes::actuator::{DigitalOut, InvertedDigitalOut, NormallyClosedValve};
 use datatypes::sensor::DigitalIn;
+use datatypes::status::ArmingState;
 use datatypes::units::{BarG, Celsius};
 use io_utils::Broadcast;
 use messages::Message;
@@ -10,10 +11,12 @@ use watchable::Watchable;
 #[broadcast(message_type = "Message")]
 pub struct Sensors {
     /// `On` if the valves of the SMART box are getting power.
-    // FIXME: datapoint
-    pub valve_power_interlock: Watchable<DigitalIn>,
+    #[datapoint(pattern = "Message::RfsComputer(RFSCMessage::ValvesArmedSmartBox(#value))")]
+    #[broadcast(min_freq_hz = 0.5, max_freq_hz = 5.)]
+    pub valve_power_interlock: Watchable<ArmingState>,
     /// `On` if the rocket is receiving power and connection is detected.
-    // FIXME: datapoint
+    #[datapoint(pattern = "Message::RfsComputer(RFSCMessage::RocketConnected(#value))")]
+    #[broadcast(min_freq_hz = 0.5, max_freq_hz = 5.)]
     pub rocket_connection_detect: Watchable<DigitalIn>,
     /// `On` if proximity of the lox decoupler to the retracted state is detected.
     #[datapoint(pattern = "Message::RfsComputer(RFSCMessage::LoxDecouplerProximity(#value))")]
@@ -33,7 +36,8 @@ pub struct Sensors {
     #[broadcast(min_freq_hz = 1., max_freq_hz = 3.)]
     pub igniter_temperature: Watchable<Celsius>,
     /// The last received ambient temperature inside the SMART box.
-    // TODO: datapoint
+    #[datapoint(pattern = "Message::RfsComputer(RFSCMessage::SmartBoxTemperature(#value))")]
+    #[broadcast(min_freq_hz = 0.5, max_freq_hz = 2.)]
     pub smart_box_temperature: Watchable<Celsius>,
 }
 
@@ -81,7 +85,7 @@ pub struct Actuators {
     pub n2_engine_purge_valve: Watchable<NormallyClosedValve>,
 
     /// The state of the rocket heating.
-    #[datapoint(pattern = "Message::RfsComputer(RFSCMessage::FssHeatingState(#value))")]
+    #[datapoint(pattern = "Message::RfsComputer(RFSCMessage::RocketHeatingState(#value))")]
     #[broadcast(min_freq_hz = 1.5, max_freq_hz = 20.)]
-    pub fss_heating: Watchable<DigitalOut>,
+    pub rocket_heating: Watchable<DigitalOut>,
 }
