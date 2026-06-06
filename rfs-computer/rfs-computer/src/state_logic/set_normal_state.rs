@@ -78,9 +78,7 @@ impl StateLogic for SetNormalState {
         gox_igniter_valve.replace(Default::default());
         igniter_spark.replace(Default::default());
         // PSS
-        output
-            .pss_valves
-            .set_oxidizer_vent(Default::default());
+        output.pss_valves.set_oxidizer_vent(Default::default());
         output
             .pss_valves
             .set_pressurization_vent(Default::default());
