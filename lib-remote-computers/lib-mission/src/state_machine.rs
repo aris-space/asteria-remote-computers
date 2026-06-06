@@ -32,8 +32,6 @@ pub trait StateLogic {
     /// A struct with all the target output data. The "Output Tree".
     type Output;
     /// A struct with inter-state parameters.
-    /// Every implementation should clearly define how they interact with this!
-    /// This is the only type that will be given exclusively, not requireing interior mutablity.
     /// It is also used to track the state transition path.
     type Parameter;
 

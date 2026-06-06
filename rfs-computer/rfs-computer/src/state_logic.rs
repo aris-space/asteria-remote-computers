@@ -1,6 +1,6 @@
 pub type Input = crate::io::input::InputTree;
 pub type Output = crate::io::output::OutputTree;
-pub type Parameter = ();
+pub type Parameter = crate::state::State;
 
 pub mod helpers;
 

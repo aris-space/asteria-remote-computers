@@ -21,17 +21,15 @@ impl InputTree {
     ) -> Result<Vec<AbortHandle>, Box<dyn std::error::Error>> {
         // This destructure is used so that we don't forget later additions.
         let InputTree {
-            state: _,
             time,
             transition_command,
             actuator_command,
-            uplink_telemetry_health,
-            downlink_telemetry_stats: _,
-            is_can_connected,
             rocket_health,
             flight_computer_status,
             uremote_sensors,
             uremote_actuators,
+            controllino_valves: _,  // TODO (or find a better way)
+            controllino_sensors: _, // TODO (or find a better way)
             n2_pre_booster_pressure,
             h2_purge_pressure,
             n2_post_booster_pressure,
@@ -230,8 +228,6 @@ impl OutputTree {
             controllino_actuators: _, // TODO kind of
             pss_valves: _,
             lox_fill_valve,
-            hash_config: _,
-            rfs_computer_status,
         } = self;
 
         let mut handles = vec![

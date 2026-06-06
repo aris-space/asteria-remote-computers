@@ -64,7 +64,8 @@ impl StateLogic for RunSeqWithControl {
                 tracing::warn!("threshold violation: {violation}");
                 self.on_violation.clone()
             }
-            _ = await_telemetry_loss(&input.uplink_telemetry_health, &input.time, self.telemetry_loss_threshold) => {
+            _ = await_telemetry_loss(&param
+                .parameters.uplink_telemetry_health, &input.time, self.telemetry_loss_threshold) => {
                 tracing::warn!("telemetry loss detected");
                 self.on_violation.clone()
             }

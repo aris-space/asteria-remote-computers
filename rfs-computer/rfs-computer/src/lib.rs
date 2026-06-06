@@ -4,6 +4,7 @@
 
 pub mod config;
 pub mod io;
+pub mod state;
 pub mod state_logic;
 
 pub mod build_info {

@@ -7,8 +7,6 @@ use lib_mission::state_machine::{BoxedState, StateName};
 use lib_mission::transition::ManualTransitions;
 use serde::{Deserialize, Serialize};
 
-use crate::io::input::InputTree;
-use crate::io::output::OutputTree;
 use crate::state_logic;
 use crate::state_logic::helpers::ThresholdWatcher;
 use keller23sx::BaudRate;
@@ -194,7 +192,11 @@ pub enum StateLogicConfig {
 
 #[allow(clippy::too_many_lines)]
 impl MakeState for StateLogicConfig {
-    type State = BoxedState<InputTree, OutputTree, ()>;
+    type State = BoxedState<
+        crate::state_logic::Input,
+        crate::state_logic::Output,
+        crate::state_logic::Parameter,
+    >;
 
     fn make(
         self,

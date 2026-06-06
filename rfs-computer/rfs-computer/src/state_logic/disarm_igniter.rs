@@ -23,7 +23,11 @@ impl StateLogic for DisarmIgniter {
         output: &Self::Output,
         param: &AdditionalState<Self::Parameter>,
     ) -> StateName {
-        output.rfs_computer_status.write().is_ignition_armed = ArmingState::Safe;
+        param
+            .parameters
+            .rfs_computer_status
+            .write()
+            .is_ignition_armed = ArmingState::Safe;
         output.rfs_actuators.igniter_spark.replace(DigitalOut::Off);
         output
             .rfs_actuators
