@@ -4,7 +4,7 @@
 //! Output data is directly written
 
 use std::marker::PhantomData;
-use std::net::{SocketAddr, ToSocketAddrs};
+use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -126,19 +126,16 @@ impl Client {
     /// Connects to the modbus server.
     /// TODO: make it lazy and reconnectable.
     pub async fn connect(
-        socket_addr: &str,
+        socket_addr: SocketAddr,
         timeout: Duration,
-        health_callback: Watchable<RfsComputerStatus>,
+        health: Watchable<RfsComputerStatus>,
     ) -> std::io::Result<Self> {
-        let socket_addr = singleton(socket_addr.to_socket_addrs()?).ok_or_else(|| {
-            std::io::Error::other("Expected socket address to parse to exactly one element")
-        })?;
         let ctx = tokio_modbus::client::tcp::connect(socket_addr).await?;
         Ok(Self {
             timeout,
             context: Arc::new(AsyncMutex::new(ctx)),
             socket_addr,
-            health: health_callback,
+            health,
         })
     }
 
@@ -431,14 +428,4 @@ impl Client {
 
 fn decode_f32_from_holding_registers(data_hi: u16, data_lo: u16) -> f32 {
     f32::from_bits(u32::from(data_lo) | (u32::from(data_hi) << 16))
-}
-
-fn singleton<T>(mut iter: impl Iterator<Item = T>) -> Option<T> {
-    if let Some(n) = iter.next()
-        && let None = iter.next()
-    {
-        Some(n)
-    } else {
-        None
-    }
 }

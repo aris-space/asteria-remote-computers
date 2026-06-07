@@ -1,4 +1,6 @@
 use std::collections::HashSet;
+use std::net::SocketAddr;
+use std::time::Duration;
 
 use lib_mission::actuator_control::command::ActuatorControl;
 use lib_mission::common_states;
@@ -21,6 +23,8 @@ pub struct Config {
     pub telemetry: TelemetryConfig,
     /// The sub config for the Weidmüller u-remote coupler driver.
     pub uremote: URemoteConfig,
+    /// The sub config for the controllino driver.
+    pub controllino: ControllinoConfig,
     /// The sub config for serial communication over Modbus RTU.
     pub serial: SerialConfig,
     /// The sub config for CAN.
@@ -76,6 +80,34 @@ pub struct URemoteConfig {
     /// The minimal frequency of reads. Reads can happen fast than this.
     /// This needs to be above 1Hz such that the uremote watchdog doesn't time out.
     pub min_read_frequency_hz: f32,
+}
+
+/// The sub config for the Controllino driver.
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ControllinoConfig {
+    /// The TCP modbus server address.
+    pub address: SocketAddr,
+    /// The timeout for a request before it should be cancelled.
+    #[serde(deserialize_with = "deserialize_duration_secs")]
+    #[serde(rename = "request_timeout_secs")]
+    pub request_timeout: Duration,
+    /// The rate in Hz at which the pressure sensors should be polled.
+    pub pressure_polling_hz: f32,
+    /// The rate in Hz at which the temperature sensors should be polled.
+    pub temperature_polling_hz: f32,
+    /// The rate in Hz at which the digital sensors should be polled.
+    pub digital_polling_hz: f32,
+    /// The rate in Hz at which the actuator state should be polled.
+    pub actuator_polling_hz: f32,
+}
+
+fn deserialize_duration_secs<'de, D>(deserializer: D) -> Result<Duration, D::Error>
+where
+    D: serde::de::Deserializer<'de>,
+{
+    let secs = f32::deserialize(deserializer)?;
+    Ok(Duration::from_secs_f32(secs))
 }
 
 /// The main config file specification.

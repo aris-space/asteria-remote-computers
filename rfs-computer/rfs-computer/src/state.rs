@@ -6,7 +6,7 @@ use messages::datapoints::dp_rfs_computer::Message as RFSMessage;
 use messages::datapoints::dp_rfs_computer::RfsComputerStatus;
 use watchable::Watchable;
 
-#[derive(Debug, Clone, Broadcast)]
+#[derive(Debug, Default, Clone, Broadcast)]
 #[broadcast(message_type = "Message")]
 pub struct State {
     /// The current state machine state.
