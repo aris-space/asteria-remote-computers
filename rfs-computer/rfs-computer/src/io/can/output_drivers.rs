@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use datatypes::status::{BuildInformationCommon, SensorStatus, StatusCommonMessage};
+use datatypes::status::BuildInformationCommon;
 use datatypes::units::BarG;
 use lib_mission::reactive::Watched;
 use lib_mission::util::init::BuildInfo;
@@ -19,22 +19,9 @@ pub fn spawn_rfsc_status_driver(
         async move {
             let mut interval = tokio::time::interval(Duration::from_secs(1));
             interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
-            let start_time = std::time::SystemTime::now();
             loop {
                 interval.tick().await;
-                let status = dp_rfs_computer::RfsComputerStatus {
-                    common: StatusCommonMessage {
-                        errors: 0,
-                        micros_since_restart: std::time::SystemTime::now()
-                            .duration_since(start_time)
-                            .expect("Time moved backwards")
-                            .as_micros() as u64,
-                    },
-                    is_ignition_armed: rfsc_status.read().is_ignition_armed,
-                    controllino_connection: SensorStatus::Offline, // TODO
-                };
-
-                let _ = rfsc_status.update(status.clone());
+                let status = rfsc_status.get();
                 let msg = messages::Message::RfsComputer(dp_rfs_computer::Message::Status(status));
 
                 if tx.send(msg).is_err() {

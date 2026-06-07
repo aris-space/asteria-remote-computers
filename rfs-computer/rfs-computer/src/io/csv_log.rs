@@ -72,29 +72,6 @@ impl InputTree {
             //     time.watched(),
             // ),
 
-            // Log the timestamp of the last received telemetry message
-            spawn_watchable_logger(
-                make_timeseries_writer(
-                    folder,
-                    "telemetry_health",
-                    &[
-                        "time_of_last_msg [unix ms]",
-                        "num_msg_received",
-                        "time_of_last_processed_msg [unix ms]",
-                        "num_msg_processed",
-                    ],
-                )
-                .await?,
-                uplink_telemetry_health.watched().map(|h| {
-                    (
-                        h.time_of_last_msg.0,
-                        h.num_msg_received,
-                        h.time_of_last_processed_msg.0,
-                        h.num_msg_processed,
-                    )
-                }),
-                time.watched(),
-            ),
             // Log transition commands to two columns (or leave them empty)
             spawn_watchable_logger(
                 make_timeseries_writer(
@@ -129,11 +106,6 @@ impl InputTree {
                         (Some(c.in_state_index), Some(c.actuator), Some(c.value))
                     })
                 }),
-                time.watched(),
-            ),
-            spawn_watchable_logger(
-                make_timeseries_writer(folder, "is_can_connected", &["connected [bool]"]).await?,
-                is_can_connected.watched(),
                 time.watched(),
             ),
             // Log board last healths to a single column csv files
@@ -230,28 +202,16 @@ impl OutputTree {
             lox_fill_valve,
         } = self;
 
-        let mut handles = vec![
-            lib_mission::util::log::spawn_watchable_logger(
-                lib_mission::util::log::make_timeseries_writer(
-                    folder,
-                    "target_state_LOX_FLL_VLV",
-                    &["target state [openness %]"],
-                )
-                .await?,
-                lox_fill_valve.watched(),
-                time.watched(),
-            ),
-            lib_mission::util::log::spawn_watchable_logger(
-                lib_mission::util::log::make_timeseries_writer(
-                    folder,
-                    "is_software_armed",
-                    &["is armed [bool]"],
-                )
-                .await?,
-                rfs_computer_status.watched(),
-                time.watched(),
-            ),
-        ];
+        let mut handles = vec![lib_mission::util::log::spawn_watchable_logger(
+            lib_mission::util::log::make_timeseries_writer(
+                folder,
+                "target_state_LOX_FLL_VLV",
+                &["target state [openness %]"],
+            )
+            .await?,
+            lox_fill_valve.watched(),
+            time.watched(),
+        )];
         handles.extend(rfs_actuators.start_logging(folder, &time).await?);
 
         Ok(handles)

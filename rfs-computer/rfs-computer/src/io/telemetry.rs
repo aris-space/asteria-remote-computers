@@ -28,7 +28,7 @@ pub fn init_telemetry(
     config: &TelemetryConfig,
     input_tree: &InputTree,
     state_tree: &State,
-    state_machine: &StateMachine<InputTree, OutputTree, ()>,
+    state_machine: &StateMachine<InputTree, OutputTree, crate::state_logic::Parameter>,
 ) -> Result<Handles, Box<dyn std::error::Error>> {
     // Setup connection
     let socket = UdpSocket::bind("127.0.0.1:0")?;
