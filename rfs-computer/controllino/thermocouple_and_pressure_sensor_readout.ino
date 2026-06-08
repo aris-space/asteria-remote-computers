@@ -1,96 +1,177 @@
-// This is a TEST script for the Controllino
+// Controllino Modbus TCP Server
+// Implements the register map from the Instrumentation Naming specification.
+//
+// Coils (actuators)       0x100–0x107  written by client, applied to outputs
+// Discrete Inputs         0x200–0x203  read from digital inputs, served to client
+// Holding Registers       0x300–0x305  analog sensors as big-endian IEEE 754 floats
 
+#include <Controllino.h>
+#include <Ethernet.h>
+#include <ArduinoRS485.h>  // required dependency of ArduinoModbus
+#include <ArduinoModbus.h>
 #include <Wire.h>
 #include "Seeed_MCP9600.h"
-#include <Controllino.h>
 
-// --- Thermocouple Setup ---
-MCP9600 sensor_1;       // Default 0x60 address
-MCP9600 sensor_2(0x67); // Soldered alternate address
+// --- Network ---
+byte mac[] = { 0xDE, 0xAD, 0xBE, 0xEF, 0xFE, 0xED };
+IPAddress ip(192, 168, 0, 227);
+EthernetServer ethServer(502);
+ModbusTCPServer modbusTCPServer;
 
-// --- Pressure Sensor Setup ---
-// Updated to the 40 Bar limit from your uploaded file
-const float MAX_PRESSURE_BAR = 40.0; 
+// --- Thermocouples ---
+MCP9600 tc_igniter;        // I2C 0x60 → ign_cc_t   → holding regs 0x302–0x303
+MCP9600 tc_cabinet(0x67);  // I2C 0x67 → smart_cabinent_t → holding regs 0x304–0x305
+
+// --- Modbus address map ---
+#define COIL_BASE         0x100   // actuators
+#define COIL_COUNT        8
+#define DISCRETE_IN_BASE  0x200   // digital sensors
+#define DISCRETE_IN_COUNT 4
+#define HOLDING_REG_BASE  0x300   // analog sensors (3 floats × 2 registers each)
+#define HOLDING_REG_COUNT 6
+
+// Actuator output pins, indexed by coil offset from COIL_BASE
+const int ACTUATOR_PINS[COIL_COUNT] = {
+    CONTROLLINO_D0,  // 0x100: rocket_power    (DO0) – disconnects rocket power when HIGH
+    CONTROLLINO_R0,  // 0x101: lox_dec_ext     (R0)
+    CONTROLLINO_R1,  // 0x102: lox_dec_ret     (R1)
+    CONTROLLINO_R2,  // 0x103: n2_dec_ext      (R2)
+    CONTROLLINO_R3,  // 0x104: n2_dec_ret      (R3)
+    CONTROLLINO_R4,  // 0x105: n2_shw_vlv      (R4)
+    CONTROLLINO_R5,  // 0x106: eng_prg_vlv     (R5)
+    CONTROLLINO_R6,  // 0x107: rocket_heating  (R6)
+};
+
+// Digital input pins, indexed by offset from DISCRETE_IN_BASE
+const int DIGITAL_IN_PINS[DISCRETE_IN_COUNT] = {
+    CONTROLLINO_DI0,  // 0x200: smart_valves_armed
+    CONTROLLINO_DI1,  // 0x201: rocket_con_detect
+    CONTROLLINO_DI2,  // 0x202: lox_dec_prox
+    CONTROLLINO_DI3,  // 0x203: n2_dec_prox
+};
+
+// Pressure: 4–20 mA via 453 Ω resistor → 1.812–9.060 V → 0–40 barg
+// Controllino analog inputs: 0–10 V maps to ADC 0–1023
+const float PRESSURE_V_ZERO  = 1.812f;  // 4 mA × 453 Ω
+const float PRESSURE_V_SPAN  = 7.248f;  // 16 mA × 453 Ω
+const float PRESSURE_MAX_BAR = 40.0f;
+
+// --- Helpers ---
+
+// Encode a float as two holding registers: high word at baseAddr, low word at baseAddr+1.
+// Matches the big-endian decoding in driver.rs: f32::from_bits((hi << 16) | lo)
+void writeFloat(int baseAddr, float value) {
+    uint32_t bits;
+    memcpy(&bits, &value, 4);
+    modbusTCPServer.holdingRegisterWrite(baseAddr,     (uint16_t)(bits >> 16));
+    modbusTCPServer.holdingRegisterWrite(baseAddr + 1, (uint16_t)(bits & 0xFFFF));
+}
+
+// Interlock: extend and retract valves on the same coupler must never both be active.
+// If both are on, retract is forced off (extend wins).
+void enforceInterlocks() {
+    if (modbusTCPServer.coilRead(0x101) && modbusTCPServer.coilRead(0x102)) {
+        modbusTCPServer.coilWrite(0x102, 0);  // LOX retract off
+    }
+    if (modbusTCPServer.coilRead(0x103) && modbusTCPServer.coilRead(0x104)) {
+        modbusTCPServer.coilWrite(0x104, 0);  // N2 retract off
+    }
+}
+
+// Apply coil states to hardware outputs
+void applyActuators() {
+    enforceInterlocks();
+    for (int i = 0; i < COIL_COUNT; i++) {
+        digitalWrite(ACTUATOR_PINS[i], modbusTCPServer.coilRead(COIL_BASE + i) ? HIGH : LOW);
+    }
+}
+
+// Read digital inputs into the Modbus discrete input table
+void updateDiscreteInputs() {
+    for (int i = 0; i < DISCRETE_IN_COUNT; i++) {
+        modbusTCPServer.discreteInputWrite(DISCRETE_IN_BASE + i, digitalRead(DIGITAL_IN_PINS[i]));
+    }
+}
+
+// Read the pressure sensor (AI12) and write to holding registers 0x300–0x301
+void updatePressure() {
+    float voltage = analogRead(CONTROLLINO_A12) * (10.0f / 1023.0f);
+    float pressure = 0.0f;
+    if (voltage >= PRESSURE_V_ZERO) {
+        pressure = ((voltage - PRESSURE_V_ZERO) / PRESSURE_V_SPAN) * PRESSURE_MAX_BAR;
+    }
+    writeFloat(0x300, pressure);
+}
+
+// Read both thermocouples and write to holding registers 0x302–0x305
+void updateTemperatures() {
+    float temp;
+    tc_igniter.read_hot_junc(&temp);
+    writeFloat(0x302, temp);
+    tc_cabinet.read_hot_junc(&temp);
+    writeFloat(0x304, temp);
+}
+
+// --- Setup ---
 
 void setup() {
     Serial.begin(9600);
-    delay(100); 
-    Serial.println("==================================================");
-    Serial.println("  Booting Unified Test Bench (2x TC + 1x Pressure) ");
-    Serial.println("==================================================");
 
-    // 1. Initialize the I2C bus for Thermocouples
-    Wire.begin(); 
-    
-    if (sensor_1.init(THER_TYPE_K) == NO_ERROR) {
-        Serial.println(">> TC Sensor 1 (0x60) initialized.");
-    } else {
-        Serial.println("SYSTEM HALT: TC Sensor 1 failed. Check Hub wiring.");
-        while(1); 
+    // Thermocouples
+    Wire.begin();
+    if (tc_igniter.init(THER_TYPE_K) != NO_ERROR) {
+        Serial.println("ERROR: TC igniter (0x60) init failed");
+    }
+    if (tc_cabinet.init(THER_TYPE_K) != NO_ERROR) {
+        Serial.println("ERROR: TC cabinet (0x67) init failed");
     }
 
-    if (sensor_2.init(THER_TYPE_K) == NO_ERROR) {
-        Serial.println(">> TC Sensor 2 (0x67) initialized.");
-    } else {
-        Serial.println("SYSTEM HALT: TC Sensor 2 failed. Check 0x67 address.");
-        while(1); 
+    // Actuator pins – all off at boot
+    for (int i = 0; i < COIL_COUNT; i++) {
+        pinMode(ACTUATOR_PINS[i], OUTPUT);
+        digitalWrite(ACTUATOR_PINS[i], LOW);
     }
 
-    // 2. Initialize the 24V loop for the Pressure Sensor
-    pinMode(CONTROLLINO_D0, OUTPUT);
-    digitalWrite(CONTROLLINO_D0, HIGH); 
-    Serial.println(">> 24V Pressure Sensor Power (DO0) ENABLED.");
-    
-    // Give the 4-20mA loop 50ms to energize and stabilize
-    delay(50);
+    // Digital input pins
+    for (int i = 0; i < DISCRETE_IN_COUNT; i++) {
+        pinMode(DIGITAL_IN_PINS[i], INPUT);
+    }
+
+    // Ethernet
+    Ethernet.begin(mac, ip);
+    delay(1000);
+    Serial.print("IP: ");
+    Serial.println(Ethernet.localIP());
+
+    // Modbus TCP server
+    ethServer.begin();
+    if (!modbusTCPServer.begin()) {
+        Serial.println("ERROR: Modbus server init failed");
+        while (1);
+    }
+    modbusTCPServer.configureCoils(COIL_BASE, COIL_COUNT);
+    modbusTCPServer.configureDiscreteInputs(DISCRETE_IN_BASE, DISCRETE_IN_COUNT);
+    modbusTCPServer.configureHoldingRegisters(HOLDING_REG_BASE, HOLDING_REG_COUNT);
+
+    Serial.println("Modbus TCP server ready on port 502.");
 }
 
-void loop() {
-    float temp1 = 0;
-    float temp2 = 0;
-    bool data_ready_1 = false;
-    bool data_ready_2 = false;
-    
-    // 1. Check if both thermocouples have fresh data ready
-    sensor_1.check_data_update(&data_ready_1);
-    sensor_2.check_data_update(&data_ready_2);
-    
-    // 2. Only pull data when the I2C sensors are fully synchronized
-    if (data_ready_1 && data_ready_2) {
-        
-        // Read thermocouples
-        sensor_1.read_hot_junc(&temp1);
-        sensor_2.read_hot_junc(&temp2);
-        
-        // Read pressure sensor
-        int raw_adc = analogRead(CONTROLLINO_A12);
-        float voltage = raw_adc * (10.0 / 1023.0);
-        
-        // 3. Print everything out on a single line
-        Serial.print("T1: ");
-        Serial.print(temp1, 2);
-        Serial.print(" °C  |  T2: ");
-        Serial.print(temp2, 2);
-        Serial.print(" °C  |  ");
+// --- Loop ---
 
-        // Handle pressure calculations and faults inline
-        if (voltage < 1.65) {
-            Serial.print("Pressure: FAULT (");
-            Serial.print(voltage, 2);
-            Serial.println(" V)");
-        } else {
-            // Subtract the 1.812V baseline, divide by 7.248V span, multiply by 40 Bar
-            float pressure = ((voltage - 1.812) / 7.248) * MAX_PRESSURE_BAR;
-            if (pressure < 0) pressure = 0; // Clean up micro-fluctuations
-            
-            Serial.print("Pressure: ");
-            Serial.print(pressure, 2);
-            Serial.print(voltage, 2);
-            Serial.println(" V)");
-            Serial.println(" Bar");
-        }
+void loop() {
+    EthernetClient client = ethServer.available();
+    if (!client) return;
+
+    Serial.println("client connected");
+    modbusTCPServer.accept(client);
+
+    while (client.connected()) {
+        modbusTCPServer.poll();
+        applyActuators();
+        updateDiscreteInputs();
+        updatePressure();
+        updateTemperatures();
     }
-    
-    // Short polling delay so we don't spam the I2C bus too rapidly
-    delay(250); 
+
+    Serial.println("client disconnected");
 }
