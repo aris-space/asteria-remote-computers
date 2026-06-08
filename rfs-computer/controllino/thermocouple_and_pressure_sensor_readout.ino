@@ -67,15 +67,54 @@ void writeFloat(int baseAddr, float value) {
     modbusTCPServer.holdingRegisterWrite(baseAddr + 1, (uint16_t)(bits & 0xFFFF));
 }
 
-// Interlock: extend and retract valves on the same coupler must never both be active.
-// If both are on, retract is forced off (extend wins).
+// Interlock rules:
+// 1. All interlocked valves (0x101–0x106) are forced off when valves are not armed (DI0).
+// 2. Extend and retract on the same coupler must never both be active.
+//    When both are commanded, the one that was off last tick (the "last on") stays on.
 void enforceInterlocks() {
-    if (modbusTCPServer.coilRead(0x101) && modbusTCPServer.coilRead(0x102)) {
-        modbusTCPServer.coilWrite(0x102, 0);  // LOX retract off
+    static bool prev_lox_ext = false, prev_lox_ret = false;
+    static bool prev_n2_ext  = false, prev_n2_ret  = false;
+
+    // Read valve-armed interlock directly from the pin (not from the stale Modbus table)
+    bool armed = digitalRead(CONTROLLINO_DI0);
+    if (!armed) {
+        for (int coil = 0x101; coil <= 0x106; coil++) {
+            modbusTCPServer.coilWrite(coil, 0);
+        }
+        prev_lox_ext = prev_lox_ret = prev_n2_ext = prev_n2_ret = false;
+        return;
     }
-    if (modbusTCPServer.coilRead(0x103) && modbusTCPServer.coilRead(0x104)) {
-        modbusTCPServer.coilWrite(0x104, 0);  // N2 retract off
+
+    // LOX extend/retract: if both on, the newly-set one (was off last tick) wins
+    bool lox_ext = modbusTCPServer.coilRead(0x101);
+    bool lox_ret = modbusTCPServer.coilRead(0x102);
+    if (lox_ext && lox_ret) {
+        if (!prev_lox_ext) {  // ext just turned on → ext wins
+            modbusTCPServer.coilWrite(0x102, 0);
+            lox_ret = false;
+        } else {              // ret just turned on (or both new simultaneously: ret wins)
+            modbusTCPServer.coilWrite(0x101, 0);
+            lox_ext = false;
+        }
     }
+
+    // N2 extend/retract: same logic
+    bool n2_ext = modbusTCPServer.coilRead(0x103);
+    bool n2_ret = modbusTCPServer.coilRead(0x104);
+    if (n2_ext && n2_ret) {
+        if (!prev_n2_ext) {
+            modbusTCPServer.coilWrite(0x104, 0);
+            n2_ret = false;
+        } else {
+            modbusTCPServer.coilWrite(0x103, 0);
+            n2_ext = false;
+        }
+    }
+
+    prev_lox_ext = lox_ext;
+    prev_lox_ret = lox_ret;
+    prev_n2_ext  = n2_ext;
+    prev_n2_ret  = n2_ret;
 }
 
 // Apply coil states to hardware outputs
