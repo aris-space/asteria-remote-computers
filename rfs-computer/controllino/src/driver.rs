@@ -139,6 +139,56 @@ impl Client {
         })
     }
 
+    /// Starts tasks to periodically poll the sensors and actuator states
+    pub fn start_polling(
+        &self,
+        pressure_polling_hz: f32,
+        temperature_polling_hz: f32,
+        digital_polling_hz: f32,
+        actuator_polling_hz: f32,
+        actuators: input::Actuators,
+        sensors: &input::Sensors,
+    ) {
+        let driver = self.clone();
+        tokio::spawn(async move {
+            let period = Duration::from_secs_f32(1. / actuator_polling_hz);
+            loop {
+                tokio::time::sleep(period).await; // intentionally not `interval` to have natural random jitter.
+                driver.poll_actuators(&actuators).await;
+            }
+        });
+
+        let driver = self.clone();
+        let sensor_tree = sensors.clone();
+        tokio::spawn(async move {
+            let period = Duration::from_secs_f32(1. / pressure_polling_hz);
+            loop {
+                tokio::time::sleep(period).await; // intentionally not `interval` to have natural random jitter.
+                driver.poll_pressure_sensor(&sensor_tree).await;
+            }
+        });
+
+        let driver = self.clone();
+        let sensor_tree = sensors.clone();
+        tokio::spawn(async move {
+            let period = Duration::from_secs_f32(1. / temperature_polling_hz);
+            loop {
+                tokio::time::sleep(period).await; // intentionally not `interval` to have natural random jitter.
+                driver.poll_temperature_sensors(&sensor_tree).await;
+            }
+        });
+
+        let driver = self.clone();
+        let sensor_tree = sensors.clone();
+        tokio::spawn(async move {
+            let period = Duration::from_secs_f32(1. / digital_polling_hz);
+            loop {
+                tokio::time::sleep(period).await; // intentionally not `interval` to have natural random jitter.
+                driver.poll_discrete_inputs(&sensor_tree).await;
+            }
+        });
+    }
+
     fn mark_error(&self) {
         let mut x = self.health.write();
         if x.controllino.online != SensorStatus::Offline {
