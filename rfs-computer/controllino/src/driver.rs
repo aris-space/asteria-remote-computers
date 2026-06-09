@@ -130,7 +130,10 @@ impl Client {
         timeout: Duration,
         health: Watchable<RfsComputerStatus>,
     ) -> std::io::Result<Self> {
-        let ctx = tokio_modbus::client::tcp::connect(socket_addr).await?;
+        tracing::info!("Connecting to Controllino at {socket_addr}");
+        let ctx =
+            tokio::time::timeout(5 * timeout, tokio_modbus::client::tcp::connect(socket_addr))
+                .await??;
         Ok(Self {
             timeout,
             context: Arc::new(AsyncMutex::new(ctx)),
