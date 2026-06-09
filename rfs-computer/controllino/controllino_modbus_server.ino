@@ -13,7 +13,7 @@
 #include "Seeed_MCP9600.h"
 
 // --- Network ---
-byte mac[] = { 0xDE, 0xAD, 0xBE, 0xEF, 0xFE, 0xED };
+byte mac[] = { 0x71, 0x14, 0x89, 0x7d, 0xc1, 0xbf };
 IPAddress ip(192, 168, 0, 227);
 EthernetServer ethServer(502);
 ModbusTCPServer modbusTCPServer;
