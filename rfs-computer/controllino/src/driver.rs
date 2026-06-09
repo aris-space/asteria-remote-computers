@@ -60,7 +60,7 @@ pub struct Client {
     timeout: Duration,
     /// Underlying connection to the Controllino
     context: Arc<AsyncMutex<Context>>,
-    /// The address of the uremote, usually `192.168.0.222:502`.
+    /// The IP address of the Controllino, usually `192.168.0.227:502`.
     socket_addr: SocketAddr,
     /// The shared variable where the controllino health should be stored in.
     health: Watchable<RfsComputerStatus>,

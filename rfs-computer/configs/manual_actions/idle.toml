@@ -12,11 +12,17 @@ min_read_frequency_hz = 20
 serial_port = "/dev/ttyAMA2"
 baud_rate = "Baud115200"
 timeout_ms = 105
-pressure_polling_hz = 20     # double for igniter sensor
+pressure_polling_hz = 20
 valve_state_polling_hz = 5
-
 [can]
 socket_address = "can0"
+[controllino]
+address = "192.168.0.227:502"
+request_timeout_secs = 0.1
+pressure_polling_hz = 40.0
+temperature_polling_hz = 5.0
+digital_polling_hz = 10.0
+actuator_polling_hz = 10.0
 
 [state_machine]
 name = "Idle State machine"

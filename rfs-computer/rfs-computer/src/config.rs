@@ -86,7 +86,7 @@ pub struct URemoteConfig {
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct ControllinoConfig {
-    /// The TCP modbus server address.
+    /// The TCP modbus server address, usually `192.168.0.227:502`.
     pub address: SocketAddr,
     /// The timeout for a request before it should be cancelled.
     #[serde(deserialize_with = "deserialize_duration_secs")]

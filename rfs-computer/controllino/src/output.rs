@@ -37,8 +37,8 @@ pub struct Actuators {
 pub enum ActuatorName {
     /// The name for [`Actuators::rocket_power`].
     rocket_power,
-    /// The name for [`Actuators::fss_heating`].
-    fss_heating,
+    /// The name for [`Actuators::rocket_heating`].
+    rocket_heating,
     /// The name for [`Actuators::lox_decoupler_extend_valve`].
     lox_dec_ext,
     /// The name for [`Actuators::lox_decoupler_retract_valve`].
@@ -72,7 +72,7 @@ impl Actuators {
         }
         BTreeMap::from([
             (ActuatorName::rocket_power, boxx!(self.rocket_power)),
-            (ActuatorName::fss_heating, boxx!(self.rocket_heating)),
+            (ActuatorName::rocket_heating, boxx!(self.rocket_heating)),
             (
                 ActuatorName::lox_dec_ext,
                 boxx!(self.lox_decoupler_extend_valve),
