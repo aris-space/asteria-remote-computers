@@ -76,7 +76,7 @@ fn init_output_drivers(
         output_drivers::spawn_rfsc_status_driver(rfs_computer_status.clone(), tx.clone()),
         output_drivers::spawn_rfsc_debug_driver(crate::build_info::THIS_BUILD, tx.clone()),
         output_drivers::spawn_fc_igniter_pressure_driver(
-            input_tree.igniter_pressure.watched(),
+            input_tree.controllino_sensors.igniter_pressure.watched(),
             tx.clone(),
         ),
     ];

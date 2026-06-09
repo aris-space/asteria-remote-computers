@@ -35,7 +35,6 @@ mod modbus_addresses {
     pub const PNEUMATIC_SENSOR_ADDR: u8 = 7;
     pub const N2_POST_BOOSTER_SENSOR_ADDR: u8 = 8;
     pub const H2_SENSOR_ADDR: u8 = 9;
-    pub const IGNITER_SENSOR_ADDR: u8 = 10;
 
     pub const LOX_FILL_VALVE_ADDR: u8 = 101;
 }
@@ -284,14 +283,6 @@ pub fn init_keller23sx_drivers(
             input_tree.h2_pressure.clone(),
             "h2",
             polling_period,
-            timeout,
-        )?,
-        spawn_individual_keller23sx_driver(
-            shared_modbus.clone(),
-            Slave(modbus_addresses::IGNITER_SENSOR_ADDR),
-            input_tree.igniter_pressure.clone(),
-            "igniter",
-            polling_period / 2, // Igniter sensor is more critical, it gets double to bandwidth by giving it half the period
             timeout,
         )?,
     ])

@@ -38,7 +38,6 @@ impl InputTree {
             pneumatic_pressure,
             gox_pressure,
             h2_pressure,
-            igniter_pressure,
             lox_fill_valve,
             pss_valves,
             pss_sensors,
@@ -172,7 +171,6 @@ impl InputTree {
                 pneumatic_pressure,
                 gox_pressure,
                 h2_pressure,
-                igniter_pressure,
             )
             .await?,
         );
@@ -230,7 +228,6 @@ async fn start_pressure_sensors_logging(
     pneumatic_pressure: &Watchable<datatypes::units::BarG>,
     gox_pressure: &Watchable<datatypes::units::BarG>,
     h2_pressure: &Watchable<datatypes::units::BarG>,
-    igniter_pressure: &Watchable<datatypes::units::BarG>,
 ) -> Result<Vec<AbortHandle>, Box<dyn std::error::Error>> {
     use lib_mission::reactive::IntoWatched as _;
     macro_rules! spawn_pressure_logger {
@@ -258,7 +255,6 @@ async fn start_pressure_sensors_logging(
         spawn_pressure_logger!("sensor_pneumatic_p", pneumatic_pressure),
         spawn_pressure_logger!("sensor_n2_post_booster_p", n2_post_booster_pressure),
         spawn_pressure_logger!("sensor_h2_p", h2_pressure),
-        spawn_pressure_logger!("sensor_igniter_p", igniter_pressure),
     ];
     Ok(handles)
 }

@@ -79,9 +79,6 @@ pub struct InputTree {
     #[datapoint(pattern = "Message::RfsComputer(RFSMessage::H2Pressure(#value))")]
     #[broadcast(min_freq_hz = 6., max_freq_hz = 14.)]
     pub h2_pressure: Watchable<BarG>,
-    #[datapoint(pattern = "Message::RfsComputer(RFSMessage::IgniterPressure(#value))")]
-    #[broadcast(min_freq_hz = 6., max_freq_hz = 14.)]
-    pub igniter_pressure: Watchable<BarG>,
 
     /// The current state for the lox fill valve.
     #[datapoint(pattern = "Message::RfsComputer(RFSMessage::LoxFillValveState(#value))")]
