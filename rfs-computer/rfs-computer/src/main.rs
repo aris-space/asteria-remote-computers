@@ -39,7 +39,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     .await?;
 
     let (can_tx, _can_rx) = std::sync::mpsc::channel();
-    let output_tree = OutputTree::new(can_tx.clone(), controllino_driver.clone());
+    let output_tree = OutputTree::new(can_tx.clone(), controllino_driver.clone(), &None);
 
     let state_machine = StateMachine::new(config_file.state_machine)?;
     state_tree.state_machine_state.current_state = state_machine.current_state.clone(); // synchronize shared variable
@@ -86,6 +86,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         config_file.controllino.actuator_polling_hz,
         input_tree.controllino_valves.clone(),
         &input_tree.controllino_sensors,
+        None,
     );
 
     // Skip for now, as not yet done, and very noisy error messages

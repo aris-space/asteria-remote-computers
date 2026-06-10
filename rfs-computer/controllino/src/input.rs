@@ -2,13 +2,14 @@ use datatypes::actuator::{DigitalOut, InvertedDigitalOut, NormallyClosedValve};
 use datatypes::sensor::DigitalIn;
 use datatypes::status::ArmingState;
 use datatypes::units::{BarG, Celsius};
-use io_utils::Broadcast;
+use io_utils::{Broadcast, Collector};
 use messages::Message;
 use messages::datapoints::dp_rfs_computer::Message as RFSCMessage;
 use watchable::Watchable;
 
-#[derive(Debug, Default, Clone, Broadcast)]
+#[derive(Debug, Default, Clone, Broadcast, Collector)]
 #[broadcast(message_type = "Message")]
+#[collector(message_type = "Message", update_expr = "let _ = #field.update(#value);")]
 pub struct Sensors {
     /// `On` if the valves of the SMART box are getting power.
     #[datapoint(pattern = "Message::RfsComputer(RFSCMessage::ValvesArmedSmartBox(#value))")]
@@ -42,8 +43,9 @@ pub struct Sensors {
 }
 
 /// The states of the actuators connected to the SMART box Controllino.
-#[derive(Debug, Default, Clone, Broadcast)]
+#[derive(Debug, Default, Clone, Broadcast, Collector)]
 #[broadcast(message_type = "Message")]
+#[collector(message_type = "Message", update_expr = "let _ = #field.update(#value);")]
 #[allow(clippy::struct_field_names)]
 pub struct Actuators {
     /// The state of the ROCKET_POWER.

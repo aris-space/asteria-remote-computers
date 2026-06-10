@@ -1,7 +1,7 @@
 //! This module serves to communicate with the Modbus server on the Controllino.
 //!
-//! Helper functions can poll data and write it into input trees.
-//! Output data is directly written
+//! Helper functions poll data and return messages, which callers dispatch into input trees
+//! via the [`Collector`] trait. Output data is written directly to the Modbus server.
 
 use std::marker::PhantomData;
 use std::net::SocketAddr;
@@ -11,8 +11,12 @@ use std::time::Duration;
 use datatypes::actuator::{Energizable, OutOfRange, Settable};
 use datatypes::status::SensorStatus;
 use datatypes::units::{BarG, Celsius};
+use io_utils::Collector;
+use messages::Message;
+use messages::datapoints::dp_rfs_computer::Message as RFSCMessage;
 use messages::datapoints::dp_rfs_computer::RfsComputerStatus;
 use tokio::sync::Mutex as AsyncMutex;
+use tokio::sync::mpsc;
 use tokio_modbus::Address;
 use tokio_modbus::client::{Context, Reader, Writer as _};
 use watchable::Watchable;
@@ -70,22 +74,42 @@ pub struct Client {
 pub struct CoilSettable<T> {
     coil: tokio_modbus::Address,
     driver: Client,
+    #[allow(clippy::type_complexity)] // okay enough: it is (Channel, Message Mapping)
+    log: Option<(mpsc::Sender<Message>, fn(T) -> Message)>,
     _phantom: PhantomData<T>,
 }
 
 impl<T> CoilSettable<T> {
-    pub fn new(driver: Client, coil: tokio_modbus::Address) -> Self {
+    fn new(driver: Client, coil: tokio_modbus::Address) -> Self {
         Self {
             coil,
             driver,
+            log: None,
+            _phantom: PhantomData,
+        }
+    }
+
+    fn new_with_log(
+        driver: Client,
+        coil: tokio_modbus::Address,
+        log_tx: mpsc::Sender<Message>,
+        to_msg: fn(T) -> Message,
+    ) -> Self {
+        Self {
+            coil,
+            driver,
+            log: Some((log_tx, to_msg)),
             _phantom: PhantomData,
         }
     }
 }
 
-impl<T: Energizable> CoilSettable<T> {
+impl<T: Energizable + Clone> CoilSettable<T> {
     #[allow(clippy::needless_pass_by_value)] // typically u8
     pub fn set(&self, value: T) {
+        if let Some((tx, to_msg)) = &self.log {
+            let _ = tx.try_send(to_msg(value.clone()));
+        }
         let high = value.is_active();
 
         // send to coil, need async, so spawn a task
@@ -95,7 +119,7 @@ impl<T: Energizable> CoilSettable<T> {
     }
 }
 
-impl<T: Default + Settable + Energizable> Settable for CoilSettable<T> {
+impl<T: Default + Settable + Energizable + Clone> Settable for CoilSettable<T> {
     fn set_value(&mut self, value: f32) -> Result<(), OutOfRange> {
         let mut typed = T::default();
         typed.set_value(value)?;
@@ -142,7 +166,9 @@ impl Client {
         })
     }
 
-    /// Starts tasks to periodically poll the sensors and actuator states
+    /// Starts tasks to periodically poll the sensors and actuator states, dispatching results
+    /// into the input trees and optionally forwarding each message to `log`.
+    #[allow(clippy::too_many_arguments)] // its fine
     pub fn start_polling(
         &self,
         pressure_polling_hz: f32,
@@ -151,43 +177,70 @@ impl Client {
         actuator_polling_hz: f32,
         actuators: input::Actuators,
         sensors: &input::Sensors,
+        log: Option<mpsc::Sender<Message>>,
     ) {
+        /// Sends all messages to both the input tree and the log
+        fn dispatch(
+            msgs: Vec<Message>,
+            tree: &mut impl Collector<Message>,
+            log: Option<&mpsc::Sender<Message>>,
+        ) {
+            for msg in msgs {
+                if let Some(tx) = log {
+                    let res = tx.try_send(msg.clone());
+                    if let Err(e) = res {
+                        tracing::warn!("dropping log: {e}");
+                    }
+                }
+                let _ = tree.update_from(msg);
+            }
+        }
+
         let driver = self.clone();
+        let log_a = log.clone();
         tokio::spawn(async move {
+            let mut actuators = actuators;
             let period = Duration::from_secs_f32(1. / actuator_polling_hz);
             loop {
                 tokio::time::sleep(period).await; // intentionally not `interval` to have natural random jitter.
-                driver.poll_actuators(&actuators).await;
+                let msgs = driver.poll_actuators().await;
+                dispatch(msgs, &mut actuators, log_a.as_ref());
             }
         });
 
         let driver = self.clone();
-        let sensor_tree = sensors.clone();
+        let mut pressure_sensors = sensors.clone();
+        let log_p = log.clone();
         tokio::spawn(async move {
             let period = Duration::from_secs_f32(1. / pressure_polling_hz);
             loop {
                 tokio::time::sleep(period).await; // intentionally not `interval` to have natural random jitter.
-                driver.poll_pressure_sensor(&sensor_tree).await;
+                let msgs = driver.poll_pressure_sensor().await;
+                dispatch(msgs, &mut pressure_sensors, log_p.as_ref());
             }
         });
 
         let driver = self.clone();
-        let sensor_tree = sensors.clone();
+        let mut temp_sensors = sensors.clone();
+        let log_t = log.clone();
         tokio::spawn(async move {
             let period = Duration::from_secs_f32(1. / temperature_polling_hz);
             loop {
                 tokio::time::sleep(period).await; // intentionally not `interval` to have natural random jitter.
-                driver.poll_temperature_sensors(&sensor_tree).await;
+                let msgs = driver.poll_temperature_sensors().await;
+                dispatch(msgs, &mut temp_sensors, log_t.as_ref());
             }
         });
 
         let driver = self.clone();
-        let sensor_tree = sensors.clone();
+        let mut digital_sensors = sensors.clone();
+        let log_d = log;
         tokio::spawn(async move {
             let period = Duration::from_secs_f32(1. / digital_polling_hz);
             loop {
                 tokio::time::sleep(period).await; // intentionally not `interval` to have natural random jitter.
-                driver.poll_discrete_inputs(&sensor_tree).await;
+                let msgs = driver.poll_discrete_inputs().await;
+                dispatch(msgs, &mut digital_sensors, log_d.as_ref());
             }
         });
     }
@@ -206,8 +259,8 @@ impl Client {
         }
     }
 
-    /// Reads all actuator states from the modbus server at once and writes them to `actuators`
-    pub async fn poll_actuators(&self, actuators: &input::Actuators) {
+    /// Reads all actuator states from the modbus server at once and returns them as messages.
+    pub async fn poll_actuators(&self) -> Vec<Message> {
         let mut ctx = self.context.lock().await;
         match tokio::time::timeout(
             self.timeout,
@@ -223,61 +276,65 @@ impl Client {
                         "modbus server didn't return all coils: {count}",
                         count = vals.len()
                     );
-                    return;
+                    return vec![];
                 }
-                let _ = actuators.rocket_power.update(Energizable::from_active(
-                    vals[(ROCKET_POWER - COIL_BASE) as usize],
-                ));
-                let _ = actuators
-                    .lox_decoupler_extend_valve
-                    .update(Energizable::from_active(
-                        vals[(LOX_DECOUPLER_EXTEND_VALVE - COIL_BASE) as usize],
-                    ));
-                let _ = actuators
-                    .lox_decoupler_retract_valve
-                    .update(Energizable::from_active(
-                        vals[(LOX_DECOUPLER_RETRACT_VALVE - COIL_BASE) as usize],
-                    ));
-                let _ = actuators
-                    .n2_decoupler_extend_valve
-                    .update(Energizable::from_active(
-                        vals[(N2_DECOUPLER_EXTEND_VALVE - COIL_BASE) as usize],
-                    ));
-                let _ = actuators
-                    .n2_decoupler_retract_valve
-                    .update(Energizable::from_active(
-                        vals[(N2_DECOUPLER_RETRACT_VALVE - COIL_BASE) as usize],
-                    ));
-                let _ = actuators.n2_shower_valve.update(Energizable::from_active(
-                    vals[(N2_SHOWER_VALVE - COIL_BASE) as usize],
-                ));
-                let _ = actuators
-                    .n2_engine_purge_valve
-                    .update(Energizable::from_active(
-                        vals[(N2_ENGINE_PURGE_VALVE - COIL_BASE) as usize],
-                    ));
-                let _ = actuators.rocket_heating.update(Energizable::from_active(
-                    vals[(HEATING_PADS_POWER - COIL_BASE) as usize],
-                ));
                 self.mark_connected();
+                let mut msgs = Vec::with_capacity(COIL_QUANTITY as usize);
+
+                msgs.push(Message::RfsComputer(RFSCMessage::RocketPowerState(
+                    Energizable::from_active(vals[(ROCKET_POWER - COIL_BASE) as usize]),
+                )));
+                msgs.push(Message::RfsComputer(
+                    RFSCMessage::LoxDecouplerExtendValveState(Energizable::from_active(
+                        vals[(LOX_DECOUPLER_EXTEND_VALVE - COIL_BASE) as usize],
+                    )),
+                ));
+                msgs.push(Message::RfsComputer(
+                    RFSCMessage::LoxDecouplerRetractValveState(Energizable::from_active(
+                        vals[(LOX_DECOUPLER_RETRACT_VALVE - COIL_BASE) as usize],
+                    )),
+                ));
+                msgs.push(Message::RfsComputer(
+                    RFSCMessage::N2DecouplerExtendValveState(Energizable::from_active(
+                        vals[(N2_DECOUPLER_EXTEND_VALVE - COIL_BASE) as usize],
+                    )),
+                ));
+                msgs.push(Message::RfsComputer(
+                    RFSCMessage::N2DecouplerRetractValveState(Energizable::from_active(
+                        vals[(N2_DECOUPLER_RETRACT_VALVE - COIL_BASE) as usize],
+                    )),
+                ));
+                msgs.push(Message::RfsComputer(RFSCMessage::N2ShowerValvesState(
+                    Energizable::from_active(vals[(N2_SHOWER_VALVE - COIL_BASE) as usize]),
+                )));
+                msgs.push(Message::RfsComputer(RFSCMessage::N2RocketPurgeValveState(
+                    Energizable::from_active(vals[(N2_ENGINE_PURGE_VALVE - COIL_BASE) as usize]),
+                )));
+                msgs.push(Message::RfsComputer(RFSCMessage::RocketHeatingState(
+                    Energizable::from_active(vals[(HEATING_PADS_POWER - COIL_BASE) as usize]),
+                )));
+                msgs
             }
             Ok(Ok(Err(code))) => {
                 tracing::warn!("modbus server rejected actuator coil read: {code}");
                 self.mark_connected(); // it responded, but weirdly
+                vec![]
             }
             Ok(Err(err)) => {
                 tracing::warn!("Cannot reach modbus server: {err}");
                 self.mark_error();
+                vec![]
             }
             Err(_elapsed) => {
                 tracing::warn!("Timed out modbus server");
                 self.mark_error();
+                vec![]
             }
         }
     }
 
-    /// Reads all digital inputs from the modbus server at once and writes them to `sensors`
-    pub async fn poll_discrete_inputs(&self, sensors: &input::Sensors) {
+    /// Reads all digital inputs from the modbus server at once and returns them as messages.
+    pub async fn poll_discrete_inputs(&self) -> Vec<Message> {
         let mut ctx = self.context.lock().await;
         match tokio::time::timeout(
             self.timeout,
@@ -293,49 +350,52 @@ impl Client {
                         "modbus server didn't return all discrete inputs: {count}",
                         count = vals.len()
                     );
-                    return;
+                    return vec![];
                 }
-                let _ = sensors
-                    .valve_power_interlock
-                    .update(Energizable::from_active(
-                        vals[(VALVE_POWER_INTERLOCK - DISCRETE_IN_BASE) as usize],
-                    ));
-                let _ = sensors
-                    .rocket_connection_detect
-                    .update(Energizable::from_active(
-                        vals[(ROCKET_CONNECTION_DETECT - DISCRETE_IN_BASE) as usize],
-                    ));
-                let _ = sensors
-                    .lox_decoupler_proximity
-                    .update(Energizable::from_active(
-                        vals[(LOX_DECOUPLER_PROXIMITY - DISCRETE_IN_BASE) as usize],
-                    ));
-                let _ = sensors
-                    .n2_decoupler_proximity
-                    .update(Energizable::from_active(
-                        vals[(N2_DECOUPLER_PROXIMITY - DISCRETE_IN_BASE) as usize],
-                    ));
                 self.mark_connected();
+                vec![
+                    Message::RfsComputer(RFSCMessage::ValvesArmedSmartBox(
+                        Energizable::from_active(
+                            vals[(VALVE_POWER_INTERLOCK - DISCRETE_IN_BASE) as usize],
+                        ),
+                    )),
+                    Message::RfsComputer(RFSCMessage::RocketConnected(Energizable::from_active(
+                        vals[(ROCKET_CONNECTION_DETECT - DISCRETE_IN_BASE) as usize],
+                    ))),
+                    Message::RfsComputer(RFSCMessage::LoxDecouplerProximity(
+                        Energizable::from_active(
+                            vals[(LOX_DECOUPLER_PROXIMITY - DISCRETE_IN_BASE) as usize],
+                        ),
+                    )),
+                    Message::RfsComputer(RFSCMessage::N2DecouplerProximity(
+                        Energizable::from_active(
+                            vals[(N2_DECOUPLER_PROXIMITY - DISCRETE_IN_BASE) as usize],
+                        ),
+                    )),
+                ]
             }
             Ok(Ok(Err(code))) => {
                 tracing::warn!("modbus server rejected discrete input read: {code}");
                 self.mark_connected(); // it responded, but weirdly
+                vec![]
             }
             Ok(Err(err)) => {
                 tracing::warn!("Cannot reach modbus server: {err}");
                 self.mark_error();
+                vec![]
             }
             Err(_elapsed) => {
                 tracing::warn!("Timed out modbus server");
                 self.mark_error();
+                vec![]
             }
         }
     }
 
-    /// Reads the analog input for the pressure sensor from the modbus server and write it to `sensors`
+    /// Reads the analog input for the pressure sensor from the modbus server.
     ///
     /// This is separate, as it needs to be called more frequently.
-    pub async fn poll_pressure_sensor(&self, sensors: &input::Sensors) {
+    pub async fn poll_pressure_sensor(&self) -> Vec<Message> {
         let mut ctx = self.context.lock().await;
         match tokio::time::timeout(
             self.timeout,
@@ -354,33 +414,36 @@ impl Client {
                         "modbus server didn't return all words of the pressure sensor: {count}",
                         count = vals.len()
                     );
-                    return;
+                    return vec![];
                 }
-                let _ = sensors
-                    .igniter_pressure
-                    .update(BarG(decode_f32_from_holding_registers(
-                        vals[(HOLDING_REGISTER_FLOAT_HI_OFFSET) as usize],
-                        vals[(HOLDING_REGISTER_FLOAT_LO_OFFSET) as usize],
-                    )));
                 self.mark_connected();
+                vec![Message::RfsComputer(RFSCMessage::IgniterPressure(BarG(
+                    decode_f32_from_holding_registers(
+                        vals[HOLDING_REGISTER_FLOAT_HI_OFFSET as usize],
+                        vals[HOLDING_REGISTER_FLOAT_LO_OFFSET as usize],
+                    ),
+                )))]
             }
             Ok(Ok(Err(code))) => {
                 tracing::warn!("modbus server rejected holding register read: {code}");
                 self.mark_connected(); // it responded, but weirdly
+                vec![]
             }
             Ok(Err(err)) => {
                 tracing::warn!("Cannot reach modbus server: {err}");
                 self.mark_error();
+                vec![]
             }
             Err(_elapsed) => {
                 tracing::warn!("Timed out modbus server");
                 self.mark_error();
+                vec![]
             }
         }
     }
 
-    /// Reads all analog inputs for the temperature sensors from the modbus server at once and writes them to `sensors`
-    pub async fn poll_temperature_sensors(&self, sensors: &input::Sensors) {
+    /// Reads all analog inputs for the temperature sensors from the modbus server at once.
+    pub async fn poll_temperature_sensors(&self) -> Vec<Message> {
         let mut ctx = self.context.lock().await;
         match tokio::time::timeout(
             self.timeout,
@@ -396,42 +459,45 @@ impl Client {
                 use addresses::*;
                 if vals.len() != (TEMPERATURE_QUANTITY * HOLDING_REGISTER_FLOAT_LEN) as usize {
                     tracing::warn!(
-                        "modbus server didn't return all words of the pressure sensor: {count}",
+                        "modbus server didn't return all words of the temperature sensors: {count}",
                         count = vals.len()
                     );
-                    return;
+                    return vec![];
                 }
-
-                let _ =
-                    sensors
-                        .igniter_temperature
-                        .update(Celsius(decode_f32_from_holding_registers(
-                            vals[(HOLDING_REGISTER_FLOAT_HI_OFFSET) as usize],
-                            vals[(HOLDING_REGISTER_FLOAT_LO_OFFSET) as usize],
-                        )));
-                let _ = sensors.smart_box_temperature.update(Celsius(
-                    decode_f32_from_holding_registers(
-                        vals[((SMART_BOX_INTERNAL_TEMPERATURE_BASE - IGNITER_TEMPERATURE_BASE)
-                            + HOLDING_REGISTER_FLOAT_HI_OFFSET)
-                            as usize],
-                        vals[((SMART_BOX_INTERNAL_TEMPERATURE_BASE - IGNITER_TEMPERATURE_BASE)
-                            + HOLDING_REGISTER_FLOAT_LO_OFFSET)
-                            as usize],
-                    ),
-                ));
                 self.mark_connected();
+                vec![
+                    Message::RfsComputer(RFSCMessage::IgniterTemperature(Celsius(
+                        decode_f32_from_holding_registers(
+                            vals[HOLDING_REGISTER_FLOAT_HI_OFFSET as usize],
+                            vals[HOLDING_REGISTER_FLOAT_LO_OFFSET as usize],
+                        ),
+                    ))),
+                    Message::RfsComputer(RFSCMessage::SmartBoxTemperature(Celsius(
+                        decode_f32_from_holding_registers(
+                            vals[((SMART_BOX_INTERNAL_TEMPERATURE_BASE - IGNITER_TEMPERATURE_BASE)
+                                + HOLDING_REGISTER_FLOAT_HI_OFFSET)
+                                as usize],
+                            vals[((SMART_BOX_INTERNAL_TEMPERATURE_BASE - IGNITER_TEMPERATURE_BASE)
+                                + HOLDING_REGISTER_FLOAT_LO_OFFSET)
+                                as usize],
+                        ),
+                    ))),
+                ]
             }
             Ok(Ok(Err(code))) => {
                 tracing::warn!("modbus server rejected holding register read: {code}");
                 self.mark_connected(); // it responded, but weirdly
+                vec![]
             }
             Ok(Err(err)) => {
                 tracing::warn!("Cannot reach modbus server: {err}");
                 self.mark_error();
+                vec![]
             }
             Err(_elapsed) => {
                 tracing::warn!("Timed out modbus server");
                 self.mark_error();
+                vec![]
             }
         }
     }
@@ -455,32 +521,49 @@ impl Client {
         }
     }
 
-    /// Make an output tree that directly talks to this driver
-    pub fn into_output_tree(self) -> crate::output::Actuators {
+    /// Make an output tree that directly talks to this driver.
+    /// Pass `log` to record every actuator command as a message.
+    pub fn into_output_tree(self, log: &Option<mpsc::Sender<Message>>) -> crate::output::Actuators {
+        macro_rules! coil {
+            ($addr:expr, $variant:path) => {
+                match log.as_ref() {
+                    Some(tx) => CoilSettable::new_with_log(
+                        self.clone(),
+                        $addr,
+                        tx.clone(),
+                        (|v| Message::RfsComputer($variant(v))) as fn(_) -> Message,
+                    ),
+                    None => CoilSettable::new(self.clone(), $addr),
+                }
+            };
+        }
         crate::output::Actuators {
-            rocket_power: CoilSettable::new(self.clone(), addresses::ROCKET_POWER),
-            lox_decoupler_extend_valve: CoilSettable::new(
-                self.clone(),
+            rocket_power: coil!(addresses::ROCKET_POWER, RFSCMessage::RocketPowerState),
+            rocket_heating: coil!(
+                addresses::HEATING_PADS_POWER,
+                RFSCMessage::RocketHeatingState
+            ),
+            lox_decoupler_extend_valve: coil!(
                 addresses::LOX_DECOUPLER_EXTEND_VALVE,
+                RFSCMessage::LoxDecouplerExtendValveState
             ),
-            lox_decoupler_retract_valve: CoilSettable::new(
-                self.clone(),
+            lox_decoupler_retract_valve: coil!(
                 addresses::LOX_DECOUPLER_RETRACT_VALVE,
+                RFSCMessage::LoxDecouplerRetractValveState
             ),
-            n2_decoupler_extend_valve: CoilSettable::new(
-                self.clone(),
+            n2_decoupler_extend_valve: coil!(
                 addresses::N2_DECOUPLER_EXTEND_VALVE,
+                RFSCMessage::N2DecouplerExtendValveState
             ),
-            n2_decoupler_retract_valve: CoilSettable::new(
-                self.clone(),
+            n2_decoupler_retract_valve: coil!(
                 addresses::N2_DECOUPLER_RETRACT_VALVE,
+                RFSCMessage::N2DecouplerRetractValveState
             ),
-            n2_shower_valve: CoilSettable::new(self.clone(), addresses::N2_SHOWER_VALVE),
-            n2_engine_purge_valve: CoilSettable::new(
-                self.clone(),
+            n2_shower_valve: coil!(addresses::N2_SHOWER_VALVE, RFSCMessage::N2ShowerValvesState),
+            n2_engine_purge_valve: coil!(
                 addresses::N2_ENGINE_PURGE_VALVE,
+                RFSCMessage::N2RocketPurgeValveState
             ),
-            rocket_heating: CoilSettable::new(self.clone(), addresses::HEATING_PADS_POWER),
         }
     }
 }

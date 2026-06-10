@@ -86,10 +86,11 @@ impl OutputTree {
     pub fn new(
         can: std::sync::mpsc::Sender<Message>,
         controllino: controllino::driver::Client,
+        logging: &Option<tokio::sync::mpsc::Sender<Message>>,
     ) -> Self {
         Self {
             rfs_actuators: uremote::Actuators::default(),
-            controllino_actuators: controllino.into_output_tree(),
+            controllino_actuators: controllino.into_output_tree(logging),
             pss_valves: PSSValves::new(can, pss_drivers::output::CommandSender::RFS),
             lox_fill_valve: Watchable::default(),
         }
