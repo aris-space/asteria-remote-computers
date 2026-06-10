@@ -432,21 +432,15 @@ impl input::Sensors {
 
         let Self {
             lox_temperature,
-            igniter_temperature,
             cabinet_temperature,
             ambient_temperature,
-            lox_decoupler_proximity,
-            n2_decoupler_proximity,
             valves_armed,
             igniter_armed,
         } = self;
 
         read_temp(lox_temperature, channels::LOX_TEMPERATURE);
-        read_temp(igniter_temperature, channels::IGNITER_TEMPERATURE);
         read_temp(cabinet_temperature, channels::CABINET_TEMPERATURE);
         read_temp(ambient_temperature, channels::AMBIENT_TEMPERATURE);
-        read_coil(lox_decoupler_proximity, channels::LOX_DECOUPLER_PROXIMITY);
-        read_coil(n2_decoupler_proximity, channels::N2_DECOUPLER_PROXIMITY);
         read_coil(valves_armed, channels::VALVE_ARMING_CIRCUIT);
 
         let Some(ur20::ChannelValue::SilPFIn(sil)) = values.get(&channels::IGNITER_ARMING_CIRCUIT)

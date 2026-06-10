@@ -13,10 +13,6 @@ pub struct Sensors {
     #[datapoint(pattern = "Message::RfsComputer(RFSCMessage::LoxTemperature(#value))")]
     #[broadcast(min_freq_hz = 1., max_freq_hz = 3.)]
     pub lox_temperature: Watchable<Celsius>,
-    /// The last received temperature of the igniter.
-    #[datapoint(pattern = "Message::RfsComputer(RFSCMessage::IgniterTemperature(#value))")]
-    #[broadcast(min_freq_hz = 1., max_freq_hz = 3.)]
-    pub igniter_temperature: Watchable<Celsius>,
     /// The last received temperature of the cabinet thermocouple.
     #[datapoint(pattern = "Message::RfsComputer(RFSCMessage::CabinetTemperature(#value))")]
     #[broadcast(min_freq_hz = 0.5, max_freq_hz = 2.)]
@@ -25,14 +21,6 @@ pub struct Sensors {
     #[datapoint(pattern = "Message::RfsComputer(RFSCMessage::AmbientTemperature(#value))")]
     #[broadcast(min_freq_hz = 0.5, max_freq_hz = 2.)]
     pub ambient_temperature: Watchable<Celsius>,
-    /// `On` if proximity of the lox decoupler to the retracted state is detected.
-    #[datapoint(pattern = "Message::RfsComputer(RFSCMessage::LoxDecouplerProximity(#value))")]
-    #[broadcast(min_freq_hz = 0.5, max_freq_hz = 5.)]
-    pub lox_decoupler_proximity: Watchable<DigitalIn>,
-    /// `On` if proximity of the n2 decoupler to the retracted state is detected.
-    #[datapoint(pattern = "Message::RfsComputer(RFSCMessage::N2DecouplerProximity(#value))")]
-    #[broadcast(min_freq_hz = 0.5, max_freq_hz = 5.)]
-    pub n2_decoupler_proximity: Watchable<DigitalIn>,
     /// `On` if the valves receive power.
     #[datapoint(pattern = "Message::RfsComputer(RFSCMessage::ValvesArmed(#value))")]
     #[broadcast(min_freq_hz = 0.5, max_freq_hz = 5.)]

@@ -66,13 +66,10 @@ impl StateLogic for DiagnosticsGate {
 
         let uremote_electronics::input::Sensors {
             lox_temperature,
-            igniter_temperature,
-            cabinet_temperature: _,     // not important
-            ambient_temperature: _,     // not important
-            lox_decoupler_proximity: _, // nothing to check
-            n2_decoupler_proximity: _,  // nothing to check
-            valves_armed: _,            // nothing to check
-            igniter_armed: _,           // nothing to check
+            cabinet_temperature: _, // not important
+            ambient_temperature: _, // not important
+            valves_armed: _,        // nothing to check
+            igniter_armed: _,       // nothing to check
         } = &input.uremote_sensors;
 
         let healths = [
@@ -90,7 +87,7 @@ impl StateLogic for DiagnosticsGate {
             ),
             check_temp(&input.uremote_sensors.lox_temperature, "lox Thermocouple"),
             check_temp(
-                &input.uremote_sensors.igniter_temperature,
+                &input.controllino_sensors.igniter_temperature,
                 "igniter Thermocouple",
             ),
             check_valve(&input.lox_fill_valve, "lox fill valve"),
@@ -125,7 +122,6 @@ impl StateLogic for DiagnosticsGate {
             // check_temp(&h2.temperature_value_2, "h2 23SX Ch2"),
             // check_temp(&igniter.temperature_value_2, "igniter 23SX Ch2"),
             check_temp(lox_temperature, "lox Thermocouple"),
-            check_temp(igniter_temperature, "igniter Thermocouple"),
             check_valve(&input.lox_fill_valve, "lox fill valve"),
             check_controllino(&param.parameters.rfs_computer_status),
         ];

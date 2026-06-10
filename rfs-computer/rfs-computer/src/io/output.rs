@@ -98,7 +98,7 @@ fn test_name_from_str() {
     );
     assert_eq!(
         "n2_dec_ret".parse::<ActuatorName>().expect("must parse"),
-        ActuatorName::URValve(uremote::ActuatorName::n2_dec_ret)
+        ActuatorName::ControllinoValve(controllino::output::ActuatorName::n2_dec_ret)
     );
     assert_eq!(
         "oss_ml_vlv".parse::<ActuatorName>().expect("must parse"),
