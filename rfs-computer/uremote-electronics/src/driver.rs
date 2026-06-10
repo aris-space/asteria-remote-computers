@@ -117,10 +117,6 @@ mod channels {
         module: 1,
         channel: 0,
     };
-    pub const IGNITER_TEMPERATURE: ur20::Address = ur20::Address {
-        module: 1,
-        channel: 1,
-    };
     pub const CABINET_TEMPERATURE: ur20::Address = ur20::Address {
         module: 1,
         channel: 2,
@@ -203,12 +199,6 @@ impl Driver {
                 Some(ur20::ChannelValue::Decimal32(_)),
             ) {
                 tracing::error!("Cannot get LOX temperature value");
-            }
-            if !matches!(
-                inputs.get(&channels::IGNITER_TEMPERATURE),
-                Some(ur20::ChannelValue::Decimal32(_)),
-            ) {
-                tracing::error!("Cannot get IGN temperature value");
             }
             if !matches!(
                 inputs.get(&channels::LOX_DECOUPLER_PROXIMITY),
