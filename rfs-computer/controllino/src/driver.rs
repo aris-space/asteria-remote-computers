@@ -459,22 +459,28 @@ impl Client {
     pub fn into_output_tree(self) -> crate::output::Actuators {
         crate::output::Actuators {
             rocket_power: CoilSettable::new(self.clone(), addresses::ROCKET_POWER),
-            rocket_heating: CoilSettable::new(self.clone(), addresses::LOX_DECOUPLER_EXTEND_VALVE),
             lox_decoupler_extend_valve: CoilSettable::new(
                 self.clone(),
-                addresses::LOX_DECOUPLER_RETRACT_VALVE,
+                addresses::LOX_DECOUPLER_EXTEND_VALVE,
             ),
             lox_decoupler_retract_valve: CoilSettable::new(
                 self.clone(),
-                addresses::N2_DECOUPLER_EXTEND_VALVE,
+                addresses::LOX_DECOUPLER_RETRACT_VALVE,
             ),
             n2_decoupler_extend_valve: CoilSettable::new(
                 self.clone(),
+                addresses::N2_DECOUPLER_EXTEND_VALVE,
+            ),
+            n2_decoupler_retract_valve: CoilSettable::new(
+                self.clone(),
                 addresses::N2_DECOUPLER_RETRACT_VALVE,
             ),
-            n2_decoupler_retract_valve: CoilSettable::new(self.clone(), addresses::N2_SHOWER_VALVE),
-            n2_shower_valve: CoilSettable::new(self.clone(), addresses::N2_ENGINE_PURGE_VALVE),
-            n2_engine_purge_valve: CoilSettable::new(self.clone(), addresses::HEATING_PADS_POWER),
+            n2_shower_valve: CoilSettable::new(self.clone(), addresses::N2_SHOWER_VALVE),
+            n2_engine_purge_valve: CoilSettable::new(
+                self.clone(),
+                addresses::N2_ENGINE_PURGE_VALVE,
+            ),
+            rocket_heating: CoilSettable::new(self.clone(), addresses::HEATING_PADS_POWER),
         }
     }
 }
