@@ -90,18 +90,6 @@ pub enum ActuatorName {
     lox_bld_vlv,
     /// The name for [`Actuators::booster_valve`].
     n2_bst_vlv,
-    /// The name for [`Actuators::lox_decoupler_extend_valve`].
-    lox_dec_ext,
-    /// The name for [`Actuators::lox_decoupler_retract_valve`].
-    lox_dec_ret,
-    /// The name for [`Actuators::n2_decoupler_extend_valve`].
-    n2_dec_ext,
-    /// The name for [`Actuators::n2_decoupler_retract_valve`].
-    n2_dec_ret,
-    /// The name for [`Actuators::n2_shower_valve`].
-    n2_shw_vlv,
-    /// The name for [`Actuators::n2_engine_purge_valve`].
-    eng_prg_vlv,
     /// The name for [`Actuators::h2_igniter_valve`].
     h2_ign_vlv,
     /// The name for [`Actuators::gox_igniter_valve`].
