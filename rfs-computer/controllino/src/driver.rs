@@ -62,8 +62,8 @@ pub struct Client {
     /// Timeout for the Modbus requests using `poll_*` functions.
     /// Does not include locking time, thus if `context` stays locked, the functions will wait.
     timeout: Duration,
-    /// Underlying connection to the Controllino
-    context: Arc<AsyncMutex<Context>>,
+    /// Underlying connection to the Controllino. `None` when disconnected; re-established lazily.
+    context: Arc<AsyncMutex<Option<Context>>>,
     /// The IP address of the Controllino, usually `192.168.0.227:502`.
     socket_addr: SocketAddr,
     /// The shared variable where the controllino health should be stored in.
@@ -129,41 +129,96 @@ impl<T: Default + Settable + Energizable + Clone> Settable for CoilSettable<T> {
 }
 
 impl Client {
-    // / Creates a lazy client.
-    // / Does not connect yet.
-    // pub fn new(
-    //     socket_addr: &str,
-    //     timeout: Duration,
-    //     health_callback: Watchable<RfsComputerStatus>,
-    // ) -> std::io::Result<Self> {
-    //     let socket_addr = singleton(socket_addr.to_socket_addrs()?).ok_or_else(|| {
-    //         std::io::Error::other("Expected socket address to parse to exactly one element")
-    //     })?;
-    //     Ok(Self {
-    //         timeout,
-    //         context: Arc::default(),
-    //         socket_addr,
-    //         health: health_callback,
-    //     })
-    // }
-
-    /// Connects to the modbus server.
-    /// TODO: make it lazy and reconnectable.
-    pub async fn connect(
+    /// Creates a client without connecting. The TCP connection is established lazily on first use
+    /// and re-established automatically after any IO error.
+    pub fn new(
         socket_addr: SocketAddr,
         timeout: Duration,
         health: Watchable<RfsComputerStatus>,
-    ) -> std::io::Result<Self> {
-        tracing::info!("Connecting to Controllino at {socket_addr}");
-        let ctx =
-            tokio::time::timeout(5 * timeout, tokio_modbus::client::tcp::connect(socket_addr))
-                .await??;
-        Ok(Self {
+    ) -> Self {
+        Self {
             timeout,
-            context: Arc::new(AsyncMutex::new(ctx)),
+            context: Arc::new(AsyncMutex::new(None)),
             socket_addr,
             health,
-        })
+        }
+    }
+
+    /// Attempts a single TCP connection to the Controllino within `self.timeout`.
+    async fn try_connect(&self) -> Option<Context> {
+        match tokio::time::timeout(
+            5 * self.timeout, // longer timeout than single request timeout
+            tokio_modbus::client::tcp::connect(self.socket_addr),
+        )
+        .await
+        {
+            Ok(Ok(ctx)) => {
+                tracing::info!("Connected to Controllino at {}", self.socket_addr);
+                self.mark_connected();
+                Some(ctx)
+            }
+            Ok(Err(err)) => {
+                tracing::warn!("Failed to connect to Controllino: {err}");
+                self.mark_error();
+                None
+            }
+            Err(_elapsed) => {
+                tracing::warn!("Timed out connecting to Controllino");
+                self.mark_error();
+                None
+            }
+        }
+    }
+
+    /// Acquires the context (reconnecting if needed), runs `f` under a timeout, and handles the
+    /// two common error arms (IO error and timeout), resetting the connection on both.
+    /// Returns `None` when the operation failed; `Some(inner)` is the modbus result for callers
+    /// to interpret (either `Ok(T)` or `Err(exception code)`).
+    async fn with_context<T, E>(
+        &self,
+        f: impl AsyncFnOnce(&mut Context) -> Result<Result<T, E>, tokio_modbus::Error>,
+    ) -> Option<Result<T, E>> {
+        let mut guard = self.context.lock().await;
+        let ctx = match guard.as_mut() {
+            Some(ctx) => ctx,
+            None => match self.try_connect().await {
+                Some(ctx) => {
+                    *guard = Some(ctx);
+                    guard.as_mut().expect("just set above")
+                }
+                None => return None,
+            },
+        };
+
+        match tokio::time::timeout(self.timeout, f(ctx)).await {
+            Ok(Ok(inner)) => Some(inner),
+            Ok(Err(err)) => {
+                tracing::warn!("Cannot reach modbus server: {err}");
+                *guard = None;
+                self.mark_error();
+                None
+            }
+            Err(_elapsed) => {
+                tracing::warn!("Timed out modbus server");
+                *guard = None;
+                self.mark_error();
+                None
+            }
+        }
+    }
+
+    fn mark_error(&self) {
+        let mut x = self.health.write();
+        if x.controllino.online != SensorStatus::Offline {
+            x.controllino.online = SensorStatus::Offline;
+        }
+    }
+
+    fn mark_connected(&self) {
+        let mut x = self.health.write();
+        if x.controllino.online != SensorStatus::Online {
+            x.controllino.online = SensorStatus::Online;
+        }
     }
 
     /// Starts tasks to periodically poll the sensors and actuator states, dispatching results
@@ -245,30 +300,24 @@ impl Client {
         });
     }
 
-    fn mark_error(&self) {
-        let mut x = self.health.write();
-        if x.controllino.online != SensorStatus::Offline {
-            x.controllino.online = SensorStatus::Offline;
-        }
-    }
-
-    fn mark_connected(&self) {
-        let mut x = self.health.write();
-        if x.controllino.online != SensorStatus::Online {
-            x.controllino.online = SensorStatus::Online;
-        }
-    }
-
     /// Reads all actuator states from the modbus server at once and returns them as messages.
     pub async fn poll_actuators(&self) -> Vec<Message> {
-        let mut ctx = self.context.lock().await;
-        match tokio::time::timeout(
-            self.timeout,
-            ctx.read_coils(addresses::COIL_BASE, addresses::COIL_QUANTITY),
-        )
-        .await
-        {
-            Ok(Ok(Ok(vals))) => {
+        let Some(result) = self
+            .with_context(async |ctx| {
+                ctx.read_coils(addresses::COIL_BASE, addresses::COIL_QUANTITY)
+                    .await
+            })
+            .await
+        else {
+            return vec![];
+        };
+        match result {
+            Err(code) => {
+                tracing::warn!("modbus server rejected actuator coil read: {code}");
+                self.mark_connected(); // it responded, but weirdly
+                vec![]
+            }
+            Ok(vals) => {
                 #[allow(clippy::wildcard_imports)] // scoped finely enough here
                 use addresses::*;
                 if vals.len() != COIL_QUANTITY as usize {
@@ -280,7 +329,6 @@ impl Client {
                 }
                 self.mark_connected();
                 let mut msgs = Vec::with_capacity(COIL_QUANTITY as usize);
-
                 msgs.push(Message::RfsComputer(RFSCMessage::RocketPowerState(
                     Energizable::from_active(vals[(ROCKET_POWER - COIL_BASE) as usize]),
                 )));
@@ -315,34 +363,30 @@ impl Client {
                 )));
                 msgs
             }
-            Ok(Ok(Err(code))) => {
-                tracing::warn!("modbus server rejected actuator coil read: {code}");
-                self.mark_connected(); // it responded, but weirdly
-                vec![]
-            }
-            Ok(Err(err)) => {
-                tracing::warn!("Cannot reach modbus server: {err}");
-                self.mark_error();
-                vec![]
-            }
-            Err(_elapsed) => {
-                tracing::warn!("Timed out modbus server");
-                self.mark_error();
-                vec![]
-            }
         }
     }
 
     /// Reads all digital inputs from the modbus server at once and returns them as messages.
     pub async fn poll_discrete_inputs(&self) -> Vec<Message> {
-        let mut ctx = self.context.lock().await;
-        match tokio::time::timeout(
-            self.timeout,
-            ctx.read_discrete_inputs(addresses::DISCRETE_IN_BASE, addresses::DISCRETE_IN_QUANTITY),
-        )
-        .await
-        {
-            Ok(Ok(Ok(vals))) => {
+        let Some(result) = self
+            .with_context(async |ctx| {
+                ctx.read_discrete_inputs(
+                    addresses::DISCRETE_IN_BASE,
+                    addresses::DISCRETE_IN_QUANTITY,
+                )
+                .await
+            })
+            .await
+        else {
+            return vec![];
+        };
+        match result {
+            Err(code) => {
+                tracing::warn!("modbus server rejected discrete input read: {code}");
+                self.mark_connected(); // it responded, but weirdly
+                vec![]
+            }
+            Ok(vals) => {
                 #[allow(clippy::wildcard_imports)] // scoped finely enough here
                 use addresses::*;
                 if vals.len() != DISCRETE_IN_QUANTITY as usize {
@@ -374,21 +418,6 @@ impl Client {
                     )),
                 ]
             }
-            Ok(Ok(Err(code))) => {
-                tracing::warn!("modbus server rejected discrete input read: {code}");
-                self.mark_connected(); // it responded, but weirdly
-                vec![]
-            }
-            Ok(Err(err)) => {
-                tracing::warn!("Cannot reach modbus server: {err}");
-                self.mark_error();
-                vec![]
-            }
-            Err(_elapsed) => {
-                tracing::warn!("Timed out modbus server");
-                self.mark_error();
-                vec![]
-            }
         }
     }
 
@@ -396,17 +425,25 @@ impl Client {
     ///
     /// This is separate, as it needs to be called more frequently.
     pub async fn poll_pressure_sensor(&self) -> Vec<Message> {
-        let mut ctx = self.context.lock().await;
-        match tokio::time::timeout(
-            self.timeout,
-            ctx.read_holding_registers(
-                addresses::IGNITER_PRESSURE_BASE,
-                addresses::HOLDING_REGISTER_FLOAT_LEN,
-            ),
-        )
-        .await
-        {
-            Ok(Ok(Ok(vals))) => {
+        let Some(result) = self
+            .with_context(async |ctx| {
+                ctx.read_holding_registers(
+                    addresses::IGNITER_PRESSURE_BASE,
+                    addresses::HOLDING_REGISTER_FLOAT_LEN,
+                )
+                .await
+            })
+            .await
+        else {
+            return vec![];
+        };
+        match result {
+            Err(code) => {
+                tracing::warn!("modbus server rejected holding register read: {code}");
+                self.mark_connected(); // it responded, but weirdly
+                vec![]
+            }
+            Ok(vals) => {
                 #[allow(clippy::wildcard_imports)] // scoped finely enough here
                 use addresses::*;
                 if vals.len() != HOLDING_REGISTER_FLOAT_LEN as usize {
@@ -424,37 +461,30 @@ impl Client {
                     ),
                 )))]
             }
-            Ok(Ok(Err(code))) => {
-                tracing::warn!("modbus server rejected holding register read: {code}");
-                self.mark_connected(); // it responded, but weirdly
-                vec![]
-            }
-            Ok(Err(err)) => {
-                tracing::warn!("Cannot reach modbus server: {err}");
-                self.mark_error();
-                vec![]
-            }
-            Err(_elapsed) => {
-                tracing::warn!("Timed out modbus server");
-                self.mark_error();
-                vec![]
-            }
         }
     }
 
     /// Reads all analog inputs for the temperature sensors from the modbus server at once.
     pub async fn poll_temperature_sensors(&self) -> Vec<Message> {
-        let mut ctx = self.context.lock().await;
-        match tokio::time::timeout(
-            self.timeout,
-            ctx.read_holding_registers(
-                addresses::IGNITER_TEMPERATURE_BASE,
-                addresses::TEMPERATURE_QUANTITY * addresses::HOLDING_REGISTER_FLOAT_LEN,
-            ),
-        )
-        .await
-        {
-            Ok(Ok(Ok(vals))) => {
+        let Some(result) = self
+            .with_context(async |ctx| {
+                ctx.read_holding_registers(
+                    addresses::IGNITER_TEMPERATURE_BASE,
+                    addresses::TEMPERATURE_QUANTITY * addresses::HOLDING_REGISTER_FLOAT_LEN,
+                )
+                .await
+            })
+            .await
+        else {
+            return vec![];
+        };
+        match result {
+            Err(code) => {
+                tracing::warn!("modbus server rejected holding register read: {code}");
+                self.mark_connected(); // it responded, but weirdly
+                vec![]
+            }
+            Ok(vals) => {
                 #[allow(clippy::wildcard_imports)] // scoped finely enough here
                 use addresses::*;
                 if vals.len() != (TEMPERATURE_QUANTITY * HOLDING_REGISTER_FLOAT_LEN) as usize {
@@ -484,40 +514,20 @@ impl Client {
                     ))),
                 ]
             }
-            Ok(Ok(Err(code))) => {
-                tracing::warn!("modbus server rejected holding register read: {code}");
-                self.mark_connected(); // it responded, but weirdly
-                vec![]
-            }
-            Ok(Err(err)) => {
-                tracing::warn!("Cannot reach modbus server: {err}");
-                self.mark_error();
-                vec![]
-            }
-            Err(_elapsed) => {
-                tracing::warn!("Timed out modbus server");
-                self.mark_error();
-                vec![]
-            }
         }
     }
 
     /// Writes a single coil at given address to state `high`.
     pub async fn write_coil(&self, coil: Address, high: bool) {
-        let mut ctx = self.context.lock().await;
-        match tokio::time::timeout(self.timeout, ctx.write_single_coil(coil, high)).await {
-            Ok(Ok(Ok(()))) => tracing::debug!("Set coil {coil:x} to {high}"),
-            Ok(Ok(Err(code))) => {
-                tracing::warn!("modbus server denied coil write to {coil:x}: {code}");
-            }
-            Ok(Err(err)) => {
-                tracing::warn!("Cannot reach modbus server: {err}");
-                self.mark_error();
-            }
-            Err(_elapsed) => {
-                tracing::warn!("Timed out modbus server");
-                self.mark_error();
-            }
+        let Some(result) = self
+            .with_context(async |ctx| ctx.write_single_coil(coil, high).await)
+            .await
+        else {
+            return;
+        };
+        match result {
+            Ok(()) => tracing::debug!("Set coil {coil:x} to {high}"),
+            Err(code) => tracing::warn!("modbus server denied coil write to {coil:x}: {code}"),
         }
     }
 

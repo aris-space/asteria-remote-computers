@@ -30,13 +30,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     };
     let _ = state_tree.hash_config.update(config_hash);
 
-    // TODO: Don't block on the controllino being connected...
-    let controllino_driver = controllino::driver::Client::connect(
+    let controllino_driver = controllino::driver::Client::new(
         config_file.controllino.address,
         config_file.controllino.request_timeout,
         state_tree.rfs_computer_status.clone(),
-    )
-    .await?;
+    );
 
     let (can_tx, _can_rx) = std::sync::mpsc::channel();
     let output_tree = OutputTree::new(can_tx.clone(), controllino_driver.clone(), &None);
