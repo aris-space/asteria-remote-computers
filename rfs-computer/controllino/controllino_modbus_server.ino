@@ -5,6 +5,11 @@
 // Discrete Inputs         0x200–0x203  read from digital inputs, served to client
 // Holding Registers       0x300–0x305  analog sensors as big-endian IEEE 754 floats
 
+// SETUP:
+// - follow https://www.controllino.com/board-library-setup-in-arduino-ide/
+//   (choose MAXI Automation)
+// - install also the Seeed_MCP9600 library
+
 #include <Controllino.h>
 #include <Ethernet.h>
 #include <ArduinoRS485.h>  // required dependency of ArduinoModbus
@@ -19,7 +24,7 @@ EthernetServer ethServer(502);
 ModbusTCPServer modbusTCPServer;
 
 // --- Thermocouples ---
-MCP9600 tc_igniter;        // I2C 0x60 → ign_cc_t   → holding regs 0x302–0x303
+MCP9600 tc_igniter;        // I2C 0x60 → ign_cc_t        → holding regs 0x302–0x303
 MCP9600 tc_cabinet(0x67);  // I2C 0x67 → smart_cabinent_t → holding regs 0x304–0x305
 
 // --- Modbus address map ---
@@ -50,13 +55,162 @@ const int DIGITAL_IN_PINS[DISCRETE_IN_COUNT] = {
     CONTROLLINO_DI3,  // 0x203: n2_dec_prox
 };
 
+// Decoupler Extend/retract valves
+enum ValvePairState { VP_IDLE, VP_EXT_ON, VP_RET_ON, VP_COOLING_TO_EXT, VP_COOLING_TO_RET };
+
+// A pair of valves with their coil addresses and pins, along with a state machine,
+// such that they can enforce mutual exclusion
+struct ValvePair {
+    uint16_t ext_coil, ret_coil;
+    int ext_pin, ret_pin;
+    ValvePairState state;
+    unsigned long cool_start;
+};
+
+ValvePair lox_valves = { 0x101, 0x102, CONTROLLINO_R0, CONTROLLINO_R1, VP_IDLE, 0 };
+ValvePair n2_valves  = { 0x103, 0x104, CONTROLLINO_R2, CONTROLLINO_R3, VP_IDLE, 0 };
+
+// Interlock rules:
+//   1. All interlocked valves (0x101–0x106) are forced off when valves are not armed (DI0).
+//   2. Extend and retract must never both be active simultaneously.
+//   3. Writing the opposite side while one is active triggers a toggle:
+//      the active side turns off, both pins are held LOW for VALVE_DEADTIME_MS,
+//      then the new side turns on.
+//   4. During cooloff: canceling (clearing the target coil) → go IDLE immediately.
+//      Re-toggling (setting the original coil) → switch cooloff direction without
+//      restarting the timer (the valve has already been closed since cool_start).
+void updateValvePair(ValvePair& v) {
+    const unsigned long VALVE_DEADTIME_MS = 30;
+
+    bool want_ext = modbusTCPServer.coilRead(v.ext_coil);
+    bool want_ret = modbusTCPServer.coilRead(v.ret_coil);
+
+    switch (v.state) {
+
+        case VP_IDLE:
+            if (want_ext && !want_ret) {
+                v.state = VP_EXT_ON;
+                digitalWrite(v.ext_pin, HIGH);
+            } else if (want_ret && !want_ext) {
+                v.state = VP_RET_ON;
+                digitalWrite(v.ret_pin, HIGH);
+            } else if (want_ext && want_ret) {
+                // Both on with no prior context: ignore both
+                modbusTCPServer.coilWrite(v.ext_coil, 0);
+                modbusTCPServer.coilWrite(v.ret_coil, 0);
+            }
+            break;
+
+        case VP_EXT_ON:
+            if (want_ret) {
+                // Toggle: ret requested while ext is on — turn ext off, cooloff, then ret
+                modbusTCPServer.coilWrite(v.ext_coil, 0);
+                digitalWrite(v.ext_pin, LOW);
+                v.state = VP_COOLING_TO_RET;
+                v.cool_start = millis();
+            } else if (!want_ext) {
+                // Simple off: no cooloff needed
+                digitalWrite(v.ext_pin, LOW);
+                v.state = VP_IDLE;
+            }
+            break;
+
+        case VP_RET_ON:
+            if (want_ext) {
+                modbusTCPServer.coilWrite(v.ret_coil, 0);
+                digitalWrite(v.ret_pin, LOW);
+                v.state = VP_COOLING_TO_EXT;
+                v.cool_start = millis();
+            } else if (!want_ret) {
+                digitalWrite(v.ret_pin, LOW);
+                v.state = VP_IDLE;
+            }
+            break;
+
+        case VP_COOLING_TO_RET:
+            // Both pins stay LOW during dead time regardless of coil state
+            digitalWrite(v.ext_pin, LOW);
+            digitalWrite(v.ret_pin, LOW);
+
+            if (!want_ret) {
+                // Target canceled: go idle immediately
+                v.state = VP_IDLE;
+            } else if (want_ext) {
+                // Re-toggle: switch target; timer keeps running from original cool_start
+                modbusTCPServer.coilWrite(v.ret_coil, 0);
+                v.state = VP_COOLING_TO_EXT;
+            } else if (millis() - v.cool_start >= VALVE_DEADTIME_MS) {
+                v.state = VP_RET_ON;
+                digitalWrite(v.ret_pin, HIGH);
+            }
+            break;
+
+        case VP_COOLING_TO_EXT:
+            digitalWrite(v.ext_pin, LOW);
+            digitalWrite(v.ret_pin, LOW);
+
+            if (!want_ext) {
+                v.state = VP_IDLE;
+            } else if (want_ret) {
+                modbusTCPServer.coilWrite(v.ext_coil, 0);
+                v.state = VP_COOLING_TO_RET;
+            } else if (millis() - v.cool_start >= VALVE_DEADTIME_MS) {
+                v.state = VP_EXT_ON;
+                digitalWrite(v.ext_pin, HIGH);
+            }
+            break;
+    }
+}
+
+// Deactive both valves
+void resetValvePair(ValvePair& v) {
+    modbusTCPServer.coilWrite(v.ext_coil, 0);
+    modbusTCPServer.coilWrite(v.ret_coil, 0);
+    digitalWrite(v.ext_pin, LOW);
+    digitalWrite(v.ret_pin, LOW);
+    v.state = VP_IDLE;
+}
+
+
+// Apply all coil states to hardware outputs.
+// Valve pairs are managed by updateValvePair(); remaining coils are applied directly.
+void applyActuators() {
+    // Non-interlocked outputs always follow their coil
+    digitalWrite(CONTROLLINO_D0, modbusTCPServer.coilRead(0x100) ? HIGH : LOW);
+    digitalWrite(CONTROLLINO_R6, modbusTCPServer.coilRead(0x107) ? HIGH : LOW);
+
+    // Read armed state from the pin, then either update or reset the interlocked actuators
+    bool armed = digitalRead(CONTROLLINO_DI0);
+    if (armed) {
+        updateValvePair(lox_valves);
+        updateValvePair(n2_valves);
+        // Single interlocked valves: no ext/ret conflict, just require armed
+        digitalWrite(CONTROLLINO_R4, modbusTCPServer.coilRead(0x105) ? HIGH : LOW);
+        digitalWrite(CONTROLLINO_R5, modbusTCPServer.coilRead(0x106) ? HIGH : LOW);
+    } else {
+        resetValvePair(lox_valves);
+        resetValvePair(n2_valves);
+        modbusTCPServer.coilWrite(0x105, 0);
+        digitalWrite(CONTROLLINO_R4, LOW);
+        modbusTCPServer.coilWrite(0x106, 0);
+        digitalWrite(CONTROLLINO_R5, LOW);
+    }
+}
+
+// --- Sensors ---
+
+// Read digital inputs into the Modbus discrete input table
+void updateDiscreteInputs() {
+    for (int i = 0; i < DISCRETE_IN_COUNT; i++) {
+        modbusTCPServer.discreteInputWrite(DISCRETE_IN_BASE + i, digitalRead(DIGITAL_IN_PINS[i]));
+    }
+}
+
 // Pressure: 4–20 mA via 453 Ω resistor → 1.812–9.060 V → 0–40 barg
 // Controllino analog inputs: 0–10 V maps to ADC 0–1023
 const float PRESSURE_V_ZERO  = 1.812f;  // 4 mA × 453 Ω
 const float PRESSURE_V_SPAN  = 7.248f;  // 16 mA × 453 Ω
 const float PRESSURE_MAX_BAR = 40.0f;
-
-// --- Helpers ---
 
 // Encode a float as two holding registers: high word at baseAddr, low word at baseAddr+1.
 // Matches the big-endian decoding in driver.rs: f32::from_bits((hi << 16) | lo)
@@ -65,71 +219,6 @@ void writeFloat(int baseAddr, float value) {
     memcpy(&bits, &value, 4);
     modbusTCPServer.holdingRegisterWrite(baseAddr,     (uint16_t)(bits >> 16));
     modbusTCPServer.holdingRegisterWrite(baseAddr + 1, (uint16_t)(bits & 0xFFFF));
-}
-
-// Interlock rules:
-// 1. All interlocked valves (0x101–0x106) are forced off when valves are not armed (DI0).
-// 2. Extend and retract on the same coupler must never both be active.
-//    When both are commanded, the one that was off last tick (the "last on") stays on.
-void enforceInterlocks() {
-    static bool prev_lox_ext = false, prev_lox_ret = false;
-    static bool prev_n2_ext  = false, prev_n2_ret  = false;
-
-    // Read valve-armed interlock directly from the pin (not from the stale Modbus table)
-    bool armed = digitalRead(CONTROLLINO_DI0);
-    if (!armed) {
-        for (int coil = 0x101; coil <= 0x106; coil++) {
-            modbusTCPServer.coilWrite(coil, 0);
-        }
-        prev_lox_ext = prev_lox_ret = prev_n2_ext = prev_n2_ret = false;
-        return;
-    }
-
-    // LOX extend/retract: if both on, the newly-set one (was off last tick) wins
-    bool lox_ext = modbusTCPServer.coilRead(0x101);
-    bool lox_ret = modbusTCPServer.coilRead(0x102);
-    if (lox_ext && lox_ret) {
-        if (!prev_lox_ext) {  // ext just turned on → ext wins
-            modbusTCPServer.coilWrite(0x102, 0);
-            lox_ret = false;
-        } else {              // ret just turned on (or both new simultaneously: ret wins)
-            modbusTCPServer.coilWrite(0x101, 0);
-            lox_ext = false;
-        }
-    }
-
-    // N2 extend/retract: same logic
-    bool n2_ext = modbusTCPServer.coilRead(0x103);
-    bool n2_ret = modbusTCPServer.coilRead(0x104);
-    if (n2_ext && n2_ret) {
-        if (!prev_n2_ext) {
-            modbusTCPServer.coilWrite(0x104, 0);
-            n2_ret = false;
-        } else {
-            modbusTCPServer.coilWrite(0x103, 0);
-            n2_ext = false;
-        }
-    }
-
-    prev_lox_ext = lox_ext;
-    prev_lox_ret = lox_ret;
-    prev_n2_ext  = n2_ext;
-    prev_n2_ret  = n2_ret;
-}
-
-// Apply coil states to hardware outputs
-void applyActuators() {
-    enforceInterlocks();
-    for (int i = 0; i < COIL_COUNT; i++) {
-        digitalWrite(ACTUATOR_PINS[i], modbusTCPServer.coilRead(COIL_BASE + i) ? HIGH : LOW);
-    }
-}
-
-// Read digital inputs into the Modbus discrete input table
-void updateDiscreteInputs() {
-    for (int i = 0; i < DISCRETE_IN_COUNT; i++) {
-        modbusTCPServer.discreteInputWrite(DISCRETE_IN_BASE + i, digitalRead(DIGITAL_IN_PINS[i]));
-    }
 }
 
 // Read the pressure sensor (AI12) and write to holding registers 0x300–0x301
@@ -158,12 +247,10 @@ void setup() {
 
     // Thermocouples
     Wire.begin();
-    if (tc_igniter.init(THER_TYPE_K) != NO_ERROR) {
+    if (tc_igniter.init(THER_TYPE_K) != NO_ERROR)
         Serial.println("ERROR: TC igniter (0x60) init failed");
-    }
-    if (tc_cabinet.init(THER_TYPE_K) != NO_ERROR) {
+    if (tc_cabinet.init(THER_TYPE_K) != NO_ERROR)
         Serial.println("ERROR: TC cabinet (0x67) init failed");
-    }
 
     // Actuator pins – all off at boot
     for (int i = 0; i < COIL_COUNT; i++) {
