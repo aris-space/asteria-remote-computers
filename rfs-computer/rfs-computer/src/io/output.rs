@@ -49,6 +49,12 @@ impl OutputTree {
                 .into_iter()
                 .map(|(k, v)| (ActuatorName::PSSValve(k), v)),
         );
+        settables.extend(
+            self.controllino_actuators
+                .as_settables()
+                .into_iter()
+                .map(|(k, v)| (ActuatorName::ControllinoValve(k), v)),
+        );
         settables.insert(
             ActuatorName::LoxFillValve(LoxFillValveName::lox_fll_vlv),
             Box::new(self.lox_fill_valve.clone()) as Box<dyn Settable + Send>,
