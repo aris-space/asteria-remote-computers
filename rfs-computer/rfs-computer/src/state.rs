@@ -24,11 +24,11 @@ pub struct State {
     #[broadcast(min_freq_hz = 0.1, max_freq_hz = 0.1)]
     pub build_info: Watchable<BuildInformationCommon>,
 
-    /// If the system is in a software armed state.
-    /// This will allow the ECU to control the igniter actuators.
+    /// The status of the RFS.
+    /// Includes arming for the FC to read, as well as controllino connection etc.
     #[datapoint(pattern = "Message::RfsComputer(RFSMessage::Status(#value))")]
     #[broadcast(min_freq_hz = 1.0, max_freq_hz = 1.0)]
-    pub rfs_computer_status: Watchable<RfsComputerStatus>, // more appropriate I think
+    pub rfs_computer_status: Watchable<RfsComputerStatus>,
 
     /// Statistics about the health of the telemetry uplink.
     #[datapoint(pattern = "Message::RfsComputer(RFSMessage::UplinkTelemetryHealth(#value))")]

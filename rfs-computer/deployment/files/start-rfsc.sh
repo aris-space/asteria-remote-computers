@@ -41,4 +41,4 @@ sleep 1
 echo -e "\n${CYAN}Starting RFS Computer...${NC}\n"
 
 # Run rfs computer with state machine config file as first argument
-tmux new-session -A -s "flight-computer" -c ~/asteria -e RUST_LOG="info" -- "$RFSC_BINARY" "$CONFIG_FILE"
+tmux new-session -A -s "flight-computer" -c ~/asteria -e RUST_LOG="ur20_modbus=warn,info" -- "$RFSC_BINARY" "$CONFIG_FILE"

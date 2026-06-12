@@ -70,6 +70,10 @@ impl ManualTransitions {
                 transition_index,
                 state,
             } = watcher.next().await;
+            if transition_index == 0 && state == [0; 30] {
+                // default state, ignore
+                continue;
+            }
             let Ok(target) = StateName::try_from_array(&state, &path.states) else {
                 tracing::warn!("received invalid state name in command");
                 continue;

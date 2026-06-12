@@ -6,6 +6,7 @@
 use std::marker::PhantomData;
 use std::net::SocketAddr;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
 use datatypes::actuator::{Energizable, OutOfRange, Settable};
@@ -68,6 +69,9 @@ pub struct Client {
     socket_addr: SocketAddr,
     /// The shared variable where the controllino health should be stored in.
     health: Watchable<RfsComputerStatus>,
+    /// Whether the next disconnect event should be logged. Suppresses repeated warnings while
+    /// already offline. Starts `true` so the first failure always logs.
+    log_next_disconnect: Arc<AtomicBool>,
 }
 
 #[derive(Clone)]
@@ -141,6 +145,7 @@ impl Client {
             context: Arc::new(AsyncMutex::new(None)),
             socket_addr,
             health,
+            log_next_disconnect: Arc::new(AtomicBool::new(true)),
         }
     }
 
@@ -214,20 +219,16 @@ impl Client {
     }
 
     /// Marks the controllino disconnected and returns `true` iff this was new information (i.e. it was connected before)
+    /// Marks the Controllino as offline. Returns `true` on the first call after a connected state,
+    /// which callers use to gate a one-time warning log.
     fn mark_error(&self) -> bool {
-        let mut x = self.health.write();
-        let was_online = x.controllino.online == SensorStatus::Online;
-        if !was_online {
-            x.controllino.online = SensorStatus::Offline;
-        }
-        was_online
+        self.health.write().controllino.online = SensorStatus::Offline;
+        self.log_next_disconnect.swap(false, Ordering::Relaxed)
     }
 
     fn mark_connected(&self) {
-        let mut x = self.health.write();
-        if x.controllino.online != SensorStatus::Online {
-            x.controllino.online = SensorStatus::Online;
-        }
+        self.health.write().controllino.online = SensorStatus::Online;
+        self.log_next_disconnect.store(true, Ordering::Relaxed);
     }
 
     /// Starts tasks to periodically poll the sensors and actuator states, dispatching results
