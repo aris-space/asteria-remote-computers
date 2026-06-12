@@ -147,7 +147,7 @@ impl Client {
     /// Attempts a single TCP connection to the Controllino within `self.timeout`.
     async fn try_connect(&self) -> Option<Context> {
         match tokio::time::timeout(
-            5 * self.timeout, // longer timeout than single request timeout
+            10 * self.timeout, // longer timeout than single request timeout
             tokio_modbus::client::tcp::connect(self.socket_addr),
         )
         .await
@@ -158,13 +158,17 @@ impl Client {
                 Some(ctx)
             }
             Ok(Err(err)) => {
-                tracing::warn!("Failed to connect to Controllino: {err}");
-                self.mark_error();
+                if self.mark_error() {
+                    tracing::warn!(
+                        "Failed to connect to Controllino, will not warn again! cause: {err}"
+                    );
+                }
                 None
             }
             Err(_elapsed) => {
-                tracing::warn!("Timed out connecting to Controllino");
-                self.mark_error();
+                if self.mark_error() {
+                    tracing::warn!("Timed out connecting to Controllino, will not warn again!");
+                }
                 None
             }
         }
@@ -193,25 +197,30 @@ impl Client {
         match tokio::time::timeout(self.timeout, f(ctx)).await {
             Ok(Ok(inner)) => Some(inner),
             Ok(Err(err)) => {
-                tracing::warn!("Cannot reach modbus server: {err}");
                 *guard = None;
-                self.mark_error();
+                if self.mark_error() {
+                    tracing::warn!("Lost modbus server: {err}");
+                }
                 None
             }
             Err(_elapsed) => {
-                tracing::warn!("Timed out modbus server");
                 *guard = None;
-                self.mark_error();
+                if self.mark_error() {
+                    tracing::warn!("Lost modbus server: timed out");
+                }
                 None
             }
         }
     }
 
-    fn mark_error(&self) {
+    /// Marks the controllino disconnected and returns `true` iff this was new information (i.e. it was connected before)
+    fn mark_error(&self) -> bool {
         let mut x = self.health.write();
-        if x.controllino.online != SensorStatus::Offline {
+        let was_online = x.controllino.online == SensorStatus::Online;
+        if !was_online {
             x.controllino.online = SensorStatus::Offline;
         }
+        was_online
     }
 
     fn mark_connected(&self) {
