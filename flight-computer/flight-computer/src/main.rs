@@ -131,7 +131,7 @@ mod tests {
         ) {
         }
 
-        let cfg = gnc_configurations::limit_cycle_hil_duebendorf::hil_limit_cycle_compat_adapter_config_with_safety_spiral();
+        let cfg = gnc_configurations::limit_cycle_gadmen::official_compat_adapter_config_with_safety_spiral();
         check_type(&cfg);
 
         let ser = toml::to_string(&cfg).expect("has to serialize");
