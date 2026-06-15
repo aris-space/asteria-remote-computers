@@ -40,6 +40,8 @@ impl InputTree {
             raw_unprocessed_data,
             pss_valves,
             pss_sensors,
+            magnetometer,
+            pressure,
         } = self;
         let RawUnprocessedData {
             environmental_data,
@@ -175,6 +177,28 @@ impl InputTree {
                     o.orientation_z,
                 )
             }),
+            time.watched(),
+        );
+        spawn_watchable_logger(
+            make_timeseries_writer(
+                folder,
+                "magnetometer",
+                &[
+                    "magnetometer X",
+                    "magnetometer Y",
+                    "magnetometer Z",
+                    "magnetometer N",
+                    "magnetometer E",
+                    "magnetometer D",
+                ],
+            )
+            .await?,
+            magnetometer.watched(),
+            time.watched(),
+        );
+        spawn_watchable_logger(
+            make_timeseries_writer(folder, "env_pressure", &["pressure [HPa]"]).await?,
+            pressure.watched(),
             time.watched(),
         );
 
