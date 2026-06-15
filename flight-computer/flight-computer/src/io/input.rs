@@ -15,6 +15,7 @@ use datapoints::dp_sensor_carrier::{
     EnvironmentalData, ImuData, OrientationData, PositionData, VelocityData,
 };
 use datatypes::status::{ArmingState, DownlinkTelemetryStats, UplinkTelemetryHealth};
+use datatypes::units::HPa;
 use datatypes::units::RailStatus;
 use io_utils::{Broadcast, Collector};
 use lib_mission::state_machine::StateName;
@@ -22,6 +23,7 @@ use lib_mission::util::time::MissionTime;
 use lib_mission::{actuator_control, transition};
 use messages::datapoints;
 use messages::datapoints::dp_flight_computer::__message_meta_types::ManualStateTransition;
+use messages::datapoints::dp_sensor_carrier::MagnetometerData;
 use messages::Message;
 use pss_drivers::input::{PSSSensors, PSSValves};
 use watchable::Watchable;
@@ -114,6 +116,13 @@ pub struct InputTree {
     #[datapoint(pattern = "Message::SensorCarrier(SCMessage::OrientationData(#value))")]
     #[broadcast(min_freq_hz = 5., max_freq_hz = 10.)]
     pub orientation: Watchable<OrientationData>,
+
+    #[datapoint(pattern = "Message::SensorCarrier(SCMessage::MagnetometerData(#value))")]
+    #[broadcast(min_freq_hz = 1., max_freq_hz = 4.)]
+    pub magnetometer: Watchable<MagnetometerData>,
+    #[datapoint(pattern = "Message::SensorCarrier(SCMessage::PressureData(#value))")]
+    #[broadcast(min_freq_hz = 1., max_freq_hz = 4.)]
+    pub pressure: Watchable<HPa>,
 
     /// The valve states of the PSS.
     #[broadcast(flatten)]
