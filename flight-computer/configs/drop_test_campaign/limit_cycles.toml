@@ -67,7 +67,7 @@ type = "HeightOrTimeTrigger"
 on_time_limit_reached = "Live Helicopter"
 on_height_limit_reached = "Drogue Descent"
 time_limit_sec = 180 # armed 60 sec prior
-height_limit_m = -1 # TODO Define height limit ASL
+height_limit_m = 2556 # 1606m ASL + 950m AGL (Dropt at 1100m AGL) Drop Gadmen
 manual_transitions = [
     { target = "Live Helicopter", display = "Disarm" },
     { target = "Drogue Descent", display = "Countdown" },
@@ -80,7 +80,7 @@ type = "HeightOrTimeTrigger"
 on_time_limit_reached = "Main Chute Deployment"
 on_height_limit_reached = "Main Chute Deployment"
 time_limit_sec = 26 # 20s countdown + 6s free fall
-height_limit_m = -1 # TODO Define height limit ASL
+height_limit_m = 2556 # 1606m ASL + 950m AGL (Dropt at 1100m AGL) Drop Gadmen
 manual_transitions = [
     { target = "Live Helicopter", display = "Disarm" },
     { target = "Main Chute Deployment", display = "Manual Deployment", abort = true },
