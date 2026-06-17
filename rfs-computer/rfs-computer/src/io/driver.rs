@@ -2,12 +2,12 @@ use std::sync::Arc;
 use std::time::Duration;
 use std::vec;
 
+use datatypes::actuator::Settable as _;
+use datatypes::actuator::ThrottleableValve;
+use datatypes::units::BarG;
 use keller23sx::Keller23SX;
-use lib_mission::actuator_control::Settable as _;
 use lib_mission::reactive::{IntoWatched as _, Watched as _};
-use lib_mission::util::types::BarG;
 use lox_fill_valve::LoxValve;
-use pss_drivers::types::ThrottleableValve;
 use tokio::sync::Mutex;
 use tokio::task::AbortHandle;
 use tokio_modbus::Slave;
@@ -21,7 +21,6 @@ use watchable::Watchable;
 
 use crate::config::SerialConfig;
 use crate::config::URemoteConfig;
-use crate::io::input::{PressureSensors, SensorValues};
 
 use super::input::InputTree;
 use super::output::OutputTree;
@@ -115,11 +114,7 @@ fn init_serial_drivers(
     );
 
     // Spawn pressure sensors tasks
-    let mut handles = init_keller23sx_drivers(
-        serial_config,
-        &shared_modbus,
-        input_tree.serial_pressure_sensors.clone(),
-    )?;
+    let mut handles = init_keller23sx_drivers(serial_config, &shared_modbus, input_tree)?;
 
     handles.extend(handle);
     Ok(handles)
@@ -221,27 +216,16 @@ fn spawn_lox_fill_valve_driver(
 pub fn init_keller23sx_drivers(
     serial_config: &SerialConfig,
     shared_modbus: &Arc<Mutex<Context>>,
-    serial_input_values: PressureSensors,
+    input_tree: &InputTree,
 ) -> Result<Vec<AbortHandle>, Box<dyn std::error::Error>> {
     let polling_period = Duration::from_secs_f32(1. / serial_config.pressure_polling_hz);
     let timeout = Duration::from_millis(serial_config.timeout_ms);
 
-    let PressureSensors {
-        n2_pre_booster,
-        h2_purge,
-        n2_post_booster,
-        lox,
-        purge,
-        pneumatic,
-        gox,
-        h2,
-        igniter,
-    } = serial_input_values;
     Ok(vec![
         spawn_individual_keller23sx_driver(
             shared_modbus.clone(),
             Slave(modbus_addresses::N2_PRE_BOOSTER_SENSOR_ADDR),
-            n2_pre_booster,
+            input_tree.n2_pre_booster_pressure.clone(),
             "n2_pre_booster",
             polling_period,
             timeout,
@@ -249,7 +233,7 @@ pub fn init_keller23sx_drivers(
         spawn_individual_keller23sx_driver(
             shared_modbus.clone(),
             Slave(modbus_addresses::H2_PURGE_SENSOR_ADDR),
-            h2_purge,
+            input_tree.h2_purge_pressure.clone(),
             "h2_purge",
             polling_period,
             timeout,
@@ -257,7 +241,7 @@ pub fn init_keller23sx_drivers(
         spawn_individual_keller23sx_driver(
             shared_modbus.clone(),
             Slave(modbus_addresses::N2_POST_BOOSTER_SENSOR_ADDR),
-            n2_post_booster,
+            input_tree.n2_post_booster_pressure.clone(),
             "n2_post_booster",
             polling_period,
             timeout,
@@ -265,7 +249,7 @@ pub fn init_keller23sx_drivers(
         spawn_individual_keller23sx_driver(
             shared_modbus.clone(),
             Slave(modbus_addresses::LOX_SENSOR_ADDR),
-            lox,
+            input_tree.lox_pressure.clone(),
             "lox",
             polling_period,
             timeout,
@@ -273,7 +257,7 @@ pub fn init_keller23sx_drivers(
         spawn_individual_keller23sx_driver(
             shared_modbus.clone(),
             Slave(modbus_addresses::PURGE_SENSOR_ADDR),
-            purge,
+            input_tree.purge_pressure.clone(),
             "purge",
             polling_period,
             timeout,
@@ -281,7 +265,7 @@ pub fn init_keller23sx_drivers(
         spawn_individual_keller23sx_driver(
             shared_modbus.clone(),
             Slave(modbus_addresses::PNEUMATIC_SENSOR_ADDR),
-            pneumatic,
+            input_tree.pneumatic_pressure.clone(),
             "pneumatic",
             polling_period,
             timeout,
@@ -289,7 +273,7 @@ pub fn init_keller23sx_drivers(
         spawn_individual_keller23sx_driver(
             shared_modbus.clone(),
             Slave(modbus_addresses::GOX_SENSOR_ADDR),
-            gox,
+            input_tree.gox_pressure.clone(),
             "gox",
             polling_period,
             timeout,
@@ -297,7 +281,7 @@ pub fn init_keller23sx_drivers(
         spawn_individual_keller23sx_driver(
             shared_modbus.clone(),
             Slave(modbus_addresses::H2_SENSOR_ADDR),
-            h2,
+            input_tree.h2_pressure.clone(),
             "h2",
             polling_period,
             timeout,
@@ -305,7 +289,7 @@ pub fn init_keller23sx_drivers(
         spawn_individual_keller23sx_driver(
             shared_modbus.clone(),
             Slave(modbus_addresses::IGNITER_SENSOR_ADDR),
-            igniter,
+            input_tree.igniter_pressure.clone(),
             "igniter",
             polling_period / 2, // Igniter sensor is more critical, it gets double to bandwidth by giving it half the period
             timeout,
@@ -318,7 +302,7 @@ pub fn init_keller23sx_drivers(
 fn spawn_individual_keller23sx_driver(
     bus: Arc<Mutex<Context>>,
     address: Slave,
-    input_values: SensorValues,
+    input_values: Watchable<BarG>,
     _device_name: &str,
     polling_period: Duration,
     timeout: Duration,
@@ -348,7 +332,7 @@ fn spawn_individual_keller23sx_driver(
 
                 match device.read_pressure_sensor1().await {
                     Ok(pressure) => {
-                        let _ = input_values.pressure_value_1.update(BarG(pressure));
+                        let _ = input_values.update(BarG(pressure));
                         backoff = init_backoff;
                     }
                     Err(e) => {
@@ -356,7 +340,7 @@ fn spawn_individual_keller23sx_driver(
                             error = %e,
                             "Failed to read from pressure sensor"
                         );
-                        let _ = input_values.pressure_value_1.update(BarG(f32::NAN));
+                        let _ = input_values.update(BarG(f32::NAN));
 
                         // Exponential backoff on erros, maybe due to device not connected
                         tokio::time::sleep(backoff).await;

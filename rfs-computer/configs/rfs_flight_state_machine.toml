@@ -3,7 +3,7 @@
 # ======================================= System Configuration =======================================
 system_time_rate_hz = 200
 [telemetry]
-mavlink_address = "udpout:127.0.0.1:5761"
+mavlink_address = "127.0.0.1:5761"
 always_allowed_actuators = [
     "rocket_power",
     "maxon_board_power",
@@ -14,12 +14,6 @@ always_allowed_actuators = [
     "custom2",
     "custom3",
 ]
-[telemetry.downlink_rates]
-state_hz = 4
-actuator_feedback_hz = 2
-temperature_sensors_hz = 3
-pressure_sensors_hz = 15
-fill_levels_hz = 0.5
 [uremote]
 address = "192.168.0.222:502"
 min_read_frequency_hz = 20
@@ -37,6 +31,9 @@ socket_address = "can0"
 [state_machine]
 name = "Flight State machine, Dry Run"
 initial_state = "Idle"
+
+# Path in the repo to the state machine diagram to be used by mission control.
+diagram_path = "state-machines/rfs-flight-state-machine.drawio.svg"
 
 # Initial state which does nothing
 [state_machine.states."Idle"]
@@ -65,12 +62,8 @@ on_done = "Safe Abort 2"
 type = "Waiting"
 manual_transitions = [{ target = "System Normal", display = "Reset" }]
 
-# This state is compose of 3 substates and sets the system in a known state before waiting
+# This state is compose of substates and sets the system in a known state before waiting
 [state_machine.states."System Normal"]
-type = "SetPSSMode"
-mode = "RFSPassive"         # the default
-on_done = "System Normal 2"
-[state_machine.states."System Normal 2"]
 type = "SetNormalState"
 on_done = "System Normal 3"
 [state_machine.states."System Normal 3"]
@@ -94,25 +87,25 @@ manual_transitions = [
 [state_machine.states."System Controllable"]
 type = "ManualControl"
 allowed_actuators = [
-    "lox_fll_vlv",    # LOx fill valve
-    "gox_prg_vlv",    # GOx purge valve
-    "h2_prg_vlv",     # H2 purge valve
-    "n2_bld_vlv",     # N2 bleed valve
-    "lox_prg_vlv",    # LOx purge valve
-    "gox_bld_vlv",    # GOx bleed valve
-    "n2_prg_vlv",     # N2 purge valve
-    "n2_fll_vlv",     # N2 fill valve
-    "h2_bld_vlv",     # H2 bleed valve
-    "lox_bld_vlv",    # LOx bleed valve
-    "pnm_bstr_vlv",   # Booster valve
-    "pnm_loxdec_ext", # LOX decoupler
-    "pnm_loxdec_ret", # LOX decoupler
-    "pnm_n2dec_ext",  # N2 decoupler
-    "pnm_n2dec_ret",  # N2 decoupler
-    "pnm_n2rls_vlv",  # N2 release valve
-    "h2_ign_vlv",     # H2 igniter valve
-    "gox_ign_vlv",    # GOx igniter valve
-    "ign_spk_plg",    # Igniter spark
+    "lox_fll_vlv", # LOx fill valve
+    "gox_prg_vlv", # GOx purge valve
+    "h2_prg_vlv",  # H2 purge valve
+    "n2_bld_vlv",  # N2 bleed valve
+    "lox_prg_vlv", # LOx purge valve
+    "gox_bld_vlv", # GOx bleed valve
+    "n2_prg_vlv",  # N2 purge valve
+    "n2_fll_vlv",  # N2 fill valve
+    "h2_bld_vlv",  # H2 bleed valve
+    "lox_bld_vlv", # LOx bleed valve
+    "n2_bst_vlv",  # Booster valve
+    "lox_dec_ext", # LOX decoupler
+    "lox_dec_ret", # LOX decoupler
+    "n2_dec_ext",  # N2 decoupler
+    "n2_dec_ret",  # N2 decoupler
+    "n2_shw_vlv",  # N2 shower valves
+    "h2_ign_vlv",  # H2 igniter valve
+    "gox_ign_vlv", # GOx igniter valve
+    "ign_spk_plg", # Igniter spark
 ]
 manual_transitions = [
     { target = "System Idle", display = "Lock" },
@@ -240,12 +233,12 @@ allowed_actuators = [
     "n2_fll_vlv",
     "h2_bld_vlv",
     "lox_bld_vlv",
-    "pnm_bstr_vlv",
-    "pnm_loxdec_ext",
-    "pnm_loxdec_ret",
-    "pnm_n2dec_ext",
-    "pnm_n2dec_ret",
-    "pnm_n2rls_vlv",
+    "n2_bst_vlv",
+    "lox_dec_ext",
+    "lox_dec_ret",
+    "n2_dec_ext",
+    "n2_dec_ret",
+    "n2_shw_vlv",
     "h2_ign_vlv",
     "gox_ign_vlv",
     "ign_spk_plg",
@@ -261,11 +254,11 @@ manual_transitions = [{ target = "Pre Filling Abort", display = "Done" }]
 
 # A state that waits for the FC to become passive
 [state_machine.states."Ready for Takeover"]
-type = "AwaitFCPassive"
-on_fc_passive = "PSS Diagnostics"
+type = "Waiting"
 manual_transitions = [
     { target = "System Normal", display = "Cancel" },
     { target = "Pre Filling Abort", display = "Abort", abort = true },
+    { target = "PSS Diagnostics" },
 ]
 
 # This state only lets the SM pass on if all boards in the rocket are healthy
@@ -285,10 +278,6 @@ manual_transitions = [
 
 # This state takes control of the PSS system for the RFS and then waits
 [state_machine.states."Takeover"]
-type = "SetPSSMode"
-mode = "RFSActive"
-on_done = "Takeover 2"
-[state_machine.states."Takeover 2"]
 type = "Waiting"
 manual_transitions = [
     { target = "Couple", display = "Couple" },
@@ -301,13 +290,13 @@ manual_transitions = [
 [state_machine.states."Couple"]
 type = "ManualControl"
 allowed_actuators = [
-    "pnm_loxdec_ext", # LOX decoupler
-    "pnm_loxdec_ret", # LOX decoupler
-    "pnm_n2dec_ext",  # N2 decoupler
-    "pnm_n2dec_ret",  # N2 decoupler
-    "n2_prg_vlv",     # N2 purge valve
-    "lox_prg_vlv",    # LOX purge valve
-    "pnm_n2rls_vlv",  # N2 release valve
+    "lox_dec_ext", # LOX decoupler
+    "lox_dec_ret", # LOX decoupler
+    "n2_dec_ext",  # N2 decoupler
+    "n2_dec_ret",  # N2 decoupler
+    "n2_prg_vlv",  # N2 purge valve
+    "lox_prg_vlv", # LOX purge valve
+    "n2_shw_vlv",  # N2 shower valves
 ]
 manual_transitions = [
     { target = "Pre Filling Abort", display = "Abort", abort = true },
@@ -324,7 +313,7 @@ on_completed = "Waiting for Filling 3"
 on_cancelled = "Waiting for Filling 3"
 [[state_machine.states."Waiting for Filling 2".sequence]]
 action = "SetActuators"
-targets = { "pnm_n2rls_vlv" = "Open" } # enforces that n2 release valve is always open
+targets = { "n2_shw_vlv" = "Open" } # enforces that n2 shower valves is always open
 [state_machine.states."Waiting for Filling 3"]
 type = "Waiting"
 manual_transitions = [
@@ -457,12 +446,12 @@ allowed_actuators = [
     "n2_fll_vlv",
     "h2_bld_vlv",
     "lox_bld_vlv",
-    "pnm_bstr_vlv",
-    "pnm_loxdec_ext",
-    "pnm_loxdec_ret",
-    "pnm_n2dec_ext",
-    "pnm_n2dec_ret",
-    "pnm_n2rls_vlv",
+    "n2_bst_vlv",
+    "lox_dec_ext",
+    "lox_dec_ret",
+    "n2_dec_ext",
+    "n2_dec_ret",
+    "n2_shw_vlv",
     "h2_ign_vlv",
     "gox_ign_vlv",
     "ign_spk_plg",
@@ -482,7 +471,7 @@ type = "MonitoredManualControl"
 allowed_actuators = [
     "lox_fll_vlv", # LOX fill valve
     "lox_bld_vlv", # LOX bleed valve
-    "pnm_n2rls_vlv", # N2 release valve
+    "n2_shw_vlv",  # N2 shower valves
 ]
 telemetry_loss_threshold_sec = 300 # 5min
 on_violation = "Filling Abort"
@@ -500,14 +489,14 @@ on_done = "Filling"
 [state_machine.states."Filling"]
 type = "MonitoredManualControl"
 allowed_actuators = [
-    "lox_fll_vlv",   # LOX fill valve
-    "lox_bld_vlv",   # LOX bleed valve
-    "n2_fll_vlv",    # N2 fill valve
-    "n2_bld_vlv",    # N2 bleed valve
-    "pnm_bstr_vlv",  # N2/pneumatic booster valve
+    "lox_fll_vlv",  # LOX fill valve
+    "lox_bld_vlv",  # LOX bleed valve
+    "n2_fll_vlv",   # N2 fill valve
+    "n2_bld_vlv",   # N2 bleed valve
+    "n2_bst_vlv",   # N2/pneumatic booster valve
     "oss_ml_vlv",   # rocket LOX(OSS) main valve
-    "prz_copv_vnt",   # rocket N2(PRZ) vent valve
-    "pnm_n2rls_vlv", # N2 release valve
+    "prz_copv_vnt", # rocket N2(PRZ) vent valve
+    "n2_shw_vlv",   # N2 shower valves
 ]
 telemetry_loss_threshold_sec = 900 # 15min
 on_violation = "Filling Abort"
@@ -521,10 +510,10 @@ manual_transitions = [
 [state_machine.states."Parallel Filling"]
 type = "RunSeqWithControl"
 allowed_actuators = [
-    "lox_fll_vlv",   # LOX fill valve
-    "lox_bld_vlv",   # LOX bleed valve
-    "oss_ml_vlv",   # rocket LOX(OSS) main valve
-    "pnm_n2rls_vlv", # N2 release valve
+    "lox_fll_vlv", # LOX fill valve
+    "lox_bld_vlv", # LOX bleed valve
+    "oss_ml_vlv",  # rocket LOX(OSS) main valve
+    "n2_shw_vlv",  # N2 shower valves
 ]
 telemetry_loss_threshold_sec = 900 # 15min
 on_violation = "Filling Abort"
@@ -554,7 +543,7 @@ patience_sec = 5.0
 # Then open booster valve
 [[state_machine.states."Parallel Filling".sequence]]
 action = "SetActuators"
-targets = { "pnm_bstr_vlv" = "Open" }
+targets = { "n2_bst_vlv" = "Open" }
 # And wait for filling to 300 bar
 [[state_machine.states."Parallel Filling".sequence]]
 action = "N2FillDetection"
@@ -563,17 +552,17 @@ patience_sec = 3600                # 1h
 # Finnally close the booster and fill valve again
 [[state_machine.states."Parallel Filling".sequence]]
 action = "SetActuators"
-targets = { "pnm_bstr_vlv" = "Close", "n2_fll_vlv" = "Close" }
+targets = { "n2_bst_vlv" = "Close", "n2_fll_vlv" = "Close" }
 
 # A state where lox filling can continue, and n2 is locked.
 [state_machine.states."LOX Filling"]
 type = "MonitoredManualControl"
 allowed_actuators = [
-    "lox_fll_vlv",   # LOX fill valve
-    "lox_bld_vlv",   # LOX bleed valve
-    "oss_ml_vlv",   # rocket LOX(OSS) main valve
-    "pnm_n2rls_vlv", # N2 release valve
-    "n2_bld_vlv",    # N2 bleed valve
+    "lox_fll_vlv", # LOX fill valve
+    "lox_bld_vlv", # LOX bleed valve
+    "oss_ml_vlv",  # rocket LOX(OSS) main valve
+    "n2_shw_vlv",  # N2 shower valves
+    "n2_bld_vlv",  # N2 bleed valve
 ]
 telemetry_loss_threshold_sec = 900 # 15min
 on_violation = "Filling Abort"
@@ -595,25 +584,25 @@ action = "SetActuators"
 prz_copv_vnt = "Close"
 oss_tnk_vnt = "Close"
 lox_bld_vlv = "Close"
-pnm_n2rls_vlv = "Open"
+n2_shw_vlv = "Open"
 # Normal
 lox_fll_vlv = "Close"
 oss_ml_vlv = "Close"
 n2_fll_vlv = "Close"
 n2_bld_vlv = "Open"
-pnm_bstr_vlv = "Close"
+n2_bst_vlv = "Close"
 
 # State to try to decouple the hoses
 [state_machine.states."Decouple"]
 type = "ManualControl"
 allowed_actuators = [
-    "pnm_loxdec_ext", # LOX decoupler
-    "pnm_loxdec_ret", # LOX decoupler
-    "pnm_n2dec_ext",  # N2 decoupler
-    "pnm_n2dec_ret",  # N2 decoupler
-    "lox_bld_vlv",    # LOX bleed valve
-    "n2_bld_vlv",     # N2 bleed valve
-    "pnm_n2rls_vlv", # N2 release valve
+    "lox_dec_ext", # LOX decoupler
+    "lox_dec_ret", # LOX decoupler
+    "n2_dec_ext",  # N2 decoupler
+    "n2_dec_ret",  # N2 decoupler
+    "lox_bld_vlv", # LOX bleed valve
+    "n2_bld_vlv",  # N2 bleed valve
+    "n2_shw_vlv",  # N2 shower valves
 ]
 manual_transitions = [
     { target = "Handsoff", display = "Decoupled" },
@@ -636,10 +625,6 @@ manual_transitions = [{ target = "Safeing Normal", display = "Start Safing" }]
 
 # Waiting state which waits for rocket pressurization and arming
 [state_machine.states."Handsoff"]
-type = "SetPSSMode"
-mode = "RFSPassive"
-on_done = "Handsoff 2"
-[state_machine.states."Handsoff 2"]
 type = "Waiting"
 manual_transitions = [
     { target = "Armed", display = "Arm" },
@@ -662,8 +647,8 @@ type = "WaitForIgnition"
 on_ignition = "Ignition"
 on_not_ready = "Auto-Disarmed"
 allowed_actuators = [
-    "gox_prg_vlv",    # GOx purge valve
-    "h2_prg_vlv",     # H2 purge valve
+    "gox_prg_vlv", # GOx purge valve
+    "h2_prg_vlv",  # H2 purge valve
 ]
 manual_transitions = [
     { target = "Abort Firing", display = "Force Abort", abort = true },
@@ -710,25 +695,25 @@ manual_transitions = [
 [state_machine.states."Safeing Controllable"]
 type = "ManualControl"
 allowed_actuators = [
-    "lox_fll_vlv",    # LOx fill valve
-    "gox_prg_vlv",    # GOx purge valve
-    "h2_prg_vlv",     # H2 purge valve
-    "n2_bld_vlv",     # N2 bleed valve
-    "lox_prg_vlv",    # LOx purge valve
-    "gox_bld_vlv",    # GOx bleed valve
-    "n2_prg_vlv",     # N2 purge valve
-    "n2_fll_vlv",     # N2 fill valve
-    "h2_bld_vlv",     # H2 bleed valve
-    "lox_bld_vlv",    # LOx bleed valve
-    "pnm_bstr_vlv",   # Booster valve
-    "pnm_loxdec_ext", # LOX decoupler
-    "pnm_loxdec_ret", # LOX decoupler
-    "pnm_n2dec_ext",  # N2 decoupler
-    "pnm_n2dec_ret",  # N2 decoupler
-    "pnm_n2rls_vlv",  # N2 release valve
-    "h2_ign_vlv",     # H2 igniter valve
-    "gox_ign_vlv",    # GOx igniter valve
-    "ign_spk_plg",    # Igniter spark
+    "lox_fll_vlv", # LOx fill valve
+    "gox_prg_vlv", # GOx purge valve
+    "h2_prg_vlv",  # H2 purge valve
+    "n2_bld_vlv",  # N2 bleed valve
+    "lox_prg_vlv", # LOx purge valve
+    "gox_bld_vlv", # GOx bleed valve
+    "n2_prg_vlv",  # N2 purge valve
+    "n2_fll_vlv",  # N2 fill valve
+    "h2_bld_vlv",  # H2 bleed valve
+    "lox_bld_vlv", # LOx bleed valve
+    "n2_bst_vlv",  # Booster valve
+    "lox_dec_ext", # LOX decoupler
+    "lox_dec_ret", # LOX decoupler
+    "n2_dec_ext",  # N2 decoupler
+    "n2_dec_ret",  # N2 decoupler
+    "n2_shw_vlv",  # N2 shower valves
+    "h2_ign_vlv",  # H2 igniter valve
+    "gox_ign_vlv", # GOx igniter valve
+    "ign_spk_plg", # Igniter spark
 ]
 manual_transitions = [
     { target = "Safeing Idle", display = "Lock" },

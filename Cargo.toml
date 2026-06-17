@@ -6,8 +6,8 @@ members = [
     "lib-remote-computers/lib-mission",
     "lib-remote-computers/pss-drivers",
     "lib-remote-computers/sequences",
-    # "rfs-computer/rfs-computer",
-    # "rfs-computer/uremote-electronics",
+    "rfs-computer/rfs-computer",
+    "rfs-computer/uremote-electronics",
     "rfs-computer/keller23sx",
     "rfs-computer/lox-fill-valve",
     "rfs-computer/tokio-modbus-shared",
@@ -55,5 +55,5 @@ rand_distr = "0.6.0-rc.0"
 rand_xoshiro = "0.8.0-rc.0"
 rayon = "1.11.0"
 
-# [patch.crates-io]
-# ur20 = { git = "https://github.com/slowtec/ur20.git", rev = "592771d18d547e100aacd7204e65bf7d989910ac" }
+[patch.crates-io]
+ur20 = { git = "https://github.com/slowtec/ur20", rev = "592771d18d547e100aacd7204e65bf7d989910ac" }

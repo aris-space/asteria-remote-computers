@@ -1,4 +1,4 @@
-use lib_mission::actuator_control::valves::NormallyClosedValve;
+use datatypes::actuator::NormallyClosedValve;
 use lib_mission::state_machine::{AdditionalState, StateLogic, StateName};
 
 /// This state sets all RFS valves to normal position, except for the lox bleed valve, which is opened.
@@ -49,7 +49,8 @@ impl StateLogic for DepressurizeRFS {
             lox_decoupler_retract_valve: _, // not affected
             n2_decoupler_extend_valve: _,   // not affected
             n2_decoupler_retract_valve: _,  // not affected
-            n2_release_valve,
+            n2_shower_valve,
+            n2_engine_purge_valve,
             h2_igniter_valve,
             gox_igniter_valve,
             igniter_spark,
@@ -68,7 +69,8 @@ impl StateLogic for DepressurizeRFS {
         n2_fill_valve.replace(Default::default());
         h2_bleed_valve.replace(Default::default());
         booster_valve.replace(Default::default());
-        n2_release_valve.replace(Default::default());
+        n2_shower_valve.replace(Default::default());
+        n2_engine_purge_valve.replace(Default::default());
         h2_igniter_valve.replace(Default::default());
         gox_igniter_valve.replace(Default::default());
         igniter_spark.replace(Default::default());

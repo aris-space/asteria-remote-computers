@@ -10,9 +10,16 @@ workspace = true
 ur20 = "0.6.0"                                                 # Patched with git dependency
 ur20-modbus = "0.5.0"
 lib-mission = { path = "../../lib-remote-computers/lib-mission" }
+datatypes = { path = "../../data-definitions/datatypes" }
 watchable = "1.1.2"
 tracing = "0.1.41"
 thiserror = "2.0.12"
+io-utils = { path = "../../lib-remote-computers/io-utils" }
+messages = { path = "../../data-definitions/messages", features = [
+    "derive_debug",
+    "derive_serde",
+    "mavlink",
+], default-features = false }
 serde = { version = "1.0.219", features = ["derive"] }
 futures-util = "0.3.31"
 tokio = { version = "1.45.0", features = ["time"] }

@@ -58,7 +58,7 @@ impl OutputTree {
             steering_motor_target_deflections: Watchable::default(),
             recovery_actuators_armed: Watchable::default(),
             camera_powered_on: Watchable::default(),
-            valves: PSSValves::new(tx),
+            valves: PSSValves::new(tx, pss_drivers::output::CommandSender::FC),
             hash_config: Watchable::default(),
             fc_status: Watchable::default(),
         }

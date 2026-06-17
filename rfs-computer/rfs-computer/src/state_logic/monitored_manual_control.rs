@@ -42,7 +42,7 @@ impl StateLogic for MonitoredManualControl {
 
         // Prepares a background task to listen for (and act upon) manual actuator inputs.
         let actuator_future = self.actuator_control.act(
-            param.current_state().1,
+            param.current_state().1 as usize,
             &input.actuator_command,
             output.as_settables(),
         );
@@ -55,7 +55,7 @@ impl StateLogic for MonitoredManualControl {
                 tracing::warn!("threshold violation: {violation}");
                 self.on_violation.clone()
             }
-            _ = await_telemetry_loss(&input.telemetry_health, &input.time, self.telemetry_loss_threshold) => {
+            _ = await_telemetry_loss(&input.uplink_telemetry_health, &input.time, self.telemetry_loss_threshold) => {
                 tracing::warn!("telemetry loss detected");
                 self.on_violation.clone()
             }

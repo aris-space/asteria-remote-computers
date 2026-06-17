@@ -1,11 +1,10 @@
 //! The main entry point for the remote filling station computer
 
-use lib_mission::reactive::IntoWatched;
+use datatypes::status::ConfigHash;
 use lib_mission::state_machine::StateMachine;
 use lib_mission::util::init::init_binary;
 use rfs_computer::build_info;
 use rfs_computer::config::Config;
-use rfs_computer::io::can::init_can_drivers;
 use rfs_computer::io::driver::init_drivers;
 use rfs_computer::io::input::InputTree;
 use rfs_computer::io::output::OutputTree;
@@ -18,13 +17,21 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .ok_or("Not enought arguments. Usage: ./rfs_computer <CONFIG>")?;
     println!("> loading config from {config_path}");
 
-    let (config_file, log_folder, _run_info) =
+    let (config_file, log_folder, run_info) =
         init_binary::<Config>(build_info::THIS_BUILD, config_path).await?;
 
-    let input_tree = InputTree::default();
-    let output_tree = OutputTree::default();
+    let mut input_tree = InputTree::default();
 
+    let (can_tx, _can_rx) = std::sync::mpsc::channel();
+    let output_tree = OutputTree::new(can_tx.clone());
+    let config_hash = ConfigHash {
+        hash: run_info.config_hash.as_bytes()[..5]
+            .try_into()
+            .expect("config hash is hex SHA-1, longer than 5 chars"),
+    };
+    let _ = output_tree.hash_config.update(config_hash);
     let state_machine = StateMachine::new(config_file.state_machine)?;
+    input_tree.state.current_state = state_machine.current_state.clone(); // synchronize shared variable
     let global_actuator_control =
         lib_mission::actuator_control::command::ActuatorControl::from_strings(
             config_file
@@ -46,9 +53,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     output_tree
         .start_logging(&log_folder, input_tree.time.clone())
         .await?;
-    state_machine
-        .start_logging_state(&log_folder, input_tree.time.watched())
-        .await?;
 
     init_telemetry(
         &config_file.telemetry,
@@ -65,7 +69,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     )
     .await?;
 
-    init_can_drivers(&config_file.can, &input_tree, &output_tree)?;
+    // Skip for now, as not yet done, and very noisy error messages
+    // init_can_drivers(&config_file.can, &input_tree, &output_tree, &can_tx, can_rx)?;
 
     // Set up global actuator commands
     {

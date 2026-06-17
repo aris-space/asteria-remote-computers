@@ -6,8 +6,6 @@ use lib_mission::util::time::MissionTime;
 use tokio::task::AbortHandle;
 use watchable::Watchable;
 
-use crate::io::input::PressureSensors;
-
 use super::input::InputTree;
 use super::output::OutputTree;
 
@@ -23,16 +21,26 @@ impl InputTree {
     ) -> Result<Vec<AbortHandle>, Box<dyn std::error::Error>> {
         // This destructure is used so that we don't forget later additions.
         let InputTree {
+            state: _,
             time,
             transition_command,
             actuator_command,
-            telemetry_health,
+            uplink_telemetry_health,
+            downlink_telemetry_stats: _,
             is_can_connected,
             rocket_health,
             flight_computer_status,
             uremote_sensors,
             uremote_actuators,
-            serial_pressure_sensors,
+            n2_pre_booster_pressure,
+            h2_purge_pressure,
+            n2_post_booster_pressure,
+            lox_pressure,
+            purge_pressure,
+            pneumatic_pressure,
+            gox_pressure,
+            h2_pressure,
+            igniter_pressure,
             lox_fill_valve,
             pss_valves,
             pss_sensors,
@@ -79,11 +87,11 @@ impl InputTree {
                     ],
                 )
                 .await?,
-                telemetry_health.watched().map(|h| {
+                uplink_telemetry_health.watched().map(|h| {
                     (
-                        h.time_of_last_msg.as_ms_timestamp(),
+                        h.time_of_last_msg.0,
                         h.num_msg_received,
-                        h.time_of_last_processed_msg.as_ms_timestamp(),
+                        h.time_of_last_processed_msg.0,
                         h.num_msg_processed,
                     )
                 }),
@@ -98,8 +106,14 @@ impl InputTree {
                 )
                 .await?,
                 transition_command.watched().map(|r| {
-                    // Propagate the Noneness to each field
-                    r.map_or((None, None), |(i, s)| (i, Some(s.to_string())))
+                    (
+                        r.transition_index,
+                        Some(
+                            String::from_utf8_lossy(&r.state)
+                                .trim_end_matches('\0')
+                                .to_string(),
+                        ),
+                    )
                 }),
                 time.watched(),
             ),
@@ -176,7 +190,22 @@ impl InputTree {
 
         handles.extend(uremote_actuators.start_logging(folder, time).await?);
         handles.extend(uremote_sensors.start_logging(folder, time).await?);
-        handles.extend(serial_pressure_sensors.start_logging(folder, time).await?);
+        handles.extend(
+            start_pressure_sensors_logging(
+                folder,
+                time,
+                n2_pre_booster_pressure,
+                h2_purge_pressure,
+                n2_post_booster_pressure,
+                lox_pressure,
+                purge_pressure,
+                pneumatic_pressure,
+                gox_pressure,
+                h2_pressure,
+                igniter_pressure,
+            )
+            .await?,
+        );
 
         handles.extend(pss_valves.start_logging(folder, time).await?);
         handles.extend(pss_sensors.start_logging(folder, time).await?);
@@ -198,9 +227,10 @@ impl OutputTree {
         // This destructure is used so that we don't forget later additions.
         let OutputTree {
             rfs_actuators,
-            pss_valves,
+            pss_valves: _,
             lox_fill_valve,
-            is_software_armed,
+            hash_config: _,
+            rfs_computer_status,
         } = self;
 
         let mut handles = vec![
@@ -221,102 +251,57 @@ impl OutputTree {
                     &["is armed [bool]"],
                 )
                 .await?,
-                is_software_armed.watched(),
+                rfs_computer_status.watched(),
                 time.watched(),
             ),
         ];
         handles.extend(rfs_actuators.start_logging(folder, &time).await?);
-        handles.extend(pss_valves.start_logging(folder, time.clone()).await?);
 
         Ok(handles)
     }
 }
 
-impl PressureSensors {
-    async fn start_logging(
-        &self,
-        folder: &std::path::Path,
-        time: &Watchable<lib_mission::util::time::MissionTime>,
-    ) -> Result<Vec<AbortHandle>, Box<dyn std::error::Error>> {
-        use lib_mission::reactive::IntoWatched as _;
-        macro_rules! spawn_pressure_logger {
-            ($name:literal, $e:expr) => {
-                [
-                    lib_mission::util::log::spawn_watchable_logger(
-                        lib_mission::util::log::make_timeseries_writer(
-                            folder,
-                            concat!($name, "_pressure_1"),
-                            &["pressure_1 [barg]"],
-                        )
-                        .await?,
-                        $e.pressure_value_1.watched(),
-                        time.watched(),
-                    ),
-                    // Those sensor channels are disabled, so no need to log them:
-
-                    // lib_mission::util::log::spawn_watchable_logger(
-                    //     lib_mission::util::log::make_timeseries_writer(
-                    //         folder,
-                    //         concat!($name, "_pressure_2"),
-                    //         &["pressure_2 [barg]"],
-                    //     )
-                    //     .await?,
-                    //     $e.pressure_value_2.watched(),
-                    //     time.watched(),
-                    // ),
-                    // lib_mission::util::log::spawn_watchable_logger(
-                    //     lib_mission::util::log::make_timeseries_writer(
-                    //         folder,
-                    //         concat!($name, "_temperature_1"),
-                    //         &["temperature_1 [°C]"],
-                    //     )
-                    //     .await?,
-                    //     $e.temperature_value_1.watched(),
-                    //     time.watched(),
-                    // ),
-                    // lib_mission::util::log::spawn_watchable_logger(
-                    //     lib_mission::util::log::make_timeseries_writer(
-                    //         folder,
-                    //         concat!($name, "_temperature_2"),
-                    //         &["temperature_2 [°C]"],
-                    //     )
-                    //     .await?,
-                    //     $e.temperature_value_2.watched(),
-                    //     time.watched(),
-                    // ),
-                ]
-            };
-        }
-
-        let PressureSensors {
-            n2_pre_booster,
-            h2_purge,
-            lox,
-            gox,
-            purge,
-            pneumatic,
-            n2_post_booster,
-            h2,
-            igniter,
-        } = self;
-
-        // Log serial devices values
-        let mut handles = vec![];
-        handles.extend(spawn_pressure_logger!(
-            "sensor_n2_pre_booster_p",
-            n2_pre_booster
-        ));
-        handles.extend(spawn_pressure_logger!("sensor_h2_purge_p", h2_purge));
-        handles.extend(spawn_pressure_logger!("sensor_lox_p", lox));
-        handles.extend(spawn_pressure_logger!("sensor_gox_p", gox));
-        handles.extend(spawn_pressure_logger!("sensor_purge_p", purge));
-        handles.extend(spawn_pressure_logger!("sensor_pneumatic_p", pneumatic));
-        handles.extend(spawn_pressure_logger!(
-            "sensor_n2_post_booster_p",
-            n2_post_booster
-        ));
-        handles.extend(spawn_pressure_logger!("sensor_h2_p", h2));
-        handles.extend(spawn_pressure_logger!("sensor_igniter_p", igniter));
-        Ok(handles)
+#[allow(clippy::too_many_arguments)]
+async fn start_pressure_sensors_logging(
+    folder: &std::path::Path,
+    time: &Watchable<lib_mission::util::time::MissionTime>,
+    n2_pre_booster_pressure: &Watchable<datatypes::units::BarG>,
+    h2_purge_pressure: &Watchable<datatypes::units::BarG>,
+    n2_post_booster_pressure: &Watchable<datatypes::units::BarG>,
+    lox_pressure: &Watchable<datatypes::units::BarG>,
+    purge_pressure: &Watchable<datatypes::units::BarG>,
+    pneumatic_pressure: &Watchable<datatypes::units::BarG>,
+    gox_pressure: &Watchable<datatypes::units::BarG>,
+    h2_pressure: &Watchable<datatypes::units::BarG>,
+    igniter_pressure: &Watchable<datatypes::units::BarG>,
+) -> Result<Vec<AbortHandle>, Box<dyn std::error::Error>> {
+    use lib_mission::reactive::IntoWatched as _;
+    macro_rules! spawn_pressure_logger {
+        ($name:literal, $e:expr) => {
+            lib_mission::util::log::spawn_watchable_logger(
+                lib_mission::util::log::make_timeseries_writer(
+                    folder,
+                    concat!($name, "_pressure_1"),
+                    &["pressure_1 [barg]"],
+                )
+                .await?,
+                $e.watched(),
+                time.watched(),
+            )
+        };
     }
+
+    // One log per sensor.
+    let handles = vec![
+        spawn_pressure_logger!("sensor_n2_pre_booster_p", n2_pre_booster_pressure),
+        spawn_pressure_logger!("sensor_h2_purge_p", h2_purge_pressure),
+        spawn_pressure_logger!("sensor_lox_p", lox_pressure),
+        spawn_pressure_logger!("sensor_gox_p", gox_pressure),
+        spawn_pressure_logger!("sensor_purge_p", purge_pressure),
+        spawn_pressure_logger!("sensor_pneumatic_p", pneumatic_pressure),
+        spawn_pressure_logger!("sensor_n2_post_booster_p", n2_post_booster_pressure),
+        spawn_pressure_logger!("sensor_h2_p", h2_pressure),
+        spawn_pressure_logger!("sensor_igniter_p", igniter_pressure),
+    ];
+    Ok(handles)
 }

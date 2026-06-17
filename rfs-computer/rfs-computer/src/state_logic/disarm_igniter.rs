@@ -1,8 +1,6 @@
-use lib_mission::{
-    actuator_control::valves::NormallyClosedValve,
-    state_machine::{AdditionalState, StateLogic, StateName},
-};
-use uremote_electronics::types::SparkPlug;
+use datatypes::actuator::{DigitalOut, NormallyClosedValve};
+use datatypes::status::ArmingState;
+use lib_mission::state_machine::{AdditionalState, StateLogic, StateName};
 
 /// This state sets the software arming state to disarmed and shuts off the igniter valves.
 ///
@@ -25,8 +23,8 @@ impl StateLogic for DisarmIgniter {
         output: &Self::Output,
         param: &AdditionalState<Self::Parameter>,
     ) -> StateName {
-        output.is_software_armed.replace(false);
-        output.rfs_actuators.igniter_spark.replace(SparkPlug::Off);
+        output.rfs_computer_status.write().is_ignition_armed = ArmingState::Safe;
+        output.rfs_actuators.igniter_spark.replace(DigitalOut::Off);
         output
             .rfs_actuators
             .h2_igniter_valve

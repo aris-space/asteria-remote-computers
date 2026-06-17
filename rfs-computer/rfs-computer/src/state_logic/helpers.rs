@@ -1,5 +1,6 @@
 use std::{collections::BTreeMap, ops::ControlFlow, time::Duration};
 
+use datatypes::units::{BarG, Celsius};
 use lib_mission::reactive::{IntoWatched as _, WatchedExt as _};
 use serde::{Deserialize, Serialize};
 
@@ -20,7 +21,7 @@ pub struct ThresholdWatcher {
     upper_thresholds_celsius: TemperatureThresholds,
 }
 
-/// Parts of [`crate::io::input::PressureSensors`], see that.
+/// Parts of [`crate::io::input::InputTree`], see that.
 /// Referrs to pressure channel 1
 /// Can be extended as needed.
 #[derive(Debug, serde::Deserialize, serde::Serialize)]
@@ -77,35 +78,23 @@ impl ThresholdWatcher {
     pub async fn watch(&self, input_tree: &InputTree) -> Violation {
         // Somewhat ugly having to define all watchers.
         // Because comparision with NAN is always false, unspecified thresholds should never trigger a violation
-        let mut gox_watcher = input_tree
-            .serial_pressure_sensors
-            .gox
-            .pressure_value_1
-            .watched();
-        let mut h2_watcher = input_tree
-            .serial_pressure_sensors
-            .h2
-            .pressure_value_1
-            .watched();
-        let mut igniter_p_watcher = input_tree
-            .serial_pressure_sensors
-            .igniter
-            .pressure_value_1
-            .watched();
+        let mut gox_watcher = input_tree.gox_pressure.watched();
+        let mut h2_watcher = input_tree.h2_pressure.watched();
+        let mut igniter_p_watcher = input_tree.igniter_pressure.watched();
         let mut igniter_t_watcher = input_tree.uremote_sensors.igniter_temperature.watched();
 
         tokio::select! {
-            p = gox_watcher.next_satisfying(|p| p.as_f32() > self.upper_thresholds_barg.gox) => {
-                Violation(format!("gox pressure ({p}) rose above threshold"))
+            p = gox_watcher.next_satisfying(|&BarG(p)| p > self.upper_thresholds_barg.gox) => {
+                Violation(format!("gox pressure ({p:?}) rose above threshold"))
             }
-            p = h2_watcher.next_satisfying(|p| p.as_f32() > self.upper_thresholds_barg.h2) => {
-                Violation(format!("h2 pressure ({p}) rose above threshold"))
+            p = h2_watcher.next_satisfying(|&BarG(p)| p > self.upper_thresholds_barg.h2) => {
+                Violation(format!("h2 pressure ({p:?}) rose above threshold"))
             }
-            p = igniter_p_watcher.next_satisfying(|p| p.as_f32() > self.upper_thresholds_barg.igniter) => {
-                Violation(format!("igniter pressure ({p}) rose above threshold"))
+            p = igniter_p_watcher.next_satisfying(|&BarG(p)| p > self.upper_thresholds_barg.igniter) => {
+                Violation(format!("igniter pressure ({p:?}) rose above threshold"))
             }
-            t = igniter_t_watcher.next_satisfying(|t| t.as_f32() > self.upper_thresholds_celsius.igniter) => {
-                Violation(format!("igniter temperature ({t}) rose above threshold"))
+            t = igniter_t_watcher.next_satisfying(|&Celsius(t)| t > self.upper_thresholds_celsius.igniter) => {
+                Violation(format!("igniter temperature ({t:?}) rose above threshold"))
             }
         }
     }
@@ -169,7 +158,7 @@ pub enum Value {
     SetpointBarG(f32),
 }
 
-/// To be used as a value for [`lib_mission::actuator_control::Settable`].
+/// To be used as a value for `Settable`.
 impl From<Value> for f32 {
     fn from(value: Value) -> Self {
         match value {
@@ -225,16 +214,12 @@ pub async fn run_sequence(
                 let start = input.time.get();
                 let mut t_watcher = input.time.watched();
                 let patience_timeout = t_watcher.next_satisfying(|t| *t > start + patience);
-                let mut p_watcher = input
-                    .serial_pressure_sensors
-                    .igniter
-                    .pressure_value_1
-                    .watched();
+                let mut p_watcher = input.igniter_pressure.watched();
                 let thresh_reached =
-                    p_watcher.next_satisfying(|p| p.as_f32() > pressure_lower_thresh_barg);
+                    p_watcher.next_satisfying(|&BarG(p)| p > pressure_lower_thresh_barg);
 
                 tokio::select! {
-                    p = thresh_reached => {
+                    BarG(p) = thresh_reached => {
                         tracing::info!("Action {i}: Ignition detected {p:.2}s");
                     }
                     _ = patience_timeout => {
@@ -253,18 +238,14 @@ pub async fn run_sequence(
                 let mut t_watcher = input.time.watched();
                 let duration_reached = t_watcher.next_satisfying(|t| *t > start + duration);
 
-                let mut p_watcher = input
-                    .serial_pressure_sensors
-                    .igniter
-                    .pressure_value_1
-                    .watched();
-                let thresh_reached = p_watcher.next_satisfying(|p| p.as_f32() < min_pressure_barg);
+                let mut p_watcher = input.igniter_pressure.watched();
+                let thresh_reached = p_watcher.next_satisfying(|&BarG(p)| p < min_pressure_barg);
 
                 tokio::select! {
                     _ = duration_reached => {
                         tracing::info!("Action {i}: Ignition done");
                     }
-                    p = thresh_reached => {
+                    BarG(p) = thresh_reached => {
                         tracing::warn!(%p, "Action {i}: Lower threshhold reached, aborting");
                         return ControlFlow::<()>::Break(());
                     }
@@ -282,10 +263,10 @@ pub async fn run_sequence(
                 // FIXME: also depend on rpn3 (n2_post_booster).
                 let mut p_watcher = input.pss_sensors.pressurization_line_pressure.watched();
                 let thresh_reached =
-                    p_watcher.next_satisfying(|p| p.as_f32() > pressure_lower_thresh_barg);
+                    p_watcher.next_satisfying(|&BarG(p)| p > pressure_lower_thresh_barg);
 
                 tokio::select! {
-                    p = thresh_reached => {
+                    BarG(p) = thresh_reached => {
                         tracing::info!("Action {i}: Ignition detected {p:.2}s");
                     }
                     _ = patience_timeout => {
