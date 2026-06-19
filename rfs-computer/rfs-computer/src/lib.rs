@@ -33,7 +33,7 @@ pub mod build_info {
         unix_timestamp: THIS_BUILD.unix_timestamp,
         author_initials: THIS_BUILD.author_initials,
         is_release: THIS_BUILD.is_release,
-        debug_defmt_rtt: false, // Not applicable to FC
+        debug_defmt_rtt: false, // Not applicable to RFS
         commit_hash: trim_hash(THIS_BUILD.git_commit),
         is_git_dirty: THIS_BUILD.git_dirty,
         can_semver: [
@@ -58,7 +58,7 @@ pub mod build_info {
     const fn trim_hash(hash: &'static str) -> [u8; 7] {
         let b = hash.as_bytes();
         assert!(b.len() >= 7, "git commit hash is too short");
-        // `try_into` is not const stabel
+        // `try_into` is not const stable
         [b[0], b[1], b[2], b[3], b[4], b[5], b[6]]
     }
 }
