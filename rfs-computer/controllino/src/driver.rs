@@ -257,7 +257,9 @@ impl Client {
                         tracing::warn!("dropping log: {e}");
                     }
                 }
-                let _ = tree.update_from(msg);
+                if tree.update_from(msg).is_err() {
+                    tracing::error!("dropping polling update, as it isn't in the input tree");
+                }
             }
         }
 
