@@ -530,7 +530,7 @@ impl Client {
     }
 
     /// Writes a single coil at given address to state `high`.
-    pub async fn write_coil(&self, coil: Address, high: bool) {
+    async fn write_coil(&self, coil: Address, high: bool) {
         let Some(result) = self
             .with_context(async |ctx| ctx.write_single_coil(coil, high).await)
             .await
