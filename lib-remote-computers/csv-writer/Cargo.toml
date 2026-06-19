@@ -1,0 +1,18 @@
+[package]
+name = "csv-writer"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+messages = { path = "../../data-definitions/messages", features = [
+    "derive_debug",
+    "derive_serde",
+    "derive_facet",
+    "pss",
+], default-features = false }
+datapoint-information = { path = "../../data-definitions/datapoint-information" }
+facet.workspace = true
+tokio = { version = "1.40.0", features = ["sync", "fs", "rt"] }
+
+[lints]
+workspace = true
