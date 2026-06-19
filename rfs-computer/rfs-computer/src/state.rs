@@ -8,7 +8,7 @@ use messages::datapoints::dp_rfs_computer::RfsComputerStatus;
 use watchable::Watchable;
 
 /// This struct contains internal information of the RFS that is sent via telemetry.
-/// 
+///
 /// It is used as the `Param` tree in the state machine.
 #[derive(Debug, Clone, Broadcast)]
 #[broadcast(message_type = "Message")]
