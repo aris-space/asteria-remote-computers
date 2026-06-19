@@ -5,7 +5,7 @@ use datatypes::actuator::{DigitalOut, InvertedDigitalOut, NormallyClosedValve};
 
 use crate::driver::CoilSettable;
 
-/// The target states of the actuators connected to the u-remote.
+/// The target states of the actuators connected to the controllino.
 ///
 /// From `Instrumentation Naming` Excel sheet
 #[derive(Clone)]
