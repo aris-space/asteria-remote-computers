@@ -9,7 +9,10 @@ use watchable::Watchable;
 
 #[derive(Debug, Default, Clone, Broadcast, Collector)]
 #[broadcast(message_type = "Message")]
-#[collector(message_type = "Message", update_expr = "let _ = #field.update(#value);")]
+#[collector(
+    message_type = "Message",
+    update_expr = "let _ = #field.update(#value);"
+)]
 pub struct Sensors {
     /// `On` if the valves of the SMART box are getting power.
     #[datapoint(pattern = "Message::RfsComputer(RFSCMessage::ValvesArmedSmartBox(#value))")]
@@ -45,7 +48,10 @@ pub struct Sensors {
 /// The states of the actuators connected to the SMART box Controllino.
 #[derive(Debug, Default, Clone, Broadcast, Collector)]
 #[broadcast(message_type = "Message")]
-#[collector(message_type = "Message", update_expr = "let _ = #field.update(#value);")]
+#[collector(
+    message_type = "Message",
+    update_expr = "let _ = #field.update(#value);"
+)]
 #[allow(clippy::struct_field_names)]
 pub struct Actuators {
     /// The state of the ROCKET_POWER.
