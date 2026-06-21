@@ -1,6 +1,6 @@
 //! The main entry point for the remote filling station computer
 
-use datatypes::status::ConfigHash;
+use datatypes::status::RunConfig;
 use lib_mission::state_machine::StateMachine;
 use lib_mission::util::init::init_binary;
 use rfs_computer::build_info;
@@ -24,8 +24,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let (can_tx, _can_rx) = std::sync::mpsc::channel();
     let output_tree = OutputTree::new(can_tx.clone());
-    let config_hash = ConfigHash {
-        hash: run_info.config_hash.as_bytes()[..5]
+    let config_hash = RunConfig {
+        config_hash: run_info.config_hash.as_bytes()[..5]
             .try_into()
             .expect("config hash is hex SHA-1, longer than 5 chars"),
     };

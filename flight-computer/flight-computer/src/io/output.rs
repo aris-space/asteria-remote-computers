@@ -1,6 +1,6 @@
 //! Contains [`OutputTree`].
 
-use datatypes::status::ConfigHash;
+use datatypes::status::RunConfig;
 use dp_flight_computer::FlightComputerStatus;
 use io_utils::Broadcast;
 use messages::datapoints::dp_flight_computer;
@@ -40,7 +40,7 @@ pub struct OutputTree {
         pattern = "Message::FlightComputer(dp_flight_computer::Message::ConfigHash(#value))"
     )]
     #[broadcast(min_freq_hz = 0.2, max_freq_hz = 0.2)]
-    pub hash_config: Watchable<ConfigHash>,
+    pub hash_config: Watchable<RunConfig>,
 
     /// Aggregated FC status. Updated by the CAN status driver.
     #[datapoint(pattern = "Message::FlightComputer(dp_flight_computer::Message::Status(#value))")]

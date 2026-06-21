@@ -4,7 +4,7 @@ use std::collections::BTreeMap;
 
 use datatypes::actuator::Settable;
 use datatypes::actuator::ThrottleableValve;
-use datatypes::status::ConfigHash;
+use datatypes::status::RunConfig;
 use io_utils::Broadcast;
 use messages::Message;
 use messages::datapoints::dp_rfs_computer::{Message as RFSMessage, RfsComputerStatus};
@@ -36,7 +36,7 @@ pub struct OutputTree {
     /// First 5 hex chars of the config file Git object hash. Set once at startup.
     #[datapoint(pattern = "Message::RfsComputer(RFSMessage::ConfigHash(#value))")]
     #[broadcast(min_freq_hz = 0.2, max_freq_hz = 0.2)]
-    pub hash_config: Watchable<ConfigHash>,
+    pub hash_config: Watchable<RunConfig>,
 
     /// If the system is in a software armed state.
     /// This will allow the ECU to control the igniter actuators.

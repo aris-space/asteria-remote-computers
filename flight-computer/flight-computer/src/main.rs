@@ -2,7 +2,7 @@
 //!
 //! Currently lacks a bunch of parts, and will need to also spawn input drivers etc.
 
-use datatypes::status::ConfigHash;
+use datatypes::status::RunConfig;
 use flight_computer::build_info;
 use flight_computer::config::{Config, MissionProfile};
 use flight_computer::io::can::init_can_drivers;
@@ -39,8 +39,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let (can_tx, can_rx) = std::sync::mpsc::channel();
     let output_tree = OutputTree::new(can_tx.clone());
-    let config_hash = ConfigHash {
-        hash: run_info.config_hash.as_bytes()[..5]
+    let config_hash = RunConfig {
+        config_hash: run_info.config_hash.as_bytes()[..5]
             .try_into()
             .expect("Config hash is hex SHA-1, longer than 5 chars"),
     };
