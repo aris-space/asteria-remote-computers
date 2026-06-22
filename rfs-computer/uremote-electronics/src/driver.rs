@@ -415,7 +415,10 @@ impl input::Sensors {
         // Helper function to read a single analog channel and write it to the target watchable.
         let read_temp = move |target: &Watchable<Celsius>, channel: ur20::Address| {
             let Some(ur20::ChannelValue::Decimal32(t_celsius)) = values.get(&channel) else {
-                tracing::warn!(?channel, value = ?values.get(&channel), "Temperature reading failed, invalid channel type");
+                if channel != channels::CUSTOM_TEMPERATURE {
+                    // not always installed
+                    tracing::warn!(?channel, value = ?values.get(&channel), "Temperature reading failed, invalid channel type");
+                }
                 let _ = target.update(Celsius(f32::NAN));
                 return;
             };
