@@ -85,12 +85,33 @@ fn init_output_drivers(
         rfs_computer_status,
         ..
     } = state_tree;
+    let actuators = &input_tree.uremote_actuators;
     // Register the emitters
     let handles = vec![
         output_drivers::spawn_rfsc_status_driver(rfs_computer_status.clone(), tx.clone()),
         output_drivers::spawn_rfsc_debug_driver(crate::build_info::THIS_BUILD, tx.clone()),
         output_drivers::spawn_fc_igniter_pressure_driver(
             input_tree.controllino_sensors.igniter_pressure.watched(),
+            tx.clone(),
+        ),
+        output_drivers::spawn_gox_igniter_valve_state_driver(
+            actuators.gox_igniter_valve.watched(),
+            tx.clone(),
+        ),
+        output_drivers::spawn_h2_igniter_valve_state_driver(
+            actuators.h2_igniter_valve.watched(),
+            tx.clone(),
+        ),
+        output_drivers::spawn_gox_purge_valve_state_driver(
+            actuators.gox_purge_valve.watched(),
+            tx.clone(),
+        ),
+        output_drivers::spawn_h2_purge_valve_state_driver(
+            actuators.h2_purge_valve.watched(),
+            tx.clone(),
+        ),
+        output_drivers::spawn_igniter_spark_plug_state_driver(
+            actuators.igniter_spark.watched(),
             tx.clone(),
         ),
     ];
