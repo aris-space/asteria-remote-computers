@@ -36,7 +36,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         state_tree.rfs_computer_status.clone(),
     );
 
-    let (can_tx, _can_rx) = std::sync::mpsc::channel();
+    let (can_tx, can_rx) = std::sync::mpsc::channel();
     let output_tree = OutputTree::new(can_tx.clone(), controllino_driver.clone(), &None);
 
     let state_machine = StateMachine::new(config_file.state_machine)?;
@@ -87,8 +87,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         None,
     );
 
-    // Skip for now, as not yet done, and very noisy error messages
-    // init_can_drivers(&config_file.can, &input_tree, &output_tree, &can_tx, can_rx)?;
+    let _can_handles = rfs_computer::io::can::init_can_drivers(
+        &config_file.can,
+        &input_tree,
+        &output_tree,
+        &state_tree,
+        &can_tx,
+        can_rx,
+    )?;
 
     // Set up global actuator commands
     {

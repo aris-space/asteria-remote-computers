@@ -8,13 +8,14 @@ use crate::state::State;
 use super::input::InputTree;
 use super::output::OutputTree;
 
+mod input_drivers;
 mod output_drivers;
 
 /// Initializes CAN and its drivers
 pub fn init_can_drivers(
     config: &CANConfig,
     input_tree: &InputTree,
-    _output_tree: &OutputTree,
+    output_tree: &OutputTree,
     state_tree: &State,
     tx: &std::sync::mpsc::Sender<messages::Message>,
     rx: std::sync::mpsc::Receiver<messages::Message>,
@@ -43,8 +44,21 @@ pub fn init_can_drivers(
     };
 
     // Initialize the driver tasks
-    let output_handles = init_output_drivers(state_tree, input_tree, tx);
+    let mut handles = init_output_drivers(state_tree, input_tree, tx);
     let mut consumers = ConsumerRegistry::new().with_collector(input_tree.clone());
+
+    // Register the gated igniter control consumer. This takes precedence over the collector and
+    // only applies commands while the RFS is armed.
+    let actuators = &output_tree.rfs_actuators;
+    handles.push(input_drivers::spawn_and_register_igniter_control(
+        &mut consumers,
+        state_tree.rfs_computer_status.clone(),
+        actuators.gox_igniter_valve.clone(),
+        actuators.h2_igniter_valve.clone(),
+        actuators.gox_purge_valve.clone(),
+        actuators.h2_purge_valve.clone(),
+        actuators.igniter_spark.clone(),
+    ));
 
     // Spawn the receiving thread
     std::thread::spawn(move || {
@@ -57,7 +71,7 @@ pub fn init_can_drivers(
         run_can_transmit_actor(&mut transmitter, rx);
     });
 
-    Ok(output_handles)
+    Ok(handles)
 }
 
 /// Initializes all the CAN drivers reading from the output tree by spawning tasks to produce CAN messages.
