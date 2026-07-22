@@ -21,17 +21,15 @@ impl InputTree {
     ) -> Result<Vec<AbortHandle>, Box<dyn std::error::Error>> {
         // This destructure is used so that we don't forget later additions.
         let InputTree {
-            state: _,
             time,
             transition_command,
             actuator_command,
-            uplink_telemetry_health,
-            downlink_telemetry_stats: _,
-            is_can_connected,
             rocket_health,
             flight_computer_status,
             uremote_sensors,
             uremote_actuators,
+            controllino_valves: _,  // TODO (or find a better way)
+            controllino_sensors: _, // TODO (or find a better way)
             n2_pre_booster_pressure,
             h2_purge_pressure,
             n2_post_booster_pressure,
@@ -40,7 +38,6 @@ impl InputTree {
             pneumatic_pressure,
             gox_pressure,
             h2_pressure,
-            igniter_pressure,
             lox_fill_valve,
             pss_valves,
             pss_sensors,
@@ -74,29 +71,6 @@ impl InputTree {
             //     time.watched(),
             // ),
 
-            // Log the timestamp of the last received telemetry message
-            spawn_watchable_logger(
-                make_timeseries_writer(
-                    folder,
-                    "telemetry_health",
-                    &[
-                        "time_of_last_msg [unix ms]",
-                        "num_msg_received",
-                        "time_of_last_processed_msg [unix ms]",
-                        "num_msg_processed",
-                    ],
-                )
-                .await?,
-                uplink_telemetry_health.watched().map(|h| {
-                    (
-                        h.time_of_last_msg.0,
-                        h.num_msg_received,
-                        h.time_of_last_processed_msg.0,
-                        h.num_msg_processed,
-                    )
-                }),
-                time.watched(),
-            ),
             // Log transition commands to two columns (or leave them empty)
             spawn_watchable_logger(
                 make_timeseries_writer(
@@ -131,11 +105,6 @@ impl InputTree {
                         (Some(c.in_state_index), Some(c.actuator), Some(c.value))
                     })
                 }),
-                time.watched(),
-            ),
-            spawn_watchable_logger(
-                make_timeseries_writer(folder, "is_can_connected", &["connected [bool]"]).await?,
-                is_can_connected.watched(),
                 time.watched(),
             ),
             // Log board last healths to a single column csv files
@@ -202,7 +171,6 @@ impl InputTree {
                 pneumatic_pressure,
                 gox_pressure,
                 h2_pressure,
-                igniter_pressure,
             )
             .await?,
         );
@@ -227,34 +195,21 @@ impl OutputTree {
         // This destructure is used so that we don't forget later additions.
         let OutputTree {
             rfs_actuators,
+            controllino_actuators: _, // TODO kind of
             pss_valves: _,
             lox_fill_valve,
-            hash_config: _,
-            rfs_computer_status,
         } = self;
 
-        let mut handles = vec![
-            lib_mission::util::log::spawn_watchable_logger(
-                lib_mission::util::log::make_timeseries_writer(
-                    folder,
-                    "target_state_LOX_FLL_VLV",
-                    &["target state [openness %]"],
-                )
-                .await?,
-                lox_fill_valve.watched(),
-                time.watched(),
-            ),
-            lib_mission::util::log::spawn_watchable_logger(
-                lib_mission::util::log::make_timeseries_writer(
-                    folder,
-                    "is_software_armed",
-                    &["is armed [bool]"],
-                )
-                .await?,
-                rfs_computer_status.watched(),
-                time.watched(),
-            ),
-        ];
+        let mut handles = vec![lib_mission::util::log::spawn_watchable_logger(
+            lib_mission::util::log::make_timeseries_writer(
+                folder,
+                "target_state_LOX_FLL_VLV",
+                &["target state [openness %]"],
+            )
+            .await?,
+            lox_fill_valve.watched(),
+            time.watched(),
+        )];
         handles.extend(rfs_actuators.start_logging(folder, &time).await?);
 
         Ok(handles)
@@ -273,7 +228,6 @@ async fn start_pressure_sensors_logging(
     pneumatic_pressure: &Watchable<datatypes::units::BarG>,
     gox_pressure: &Watchable<datatypes::units::BarG>,
     h2_pressure: &Watchable<datatypes::units::BarG>,
-    igniter_pressure: &Watchable<datatypes::units::BarG>,
 ) -> Result<Vec<AbortHandle>, Box<dyn std::error::Error>> {
     use lib_mission::reactive::IntoWatched as _;
     macro_rules! spawn_pressure_logger {
@@ -301,7 +255,6 @@ async fn start_pressure_sensors_logging(
         spawn_pressure_logger!("sensor_pneumatic_p", pneumatic_pressure),
         spawn_pressure_logger!("sensor_n2_post_booster_p", n2_post_booster_pressure),
         spawn_pressure_logger!("sensor_h2_p", h2_pressure),
-        spawn_pressure_logger!("sensor_igniter_p", igniter_pressure),
     ];
     Ok(handles)
 }

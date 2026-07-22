@@ -4,10 +4,13 @@
 
 pub mod config;
 pub mod io;
+pub mod state;
 pub mod state_logic;
 
 pub mod build_info {
+    use datatypes::status::BuildInformationCommon;
     use lib_mission::util::init::BuildInfo;
+    use messages::datapoints::dp_rfs_computer;
 
     /// Collects the important information from this build.
     pub const THIS_BUILD: BuildInfo = BuildInfo {
@@ -26,6 +29,20 @@ pub mod build_info {
         author_initials: built_info::BUILDER_INITIALS,
     };
 
+    pub const THIS_BUILD_COMMON: BuildInformationCommon = BuildInformationCommon {
+        unix_timestamp: THIS_BUILD.unix_timestamp,
+        author_initials: THIS_BUILD.author_initials,
+        is_release: THIS_BUILD.is_release,
+        debug_defmt_rtt: false, // Not applicable to RFS
+        commit_hash: trim_hash(THIS_BUILD.git_commit),
+        is_git_dirty: THIS_BUILD.git_dirty,
+        can_semver: [
+            dp_rfs_computer::VERSION_MAJOR,
+            dp_rfs_computer::VERSION_MINOR,
+            dp_rfs_computer::VERSION_PATCH,
+        ],
+    };
+
     #[allow(unknown_lints)]
     #[allow(clippy::pedantic)]
     mod built_info {
@@ -35,5 +52,13 @@ pub mod build_info {
     // `expect` is only stable in 1.83, and unwrap_or not even now in const contexts.
     const fn unwrap_str(o: Option<&'static str>) -> &'static str {
         if let Some(s) = o { s } else { "{unknown}" }
+    }
+
+    /// Get the first 7 bytes of a string
+    const fn trim_hash(hash: &'static str) -> [u8; 7] {
+        let b = hash.as_bytes();
+        assert!(b.len() >= 7, "git commit hash is too short");
+        // `try_into` is not const stable
+        [b[0], b[1], b[2], b[3], b[4], b[5], b[6]]
     }
 }

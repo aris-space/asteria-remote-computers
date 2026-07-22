@@ -3,6 +3,7 @@ use lib_mission::reactive::IntoWatched;
 use tokio::task::AbortHandle;
 
 use crate::config::CANConfig;
+use crate::state::State;
 
 use super::input::InputTree;
 use super::output::OutputTree;
@@ -13,7 +14,8 @@ mod output_drivers;
 pub fn init_can_drivers(
     config: &CANConfig,
     input_tree: &InputTree,
-    output_tree: &OutputTree,
+    _output_tree: &OutputTree,
+    state_tree: &State,
     tx: &std::sync::mpsc::Sender<messages::Message>,
     rx: std::sync::mpsc::Receiver<messages::Message>,
 ) -> Result<Vec<AbortHandle>, Box<dyn std::error::Error>> {
@@ -41,7 +43,7 @@ pub fn init_can_drivers(
     };
 
     // Initialize the driver tasks
-    let output_handles = init_output_drivers(output_tree, input_tree, tx);
+    let output_handles = init_output_drivers(state_tree, input_tree, tx);
     let mut consumers = ConsumerRegistry::new().with_collector(input_tree.clone());
 
     // Spawn the receiving thread
@@ -61,20 +63,20 @@ pub fn init_can_drivers(
 /// Initializes all the CAN drivers reading from the output tree by spawning tasks to produce CAN messages.
 /// Also reads some stuff from the serial input tree and forwards it to CAN.
 fn init_output_drivers(
-    output_tree: &OutputTree,
+    state_tree: &State,
     input_tree: &InputTree,
     tx: &std::sync::mpsc::Sender<messages::Message>,
 ) -> Vec<AbortHandle> {
-    let OutputTree {
+    let State {
         rfs_computer_status,
         ..
-    } = output_tree;
+    } = state_tree;
     // Register the emitters
     let handles = vec![
         output_drivers::spawn_rfsc_status_driver(rfs_computer_status.clone(), tx.clone()),
         output_drivers::spawn_rfsc_debug_driver(crate::build_info::THIS_BUILD, tx.clone()),
         output_drivers::spawn_fc_igniter_pressure_driver(
-            input_tree.igniter_pressure.watched(),
+            input_tree.controllino_sensors.igniter_pressure.watched(),
             tx.clone(),
         ),
     ];

@@ -30,14 +30,10 @@ impl StateLogic for SetNormalState {
         tracing::info!("Setting normal state of all valves");
 
         let uremote_electronics::output::Actuators {
-            rocket_power: _,            // not affected
-            maxon_board_power: _,       // not affected
-            fss_heating: _,             // not affected
-            pressure_sensor_heating: _, // not affected
-            eth_pump_power: _,          // not affected
-            custom1: _,                 // not affected
-            custom2: _,                 // not affected
-            custom3: _,                 // not affected
+            maxon_board_power: _, // not affected
+            custom1: _,           // not affected
+            custom2: _,           // not affected
+            custom3: _,           // not affected
             gox_purge_valve,
             h2_purge_valve,
             n2_bleed_valve,
@@ -48,16 +44,20 @@ impl StateLogic for SetNormalState {
             h2_bleed_valve,
             lox_bleed_valve,
             booster_valve,
+            h2_igniter_valve,
+            gox_igniter_valve,
+            igniter_spark,
+        } = &output.rfs_actuators;
+        let controllino::output::Actuators {
+            rocket_power: _,                // not affected
+            rocket_heating: _,              // not affected
             lox_decoupler_extend_valve: _,  // not affected
             lox_decoupler_retract_valve: _, // not affected
             n2_decoupler_extend_valve: _,   // not affected
             n2_decoupler_retract_valve: _,  // not affected
             n2_shower_valve,
             n2_engine_purge_valve,
-            h2_igniter_valve,
-            gox_igniter_valve,
-            igniter_spark,
-        } = &output.rfs_actuators;
+        } = &output.controllino_actuators;
 
         // RFS
         output.lox_fill_valve.replace(Default::default());
@@ -71,11 +71,13 @@ impl StateLogic for SetNormalState {
         n2_fill_valve.replace(Default::default());
         h2_bleed_valve.replace(Default::default());
         booster_valve.replace(Default::default());
-        n2_shower_valve.replace(Default::default());
-        n2_engine_purge_valve.replace(Default::default());
         h2_igniter_valve.replace(Default::default());
         gox_igniter_valve.replace(Default::default());
         igniter_spark.replace(Default::default());
+        // Controllino
+        n2_shower_valve.set(Default::default());
+        n2_engine_purge_valve.set(Default::default());
+
         // PSS
         output.pss_valves.set_oxidizer_vent(Default::default());
         output
@@ -90,7 +92,6 @@ impl StateLogic for SetNormalState {
             .set_oxidizer_pressurization(Default::default());
         output.pss_valves.set_fuel_main(Default::default());
         output.pss_valves.set_oxidizer_main(Default::default());
-
         self.on_done.clone()
     }
 }

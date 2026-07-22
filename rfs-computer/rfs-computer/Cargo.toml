@@ -9,6 +9,7 @@ workspace = true
 [dependencies]
 lib-mission = { path = "../../lib-remote-computers/lib-mission" }
 uremote-electronics = { path = "../uremote-electronics" }
+controllino = { path = "../controllino" }
 keller23sx = { path = "../keller23sx" }
 lox-fill-valve = { path = "../lox-fill-valve" }
 tokio-modbus-shared = { path = "../tokio-modbus-shared" }

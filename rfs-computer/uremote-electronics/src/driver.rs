@@ -24,25 +24,9 @@ const MODULES: [ModuleType; 9] = [
 
 /// The channel addresses where the electronics are connected to the uremote
 mod channels {
-    pub const ROCKET_POWER: ur20::Address = ur20::Address {
-        module: 3,
-        channel: 0,
-    };
     pub const MAXON_BOARD_POWER: ur20::Address = ur20::Address {
         module: 3,
         channel: 1,
-    };
-    pub const FSS_HEATING: ur20::Address = ur20::Address {
-        module: 3,
-        channel: 2,
-    };
-    pub const PRESSURE_SENSOR_HEATING: ur20::Address = ur20::Address {
-        module: 3,
-        channel: 3,
-    };
-    pub const ETH_PUMP_POWER: ur20::Address = ur20::Address {
-        module: 3,
-        channel: 4,
     };
     pub const CUSTOM1: ur20::Address = ur20::Address {
         module: 3,
@@ -98,26 +82,6 @@ mod channels {
         module: 5,
         channel: 1,
     };
-    pub const LOX_DECOUPLER_EXTEND_VALVE: ur20::Address = ur20::Address {
-        module: 5,
-        channel: 2,
-    };
-    pub const LOX_DECOUPLER_RETRACT_VALVE: ur20::Address = ur20::Address {
-        module: 5,
-        channel: 3,
-    };
-    pub const N2_DECOUPLER_EXTEND_VALVE: ur20::Address = ur20::Address {
-        module: 5,
-        channel: 4,
-    };
-    pub const N2_DECOUPLER_RETRACT_VALVE: ur20::Address = ur20::Address {
-        module: 5,
-        channel: 5,
-    };
-    pub const N2_SHOWER_VALVE: ur20::Address = ur20::Address {
-        module: 6,
-        channel: 2,
-    };
     pub const H2_IGNITER_VALVE: ur20::Address = ur20::Address {
         module: 6,
         channel: 0,
@@ -153,10 +117,6 @@ mod channels {
         module: 1,
         channel: 0,
     };
-    pub const IGNITER_TEMPERATURE: ur20::Address = ur20::Address {
-        module: 1,
-        channel: 1,
-    };
     pub const CABINET_TEMPERATURE: ur20::Address = ur20::Address {
         module: 1,
         channel: 2,
@@ -167,7 +127,7 @@ mod channels {
     };
 }
 
-const NUM_WATCHED_OUTPUTS: usize = 26;
+const NUM_WATCHED_OUTPUTS: usize = 17;
 
 /// A abstraction of our Weidmüller u-remote driver.
 ///
@@ -241,12 +201,6 @@ impl Driver {
                 tracing::error!("Cannot get LOX temperature value");
             }
             if !matches!(
-                inputs.get(&channels::IGNITER_TEMPERATURE),
-                Some(ur20::ChannelValue::Decimal32(_)),
-            ) {
-                tracing::error!("Cannot get IGN temperature value");
-            }
-            if !matches!(
                 inputs.get(&channels::LOX_DECOUPLER_PROXIMITY),
                 Some(ur20::ChannelValue::Bit(_))
             ) {
@@ -297,27 +251,7 @@ impl Driver {
         // Either wait for a output to change, then update it, or else just do the read afterwards.
         tokio::select! {
             ((addr, value), _, _) = futures_util::future::select_all(output.iter_mut().map(|w| w.next())) => {
-                // helper close to check that a1 cant be set to active if a2 is active.
-                let simult = |a1, a2| {
-                    addr == a1
-                        && value == ur20::ChannelValue::Bit(true)
-                        && self.coupler.outputs().get(&a2) == Some(&ur20::ChannelValue::Bit(true))
-                };
-                if simult(
-                    channels::N2_DECOUPLER_EXTEND_VALVE,
-                    channels::N2_DECOUPLER_RETRACT_VALVE,
-                ) || simult(
-                    channels::N2_DECOUPLER_RETRACT_VALVE,
-                    channels::N2_DECOUPLER_EXTEND_VALVE,
-                ) || simult(
-                    channels::LOX_DECOUPLER_EXTEND_VALVE,
-                    channels::LOX_DECOUPLER_RETRACT_VALVE,
-                ) || simult(
-                    channels::LOX_DECOUPLER_RETRACT_VALVE,
-                    channels::LOX_DECOUPLER_EXTEND_VALVE,
-                ) {
-                    tracing::warn!("disallowing simultaneous decoupler valve actuation");
-                } else if let Err(e) = self.coupler.set_output(&addr, value) {
+                if let Err(e) = self.coupler.set_output(&addr, value) {
                     tracing::warn!(error = %e, "Problem setting output");
                 }
             },
@@ -393,14 +327,7 @@ impl output::Actuators {
         }
         // Matches targets to addresses
         [
-            box_actuator(&self.rocket_power, channels::ROCKET_POWER),
             box_actuator(&self.maxon_board_power, channels::MAXON_BOARD_POWER),
-            box_actuator(&self.fss_heating, channels::FSS_HEATING),
-            box_actuator(
-                &self.pressure_sensor_heating,
-                channels::PRESSURE_SENSOR_HEATING,
-            ),
-            box_actuator(&self.eth_pump_power, channels::ETH_PUMP_POWER),
             box_actuator(&self.custom1, channels::CUSTOM1),
             box_actuator(&self.custom2, channels::CUSTOM2),
             box_actuator(&self.custom3, channels::CUSTOM3),
@@ -414,23 +341,6 @@ impl output::Actuators {
             box_actuator(&self.h2_bleed_valve, channels::H2_BLEED_VALVE),
             box_actuator(&self.lox_bleed_valve, channels::LOX_BLEED_VALVE),
             box_actuator(&self.booster_valve, channels::BOOSTER_VALVE),
-            box_actuator(
-                &self.lox_decoupler_extend_valve,
-                channels::LOX_DECOUPLER_EXTEND_VALVE,
-            ),
-            box_actuator(
-                &self.lox_decoupler_retract_valve,
-                channels::LOX_DECOUPLER_RETRACT_VALVE,
-            ),
-            box_actuator(
-                &self.n2_decoupler_extend_valve,
-                channels::N2_DECOUPLER_EXTEND_VALVE,
-            ),
-            box_actuator(
-                &self.n2_decoupler_retract_valve,
-                channels::N2_DECOUPLER_RETRACT_VALVE,
-            ),
-            box_actuator(&self.n2_shower_valve, channels::N2_SHOWER_VALVE),
             box_actuator(&self.h2_igniter_valve, channels::H2_IGNITER_VALVE),
             box_actuator(&self.gox_igniter_valve, channels::GOX_IGNITER_VALVE),
             box_actuator(&self.igniter_spark, channels::IGNITER_SPARK),
@@ -460,19 +370,11 @@ impl input::Actuators {
         }
 
         // TODO (later): Better data for valves with feedback
-        update_out(outputs, &self.rocket_power, channels::ROCKET_POWER);
         update_out(
             outputs,
             &self.maxon_board_power,
             channels::MAXON_BOARD_POWER,
         );
-        update_out(outputs, &self.fss_heating, channels::FSS_HEATING);
-        update_out(
-            outputs,
-            &self.pressure_sensor_heating,
-            channels::PRESSURE_SENSOR_HEATING,
-        );
-        update_out(outputs, &self.eth_pump_power, channels::ETH_PUMP_POWER);
         update_out(outputs, &self.custom1, channels::CUSTOM1);
         update_out(outputs, &self.custom2, channels::CUSTOM2);
         update_out(outputs, &self.custom3, channels::CUSTOM3);
@@ -487,27 +389,6 @@ impl input::Actuators {
         update_out(outputs, &self.h2_bleed_valve, channels::H2_BLEED_VALVE);
         update_out(outputs, &self.lox_bleed_valve, channels::LOX_BLEED_VALVE);
         update_out(outputs, &self.booster_valve, channels::BOOSTER_VALVE);
-        update_out(
-            outputs,
-            &self.lox_decoupler_extend_valve,
-            channels::LOX_DECOUPLER_EXTEND_VALVE,
-        );
-        update_out(
-            outputs,
-            &self.lox_decoupler_retract_valve,
-            channels::LOX_DECOUPLER_RETRACT_VALVE,
-        );
-        update_out(
-            outputs,
-            &self.n2_decoupler_extend_valve,
-            channels::N2_DECOUPLER_EXTEND_VALVE,
-        );
-        update_out(
-            outputs,
-            &self.n2_decoupler_retract_valve,
-            channels::N2_DECOUPLER_RETRACT_VALVE,
-        );
-        update_out(outputs, &self.n2_shower_valve, channels::N2_SHOWER_VALVE);
         update_out(outputs, &self.h2_igniter_valve, channels::H2_IGNITER_VALVE);
         update_out(
             outputs,
@@ -541,21 +422,15 @@ impl input::Sensors {
 
         let Self {
             lox_temperature,
-            igniter_temperature,
             cabinet_temperature,
             ambient_temperature,
-            lox_decoupler_proximity,
-            n2_decoupler_proximity,
             valves_armed,
             igniter_armed,
         } = self;
 
         read_temp(lox_temperature, channels::LOX_TEMPERATURE);
-        read_temp(igniter_temperature, channels::IGNITER_TEMPERATURE);
         read_temp(cabinet_temperature, channels::CABINET_TEMPERATURE);
         read_temp(ambient_temperature, channels::AMBIENT_TEMPERATURE);
-        read_coil(lox_decoupler_proximity, channels::LOX_DECOUPLER_PROXIMITY);
-        read_coil(n2_decoupler_proximity, channels::N2_DECOUPLER_PROXIMITY);
         read_coil(valves_armed, channels::VALVE_ARMING_CIRCUIT);
 
         let Some(ur20::ChannelValue::SilPFIn(sil)) = values.get(&channels::IGNITER_ARMING_CIRCUIT)

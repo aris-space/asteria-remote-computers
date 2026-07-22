@@ -1,0 +1,84 @@
+use datatypes::status::BuildInformationCommon;
+use datatypes::status::{ConfigHash, DownlinkTelemetryStats, UplinkTelemetryHealth};
+use io_utils::Broadcast;
+use lib_mission::state_machine::StateName;
+use messages::Message;
+use messages::datapoints::dp_rfs_computer::Message as RFSMessage;
+use messages::datapoints::dp_rfs_computer::RfsComputerStatus;
+use watchable::Watchable;
+
+/// This struct contains internal information of the RFS that is sent via telemetry.
+///
+/// It is used as the `Param` tree in the state machine.
+#[derive(Debug, Clone, Broadcast)]
+#[broadcast(message_type = "Message")]
+pub struct State {
+    /// The current state machine state.
+    #[broadcast(flatten)]
+    pub state_machine_state: CurrentStateWrapper,
+
+    /// First 5 hex chars of the config file Git object hash. Set once at startup.
+    #[datapoint(pattern = "Message::RfsComputer(RFSMessage::ConfigHash(#value))")]
+    #[broadcast(min_freq_hz = 0.2, max_freq_hz = 0.2)]
+    pub hash_config: Watchable<ConfigHash>,
+
+    /// The build information of the RFS. Set once at startup.
+    #[datapoint(pattern = "Message::RfsComputer(RFSMessage::BuildInfo(#value))")]
+    #[broadcast(min_freq_hz = 0.1, max_freq_hz = 0.1)]
+    pub build_info: Watchable<BuildInformationCommon>,
+
+    /// The status of the RFS.
+    /// Includes arming for the FC to read, as well as controllino connection etc.
+    #[datapoint(pattern = "Message::RfsComputer(RFSMessage::Status(#value))")]
+    #[broadcast(min_freq_hz = 1.0, max_freq_hz = 1.0)]
+    pub rfs_computer_status: Watchable<RfsComputerStatus>,
+
+    /// Statistics about the health of the telemetry uplink.
+    #[datapoint(pattern = "Message::RfsComputer(RFSMessage::UplinkTelemetryHealth(#value))")]
+    #[broadcast(min_freq_hz = 0.5, max_freq_hz = 1.)]
+    pub uplink_telemetry_health: Watchable<UplinkTelemetryHealth>,
+
+    /// Statistics about the telemetry downlink (bytes and messages sent).
+    #[datapoint(pattern = "Message::RfsComputer(RFSMessage::DownlinkTelemetryStats(#value))")]
+    #[broadcast(min_freq_hz = 0.5, max_freq_hz = 1.)]
+    pub downlink_telemetry_stats: Watchable<DownlinkTelemetryStats>,
+
+    // FIXME: unused now
+    /// `true` if can is connected. `false` by default and is set if messages are received.
+    pub is_can_connected: Watchable<bool>,
+}
+
+/// Special default implementation that encodes the constant buildinfo.
+impl Default for State {
+    fn default() -> Self {
+        Self {
+            // Will be overwritten by `main`
+            state_machine_state: CurrentStateWrapper {
+                current_state: Watchable::new((
+                    0,
+                    StateName::new_unchecked("Idle").expect("short enough"),
+                )),
+            },
+            hash_config: Watchable::default(),
+            build_info: Watchable::new(crate::build_info::THIS_BUILD_COMMON),
+            rfs_computer_status: Watchable::default(),
+            uplink_telemetry_health: Watchable::default(),
+            downlink_telemetry_stats: Watchable::default(),
+            is_can_connected: Watchable::default(),
+        }
+    }
+}
+
+/// The current state machine wrapped in a struct such that we can use `#[broadcast(extract_expr)]`,
+/// and it is not collected.
+#[derive(Debug, Clone, Broadcast)]
+#[broadcast(
+    message_type = "Message",
+    extract_expr = "lib_mission::telemetry::encode_current_state(#value)"
+)]
+pub struct CurrentStateWrapper {
+    /// *Do not write to this!* This is exposed only for `Broadcast`
+    #[datapoint(pattern = "Message::RfsComputer(RFSMessage::StateMachineState(#value))")]
+    #[broadcast(min_freq_hz = 3., max_freq_hz = 10.)]
+    pub current_state: watchable::Watchable<(u32, StateName)>,
+}

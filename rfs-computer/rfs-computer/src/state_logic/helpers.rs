@@ -80,8 +80,8 @@ impl ThresholdWatcher {
         // Because comparision with NAN is always false, unspecified thresholds should never trigger a violation
         let mut gox_watcher = input_tree.gox_pressure.watched();
         let mut h2_watcher = input_tree.h2_pressure.watched();
-        let mut igniter_p_watcher = input_tree.igniter_pressure.watched();
-        let mut igniter_t_watcher = input_tree.uremote_sensors.igniter_temperature.watched();
+        let mut igniter_p_watcher = input_tree.controllino_sensors.igniter_pressure.watched();
+        let mut igniter_t_watcher = input_tree.controllino_sensors.igniter_temperature.watched();
 
         tokio::select! {
             p = gox_watcher.next_satisfying(|&BarG(p)| p > self.upper_thresholds_barg.gox) => {
@@ -214,7 +214,7 @@ pub async fn run_sequence(
                 let start = input.time.get();
                 let mut t_watcher = input.time.watched();
                 let patience_timeout = t_watcher.next_satisfying(|t| *t > start + patience);
-                let mut p_watcher = input.igniter_pressure.watched();
+                let mut p_watcher = input.controllino_sensors.igniter_pressure.watched();
                 let thresh_reached =
                     p_watcher.next_satisfying(|&BarG(p)| p > pressure_lower_thresh_barg);
 
@@ -238,7 +238,7 @@ pub async fn run_sequence(
                 let mut t_watcher = input.time.watched();
                 let duration_reached = t_watcher.next_satisfying(|t| *t > start + duration);
 
-                let mut p_watcher = input.igniter_pressure.watched();
+                let mut p_watcher = input.controllino_sensors.igniter_pressure.watched();
                 let thresh_reached = p_watcher.next_satisfying(|&BarG(p)| p < min_pressure_barg);
 
                 tokio::select! {

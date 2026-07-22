@@ -6,6 +6,7 @@ use std::thread::JoinHandle;
 use crate::config::TelemetryConfig;
 use crate::io::input::InputTree;
 use crate::io::output::OutputTree;
+use crate::state::State;
 
 use io_utils::{Broadcast, NeverReturns};
 use lib_mission::reactive::IntoWatched as _;
@@ -26,8 +27,8 @@ pub struct Handles {
 pub fn init_telemetry(
     config: &TelemetryConfig,
     input_tree: &InputTree,
-    output_tree: &OutputTree,
-    state_machine: &StateMachine<InputTree, OutputTree, ()>,
+    state_tree: &State,
+    state_machine: &StateMachine<InputTree, OutputTree, crate::state_logic::Parameter>,
 ) -> Result<Handles, Box<dyn std::error::Error>> {
     // Setup connection
     let socket = UdpSocket::bind("127.0.0.1:0")?;
@@ -43,7 +44,7 @@ pub fn init_telemetry(
         socket.try_clone()?,
         input_tree.transition_command.clone(),
         input_tree.actuator_command.clone(),
-        input_tree.uplink_telemetry_health.clone(),
+        state_tree.uplink_telemetry_health.clone(),
         input_tree.time.watched(),
         state_machine.state_names(),
         RemoteSystem::RfsComputer,
@@ -55,16 +56,16 @@ pub fn init_telemetry(
         socket,
         rx,
         RemoteSystem::RfsComputer,
-        input_tree.downlink_telemetry_stats.clone(),
+        state_tree.downlink_telemetry_stats.clone(),
     );
 
     // spawns tokio tasks which send mavlink messages periodically to the channel.
     let input_streamers = input_tree.start_broadcasting::<PeriodicLoop>(tx.clone());
-    let output_streamers = output_tree.start_broadcasting::<PeriodicLoop>(tx.clone());
+    let state_streamers = state_tree.start_broadcasting::<PeriodicLoop>(tx.clone());
 
     Ok(Handles {
         uplink,
         downlink,
-        streamers: [input_streamers, output_streamers].concat(),
+        streamers: [input_streamers, state_streamers].concat(),
     })
 }

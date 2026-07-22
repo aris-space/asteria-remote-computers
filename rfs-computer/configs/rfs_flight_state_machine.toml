@@ -5,11 +5,9 @@ system_time_rate_hz = 200
 [telemetry]
 mavlink_address = "127.0.0.1:5761"
 always_allowed_actuators = [
-    "rocket_power",
     "maxon_board_power",
-    "fss_heating",
-    "pres_sensor_heat",
-    "eth_pump_power",
+    "rocket_power",
+    "rocket_heating",
     "custom1",
     "custom2",
     "custom3",
@@ -21,10 +19,17 @@ min_read_frequency_hz = 20
 serial_port = "/dev/ttyAMA2"
 baud_rate = "Baud115200"
 timeout_ms = 105
-pressure_polling_hz = 20     # double for igniter sensor
+pressure_polling_hz = 20
 valve_state_polling_hz = 5
 [can]
 socket_address = "can0"
+[controllino]
+address = "192.168.0.227:502"
+request_timeout_secs = 0.1
+pressure_polling_hz = 40.0
+temperature_polling_hz = 5.0
+digital_polling_hz = 10.0
+actuator_polling_hz = 10.0
 
 
 # ======================================= System Test =======================================
@@ -103,6 +108,7 @@ allowed_actuators = [
     "n2_dec_ext",  # N2 decoupler
     "n2_dec_ret",  # N2 decoupler
     "n2_shw_vlv",  # N2 shower valves
+    "eng_prg_vlv", # Engine Purge valve
     "h2_ign_vlv",  # H2 igniter valve
     "gox_ign_vlv", # GOx igniter valve
     "ign_spk_plg", # Igniter spark
@@ -297,6 +303,7 @@ allowed_actuators = [
     "n2_prg_vlv",  # N2 purge valve
     "lox_prg_vlv", # LOX purge valve
     "n2_shw_vlv",  # N2 shower valves
+    "eng_prg_vlv", # Engine Purge valve
 ]
 manual_transitions = [
     { target = "Pre Filling Abort", display = "Abort", abort = true },
@@ -472,6 +479,7 @@ allowed_actuators = [
     "lox_fll_vlv", # LOX fill valve
     "lox_bld_vlv", # LOX bleed valve
     "n2_shw_vlv",  # N2 shower valves
+    "eng_prg_vlv", # Engine Purge valve
 ]
 telemetry_loss_threshold_sec = 300 # 5min
 on_violation = "Filling Abort"
@@ -514,6 +522,7 @@ allowed_actuators = [
     "lox_bld_vlv", # LOX bleed valve
     "oss_ml_vlv",  # rocket LOX(OSS) main valve
     "n2_shw_vlv",  # N2 shower valves
+    "eng_prg_vlv", # Engine Purge valve
 ]
 telemetry_loss_threshold_sec = 900 # 15min
 on_violation = "Filling Abort"
@@ -562,6 +571,7 @@ allowed_actuators = [
     "lox_bld_vlv", # LOX bleed valve
     "oss_ml_vlv",  # rocket LOX(OSS) main valve
     "n2_shw_vlv",  # N2 shower valves
+    "eng_prg_vlv", # Engine Purge valve
     "n2_bld_vlv",  # N2 bleed valve
 ]
 telemetry_loss_threshold_sec = 900 # 15min
@@ -603,6 +613,7 @@ allowed_actuators = [
     "lox_bld_vlv", # LOX bleed valve
     "n2_bld_vlv",  # N2 bleed valve
     "n2_shw_vlv",  # N2 shower valves
+    "eng_prg_vlv", # Engine Purge valve
 ]
 manual_transitions = [
     { target = "Handsoff", display = "Decoupled" },
@@ -711,6 +722,7 @@ allowed_actuators = [
     "n2_dec_ext",  # N2 decoupler
     "n2_dec_ret",  # N2 decoupler
     "n2_shw_vlv",  # N2 shower valves
+    "eng_prg_vlv", # Engine Purge valve
     "h2_ign_vlv",  # H2 igniter valve
     "gox_ign_vlv", # GOx igniter valve
     "ign_spk_plg", # Igniter spark

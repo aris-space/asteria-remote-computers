@@ -48,7 +48,11 @@ impl StateLogic for WaitForIgnition {
         }
 
         tracing::info!("Arming the igniter");
-        output.rfs_computer_status.write().is_ignition_armed = ArmingState::Armed;
+        param
+            .parameters
+            .rfs_computer_status
+            .write()
+            .is_ignition_armed = ArmingState::Armed;
         output
             .rfs_actuators
             .h2_bleed_valve

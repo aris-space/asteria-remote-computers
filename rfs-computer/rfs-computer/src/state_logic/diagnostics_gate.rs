@@ -1,8 +1,10 @@
 use datatypes::{
     actuator::ThrottleableValve,
+    status::SensorStatus,
     units::{BarG, Celsius},
 };
 use lib_mission::state_machine::{AdditionalState, StateLogic, StateName};
+use messages::datapoints::dp_rfs_computer::RfsComputerStatus;
 use watchable::Watchable;
 
 /// This state checks the health of the sensor readings
@@ -21,12 +23,12 @@ impl StateLogic for DiagnosticsGate {
     type Output = super::Output;
     type Parameter = super::Parameter;
 
-    #[tracing::instrument(name = "states::DiagnosticsGate::run", skip_all, fields(state = %_p.current_state().0))]
+    #[tracing::instrument(name = "states::DiagnosticsGate::run", skip_all, fields(state = %param.current_state().0))]
     async fn run(
         &self,
         input: &Self::Input,
         _: &Self::Output,
-        _p: &AdditionalState<Self::Parameter>,
+        param: &AdditionalState<Self::Parameter>,
     ) -> StateName {
         /// All temperature readings must be non-NaN, thus the sensor must have been reached last time it was polled.
         fn check_temp(reading: &Watchable<Celsius>, name: &str) -> bool {
@@ -52,18 +54,22 @@ impl StateLogic for DiagnosticsGate {
             }
             good
         }
+        fn check_controllino(reading: &Watchable<RfsComputerStatus>) -> bool {
+            let good = matches!(reading.read().controllino.online, SensorStatus::Online);
+            if !good {
+                tracing::warn!("Unhealthy: Controllino is not connected");
+            }
+            good
+        }
 
         tracing::info!("Entered the Diagnostics state...");
 
         let uremote_electronics::input::Sensors {
             lox_temperature,
-            igniter_temperature,
-            cabinet_temperature: _,     // not important
-            ambient_temperature: _,     // not important
-            lox_decoupler_proximity: _, // nothing to check
-            n2_decoupler_proximity: _,  // nothing to check
-            valves_armed: _,            // nothing to check
-            igniter_armed: _,           // nothing to check
+            cabinet_temperature: _, // not important
+            ambient_temperature: _, // not important
+            valves_armed: _,        // nothing to check
+            igniter_armed: _,       // nothing to check
         } = &input.uremote_sensors;
 
         let healths = [
@@ -75,10 +81,13 @@ impl StateLogic for DiagnosticsGate {
             check_pres(&input.pneumatic_pressure, "pneumatic 23SX Ch1"),
             check_pres(&input.n2_post_booster_pressure, "n2_post_bstr 23SX Ch1"),
             check_pres(&input.h2_pressure, "h2 23SX Ch1"),
-            check_pres(&input.igniter_pressure, "igniter 23SX Ch1"),
+            check_pres(
+                &input.controllino_sensors.igniter_pressure,
+                "igniter controllino",
+            ),
             check_temp(&input.uremote_sensors.lox_temperature, "lox Thermocouple"),
             check_temp(
-                &input.uremote_sensors.igniter_temperature,
+                &input.controllino_sensors.igniter_temperature,
                 "igniter Thermocouple",
             ),
             check_valve(&input.lox_fill_valve, "lox fill valve"),
@@ -113,8 +122,8 @@ impl StateLogic for DiagnosticsGate {
             // check_temp(&h2.temperature_value_2, "h2 23SX Ch2"),
             // check_temp(&igniter.temperature_value_2, "igniter 23SX Ch2"),
             check_temp(lox_temperature, "lox Thermocouple"),
-            check_temp(igniter_temperature, "igniter Thermocouple"),
             check_valve(&input.lox_fill_valve, "lox fill valve"),
+            check_controllino(&param.parameters.rfs_computer_status),
         ];
         if healths.iter().all(|&x| x) {
             self.on_tests_pass.clone()

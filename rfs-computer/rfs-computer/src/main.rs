@@ -9,6 +9,7 @@ use rfs_computer::io::driver::init_drivers;
 use rfs_computer::io::input::InputTree;
 use rfs_computer::io::output::OutputTree;
 use rfs_computer::io::telemetry::init_telemetry;
+use rfs_computer::state::State;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -20,18 +21,26 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let (config_file, log_folder, run_info) =
         init_binary::<Config>(build_info::THIS_BUILD, config_path).await?;
 
-    let mut input_tree = InputTree::default();
-
-    let (can_tx, _can_rx) = std::sync::mpsc::channel();
-    let output_tree = OutputTree::new(can_tx.clone());
+    let input_tree = InputTree::default();
+    let mut state_tree = State::default();
     let config_hash = ConfigHash {
         hash: run_info.config_hash.as_bytes()[..5]
             .try_into()
             .expect("config hash is hex SHA-1, longer than 5 chars"),
     };
-    let _ = output_tree.hash_config.update(config_hash);
+    let _ = state_tree.hash_config.update(config_hash);
+
+    let controllino_driver = controllino::driver::Client::new(
+        config_file.controllino.address,
+        config_file.controllino.request_timeout,
+        state_tree.rfs_computer_status.clone(),
+    );
+
+    let (can_tx, _can_rx) = std::sync::mpsc::channel();
+    let output_tree = OutputTree::new(can_tx.clone(), controllino_driver.clone(), &None);
+
     let state_machine = StateMachine::new(config_file.state_machine)?;
-    input_tree.state.current_state = state_machine.current_state.clone(); // synchronize shared variable
+    state_tree.state_machine_state.current_state = state_machine.current_state.clone(); // synchronize shared variable
     let global_actuator_control =
         lib_mission::actuator_control::command::ActuatorControl::from_strings(
             config_file
@@ -57,7 +66,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     init_telemetry(
         &config_file.telemetry,
         &input_tree,
-        &output_tree,
+        &state_tree,
         &state_machine,
     )?;
 
@@ -68,6 +77,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         &output_tree,
     )
     .await?;
+    controllino_driver.start_polling(
+        config_file.controllino.pressure_polling_hz,
+        config_file.controllino.temperature_polling_hz,
+        config_file.controllino.digital_polling_hz,
+        config_file.controllino.actuator_polling_hz,
+        input_tree.controllino_valves.clone(),
+        &input_tree.controllino_sensors,
+        None,
+    );
 
     // Skip for now, as not yet done, and very noisy error messages
     // init_can_drivers(&config_file.can, &input_tree, &output_tree, &can_tx, can_rx)?;
@@ -87,7 +105,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         _ = tokio::signal::ctrl_c() => {
             tracing::info!(shutdown = true, "Interrupt received, shutting down");
         }
-        end = state_machine.run(&input_tree, &output_tree, ()) => {
+        end = state_machine.run(&input_tree, &output_tree, state_tree) => {
             tracing::error!("Exited with error: {end:?}");
         }
     }
