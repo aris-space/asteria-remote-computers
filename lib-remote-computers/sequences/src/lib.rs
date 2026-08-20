@@ -57,18 +57,26 @@ pub async fn run_sequence(
             }
             Command::ToState(_state) => todo!("unsupported sequence command"),
             Command::ActuatorOpen(actuator) => {
-                let settable = settables
-                    .get_mut(actuator)
-                    .expect("the actuator should exist");
+                let Some(settable) = settables.get_mut(actuator) else {
+                    // Ignore when the actuator doesn't exist.
+                    tracing::info!(
+                        "Command {i}: Actuator {actuator:?} doesn't exist, ignoring actuator open command"
+                    );
+                    return ControlFlow::Continue(());
+                };
                 tracing::info!("Command {i}: Opening actuator {actuator:?}");
                 if let Err(err) = settable.set_value(1.0) {
                     tracing::error!("Command {i}: Could not open {actuator:?}: {err}");
                 }
             }
             Command::ActuatorClose(actuator) => {
-                let settable = settables
-                    .get_mut(actuator)
-                    .expect("the actuator should exist");
+                let Some(settable) = settables.get_mut(actuator) else {
+                    // Ignore when the actuator doesn't exist.
+                    tracing::info!(
+                        "Command {i}: Actuator {actuator:?} doesn't exist, ignoring actuator close command"
+                    );
+                    return ControlFlow::Continue(());
+                };
                 tracing::info!("Command {i}: Closing actuator {actuator:?}");
                 if let Err(err) = settable.set_value(1.0) {
                     tracing::error!("Command {i}: Could not close {actuator:?}: {err}");
@@ -78,18 +86,26 @@ pub async fn run_sequence(
                 name: actuator,
                 setpoint,
             } => {
-                let settable = settables
-                    .get_mut(actuator)
-                    .expect("the actuator should exist");
+                let Some(settable) = settables.get_mut(actuator) else {
+                    // Ignore when the actuator doesn't exist.
+                    tracing::info!(
+                        "Command {i}: Actuator {actuator:?} doesn't exist, ignoring DPR activate command"
+                    );
+                    return ControlFlow::Continue(());
+                };
                 tracing::info!("Command {i}: Activating DPR actuator {actuator:?}");
                 if let Err(err) = settable.set_value(*setpoint) {
                     tracing::error!("Command {i}: Could not activate {actuator:?}: {err}");
                 }
             }
             Command::DprDeactivate(actuator) => {
-                let settable = settables
-                    .get_mut(actuator)
-                    .expect("the actuator should exist");
+                let Some(settable) = settables.get_mut(actuator) else {
+                    // Ignore when the actuator doesn't exist.
+                    tracing::info!(
+                        "Command {i}: Actuator {actuator:?} doesn't exist, ignoring DPR deactivate command"
+                    );
+                    return ControlFlow::Continue(());
+                };
                 tracing::info!("Command {i}: Deactivating DPR actuator {actuator:?}");
                 if let Err(err) = settable.set_value(f32::NAN) {
                     tracing::error!("Command {i}: Could not deactivate {actuator:?}: {err}");
@@ -153,12 +169,12 @@ pub async fn run_sequence(
     ControlFlow::Continue(())
 }
 
-type WatchedSensor = (
-    Option<String>,
-    WatchedWatchable<BarG>,
-    RangeInclusive<f32>,
-    StateName,
-);
+struct WatchedSensor {
+    key: Option<String>,
+    watcher: WatchedWatchable<BarG>,
+    range: RangeInclusive<f32>,
+    abort_state: StateName,
+}
 
 /// Map of sensors which are currently watched.
 struct SensorWatcher(HashMap<SensorName, Vec<WatchedSensor>>);
@@ -179,11 +195,21 @@ impl SensorWatcher {
         abort_state: StateName,
     ) {
         if let Some(watchers) = self.0.get_mut(&name) {
-            watchers.push((key, watchable.watched(), min..=max, abort_state));
+            watchers.push(WatchedSensor {
+                key,
+                watcher: watchable.watched(),
+                range: min..=max,
+                abort_state,
+            });
         } else {
             self.0.insert(
                 name,
-                vec![(key, watchable.watched(), min..=max, abort_state)],
+                vec![WatchedSensor {
+                    key,
+                    watcher: watchable.watched(),
+                    range: min..=max,
+                    abort_state,
+                }],
             );
         }
     }
@@ -198,7 +224,7 @@ impl SensorWatcher {
         let Some(watchers) = self.0.get_mut(&name) else {
             return;
         };
-        watchers.retain(|(k, _, _, _)| k.as_ref().is_none_or(|k| k != key));
+        watchers.retain(|watched| watched.key.as_ref().is_none_or(|k| k != key));
     }
 
     /// Check whether any sensor watcher received a value which isn't in the range of allowed
@@ -207,7 +233,13 @@ impl SensorWatcher {
     /// returned.
     pub async fn check(&mut self) -> Option<StateName> {
         let iter = self.0.values_mut().flat_map(|watchers| {
-            watchers.iter_mut().map(|(_, watcher, range, abort_state)| {
+            watchers.iter_mut().map(|watched| {
+                let WatchedSensor {
+                    watcher,
+                    range,
+                    abort_state,
+                    ..
+                } = watched;
                 watcher
                     .next_satisfying(|value| !range.contains(&value.0))
                     .map(|_| abort_state.clone())

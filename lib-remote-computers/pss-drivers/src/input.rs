@@ -95,7 +95,18 @@ pub enum SensorName {
 impl SensorName {
     /// Boolean whether the [`SensorName`] is for a pressure sensor.
     pub fn is_pressure_sensor(&self) -> bool {
-        !self.is_temperature_sensor()
+        matches!(self,
+            SensorName::prz_copv_p |
+            SensorName::fss_tnk_p1 |
+            SensorName::fss_tnk_p2 |
+            SensorName::fss_tnk_p_flt |
+            SensorName::oss_tnk_p1 |
+            SensorName::oss_tnk_p2 |
+            SensorName::oss_tnk_dps |
+            SensorName::eng_cc_p |
+            SensorName::eng_inj_p |
+            SensorName::oss_inj_p
+        )
     }
 
     /// Boolean whether the [`SensorName`] is for a temperature sensor.
