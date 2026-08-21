@@ -413,7 +413,7 @@ impl SensorDatapointStore for PSSSensors {
             SensorName::eng_inj_p => &self.injector_fuel_pressure,
             SensorName::oss_inj_p => &self.injector_oxidizer_pressure,
             // `name` is not the name of a pressure sensor.
-            _ => return None,
+            SensorName::eng_inj_t | SensorName::oss_tnk_t => return None,
         };
         Some(watchable)
     }
@@ -426,7 +426,16 @@ impl SensorDatapointStore for PSSSensors {
             SensorName::eng_inj_t => &self.injector_fuel_temperature,
             SensorName::oss_tnk_t => &self.oxidizer_tank_temperature,
             // `name` is not the name of a temperature sensor.
-            _ => return None,
+            SensorName::prz_copv_p
+            | SensorName::fss_tnk_p1
+            | SensorName::fss_tnk_p2
+            | SensorName::fss_tnk_p_flt
+            | SensorName::oss_tnk_p1
+            | SensorName::oss_tnk_p2
+            | SensorName::oss_tnk_dps
+            | SensorName::eng_cc_p
+            | SensorName::eng_inj_p
+            | SensorName::oss_inj_p => return None,
         };
         Some(watchable)
     }
