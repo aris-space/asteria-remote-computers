@@ -13,7 +13,7 @@ pub struct RunSequence {
     /// This will interrupt the sequence.
     pub manual_transitions: ManualTransitions,
     /// The sequence to run.
-    pub sequence: Vec<Command<ValveName, SensorName, String>>,
+    pub sequence: Vec<Command<ValveName, SensorName, StateName>>,
     /// The state to transition to when the sequence has been completed.
     pub on_completed: StateName,
 }
@@ -40,8 +40,7 @@ impl StateLogic for RunSequence {
                 ControlFlow::Continue(_) => self.on_completed.clone(),
                 ControlFlow::Break(abort_state) => {
                     tracing::error!("Sequence aborted, transitioning into {abort_state}");
-                    StateName::new_unchecked(abort_state)
-                        .expect("after parsing the sequence from the config, we validate that all referenced states are valid states")
+                    abort_state
                 }
             }
         }

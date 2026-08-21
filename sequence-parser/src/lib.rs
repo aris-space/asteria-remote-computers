@@ -9,9 +9,9 @@ pub mod parsers;
 #[derive(Clone, Debug)]
 pub enum Command<Actuator, Sensor, State>
 where
-    Actuator: Clone + FromStr,
-    Sensor: Clone + FromStr,
-    State: Clone + FromStr,
+    Actuator: Clone,
+    Sensor: Clone,
+    State: Clone,
 {
     // ----- System functions -----
     Msg(String),

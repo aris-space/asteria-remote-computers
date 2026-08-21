@@ -7,12 +7,16 @@ use std::{
 
 use datatypes::units::BarG;
 use futures::{FutureExt, StreamExt, stream::FuturesUnordered};
-use lib_mission::reactive::{IntoWatched, WatchedExt, WatchedWatchable};
-use pss_drivers::{input::SensorName, output::ValveName};
+use lib_mission::{
+    reactive::{IntoWatched, WatchedExt, WatchedWatchable},
+    state_machine::StateName,
+};
+use pss_drivers::{
+    input::{SensorDatapointStore, SensorName},
+    output::ValveName,
+};
 pub use sequence_parser::{Command, parse_sequence_str};
 use watchable::Watchable;
-
-type StateName = String;
 
 /// Run a sequence of [`Command`]s on a remote computer.
 #[expect(clippy::too_many_lines)] // yeeeeah a bit ugly.

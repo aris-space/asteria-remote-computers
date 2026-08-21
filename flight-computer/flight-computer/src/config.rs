@@ -563,23 +563,12 @@ impl<Gnc: CompatGuidanceController> MakeState for StateLogicConfig<Gnc> {
             Self::RunSequence {
                 sequence,
                 on_completed,
-            } => {
-                for command in &sequence {
-                    if let Command::SensorWatch { abort_state, .. }
-                    | Command::SensorDetect { abort_state, .. } = command
-                    {
-                        // Ensure that hte abort state is a valid state name.
-                        StateName::try_new(abort_state, names)?;
-                    }
-                }
-
-                state_logic::RunSequence {
-                    manual_transitions,
-                    sequence,
-                    on_completed: StateName::try_new(&on_completed, names)?,
-                }
-                .into_box()
+            } => state_logic::RunSequence {
+                manual_transitions,
+                sequence: validate_sequence(sequence, names)?,
+                on_completed: StateName::try_new(&on_completed, names)?,
             }
+            .into_box(),
             StateLogicConfig::Shutdown => common_states::Shutdown::default().into_box(),
         })
     }
@@ -631,4 +620,62 @@ where
     Err(serde::de::Error::custom(
         String::from_utf8(output).expect("Should be valid UTF-8"),
     ))
+}
+
+/// Validate the sequence by ensuring that all referenced states
+/// actually exist on the state machine.
+fn validate_sequence<ValveName, SensorName>(
+    sequence: Vec<Command<ValveName, SensorName, String>>,
+    names: &HashSet<StateName>,
+) -> lib_mission::Result<Vec<Command<ValveName, SensorName, StateName>>>
+where
+    ValveName: Clone,
+    SensorName: Clone,
+{
+    sequence
+        .into_iter()
+        .map(|command| {
+            let safe_command = match command {
+                Command::SensorWatch {
+                    name,
+                    abort_state,
+                    max,
+                    min,
+                    key,
+                } => Command::SensorWatch {
+                    name,
+                    abort_state: StateName::try_new(&abort_state, names)?,
+                    max,
+                    min,
+                    key,
+                },
+                Command::SensorDetect {
+                    name,
+                    value,
+                    rising,
+                    abort_state,
+                    patience,
+                    duration,
+                } => Command::SensorDetect {
+                    name,
+                    value,
+                    rising,
+                    abort_state: StateName::try_new(&abort_state, names)?,
+                    patience,
+                    duration,
+                },
+                Command::ToState(state) => Command::ToState(StateName::try_new(&state, names)?),
+                Command::Msg(msg) => Command::Msg(msg),
+                Command::Warning(msg) => Command::Warning(msg),
+                Command::Error(msg) => Command::Error(msg),
+                Command::Wait(duration) => Command::Wait(duration),
+                Command::ActuatorOpen(name) => Command::ActuatorOpen(name),
+                Command::ActuatorClose(name) => Command::ActuatorClose(name),
+                Command::DprActivate { name, setpoint } => Command::DprActivate { name, setpoint },
+                Command::DprDeactivate(name) => Command::DprDeactivate(name),
+                Command::SensorIgnore { name, key } => Command::SensorIgnore { name, key },
+            };
+            Ok(safe_command)
+        })
+        .collect::<Result<Vec<_>, _>>()
 }

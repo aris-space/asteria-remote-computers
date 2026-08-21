@@ -289,38 +289,6 @@ impl PSSValves {
 }
 
 impl PSSSensors {
-    /// Get a watchable for a pressure sensor by it's [`SensorName`].
-    /// Returns [`None`] if the provided `name` is not the name of a pressure sensor.
-    pub fn get_pressure_datapoint(&self, name: &SensorName) -> Option<&Watchable<BarG>> {
-        let watchable = match name {
-            SensorName::prz_copv_p => &self.pressurization_line_pressure,
-            SensorName::fss_tnk_p1 => &self.fuel_tank_pressure_sensor1,
-            SensorName::fss_tnk_p2 => &self.fuel_tank_pressure_sensor2,
-            SensorName::fss_tnk_p_flt => &self.fuel_tank_pressure_filtered,
-            SensorName::oss_tnk_p1 => &self.oxidizer_tank_pressure_sensor1,
-            SensorName::oss_tnk_p2 => &self.oxidizer_tank_pressure_sensor2,
-            SensorName::oss_tnk_dps => &self.oxidizer_tank_differential_pressure,
-            SensorName::eng_cc_p => &self.chamber_pressure,
-            SensorName::eng_inj_p => &self.injector_fuel_pressure,
-            SensorName::oss_inj_p => &self.injector_oxidizer_pressure,
-            // `name` is not the name of a pressure sensor.
-            _ => return None,
-        };
-        Some(watchable)
-    }
-
-    /// Get a watchable for a temperature sensor by it's [`SensorName`].
-    /// Returns [`None`] if the provided `name` is not the name of a temperature sensor.
-    pub fn get_temperature_datapoint(&self, name: &SensorName) -> Option<&Watchable<Celsius>> {
-        let watchable = match name {
-            SensorName::eng_inj_t => &self.injector_fuel_temperature,
-            SensorName::oss_tnk_t => &self.oxidizer_tank_temperature,
-            // `name` is not the name of a temperature sensor.
-            _ => return None,
-        };
-        Some(watchable)
-    }
-
     /// Starts logging sensors timeseries to csv files in `folder`.
     /// Used for data analysis.
     ///
@@ -417,5 +385,49 @@ impl PSSSensors {
                 ["oss_tnk_t [°C?]"],
             ),
         ])
+    }
+}
+
+pub trait SensorDatapointStore {
+    /// Get a watchable for a pressure sensor by it's [`SensorName`].
+    /// Returns [`None`] if the provided `name` is not the name of a pressure sensor.
+    fn get_pressure_datapoint<'a>(&'a self, name: &SensorName) -> Option<&'a Watchable<BarG>>;
+
+    /// Get a watchable for a temperature sensor by it's [`SensorName`].
+    /// Returns [`None`] if the provided `name` is not the name of a temperature sensor.
+    fn get_temperature_datapoint<'a>(&'a self, name: &SensorName)
+    -> Option<&'a Watchable<Celsius>>;
+}
+
+impl SensorDatapointStore for PSSSensors {
+    fn get_pressure_datapoint<'a>(&'a self, name: &SensorName) -> Option<&'a Watchable<BarG>> {
+        let watchable = match name {
+            SensorName::prz_copv_p => &self.pressurization_line_pressure,
+            SensorName::fss_tnk_p1 => &self.fuel_tank_pressure_sensor1,
+            SensorName::fss_tnk_p2 => &self.fuel_tank_pressure_sensor2,
+            SensorName::fss_tnk_p_flt => &self.fuel_tank_pressure_filtered,
+            SensorName::oss_tnk_p1 => &self.oxidizer_tank_pressure_sensor1,
+            SensorName::oss_tnk_p2 => &self.oxidizer_tank_pressure_sensor2,
+            SensorName::oss_tnk_dps => &self.oxidizer_tank_differential_pressure,
+            SensorName::eng_cc_p => &self.chamber_pressure,
+            SensorName::eng_inj_p => &self.injector_fuel_pressure,
+            SensorName::oss_inj_p => &self.injector_oxidizer_pressure,
+            // `name` is not the name of a pressure sensor.
+            _ => return None,
+        };
+        Some(watchable)
+    }
+
+    fn get_temperature_datapoint<'a>(
+        &'a self,
+        name: &SensorName,
+    ) -> Option<&'a Watchable<Celsius>> {
+        let watchable = match name {
+            SensorName::eng_inj_t => &self.injector_fuel_temperature,
+            SensorName::oss_tnk_t => &self.oxidizer_tank_temperature,
+            // `name` is not the name of a temperature sensor.
+            _ => return None,
+        };
+        Some(watchable)
     }
 }
