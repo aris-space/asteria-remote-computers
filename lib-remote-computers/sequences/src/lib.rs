@@ -5,7 +5,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-use datatypes::units::BarG;
+use datatypes::units::{BarG, Celsius, ValueWithUnit};
 use futures::{FutureExt, StreamExt, stream::FuturesUnordered};
 use lib_mission::{
     reactive::{IntoWatched, WatchedExt, WatchedWatchable},
@@ -25,7 +25,8 @@ pub async fn run_sequence(
     actuators: &pss_drivers::output::PSSValves,
     sensors: &pss_drivers::input::PSSSensors,
 ) -> ControlFlow<StateName> {
-    let mut sensor_watcher = SensorWatcher::new();
+    let mut pressure_watcher = SensorWatcher::<BarG>::new();
+    let mut temperature_watcher = SensorWatcher::<Celsius>::new();
     let mut wait_deadline = Option::<Instant>::None;
     let mut settables = actuators.as_settables();
 
@@ -40,15 +41,18 @@ pub async fn run_sequence(
                 deadline.duration_since(Instant::now())
             });
 
-            tokio::select! {
+            let result = tokio::select! {
                 biased;
-                result = sensor_watcher.check() => {
-                    if let Some(abort_state) = result { return ControlFlow::Break(abort_state) }
-                    // We might still need to sleep to reach the wait deadline.
-                    should_wait = wait_deadline.is_some_and(|deadline| deadline > Instant::now());
-                },
+                result = pressure_watcher.check() => result,
+                result = temperature_watcher.check() => result,
                 _ = tokio::time::sleep(duration) => break,
             };
+
+            if let Some(abort_state) = result {
+                return ControlFlow::Break(abort_state);
+            }
+            // We might still need to sleep to reach the wait deadline.
+            should_wait = wait_deadline.is_some_and(|deadline| deadline > Instant::now());
         }
 
         match command {
@@ -125,7 +129,7 @@ pub async fn run_sequence(
                 let sensor = sensors
                     .get_pressure_datapoint(name)
                     .expect("we ensured that the name is for a pressure sensor");
-                sensor_watcher.add_pressure_watcher(
+                pressure_watcher.add_watcher(
                     *name,
                     key.clone(),
                     sensor,
@@ -141,10 +145,21 @@ pub async fn run_sequence(
                 min,
                 key,
             } if name.is_temperature_sensor() => {
-                todo!("temperature sensor sequence commands are not yet supported")
+                let sensor = sensors
+                    .get_temperature_datapoint(name)
+                    .expect("we ensured that the name is for a temperature sensor");
+                temperature_watcher.add_watcher(
+                    *name,
+                    key.clone(),
+                    sensor,
+                    *min,
+                    *max,
+                    abort_state.clone(),
+                );
             }
             Command::SensorIgnore { name, key } => {
-                sensor_watcher.remove_pressure_watcher(*name, key.as_ref());
+                temperature_watcher.remove_watcher(*name, key.as_ref());
+                pressure_watcher.remove_watcher(*name, key.as_ref());
             }
             Command::SensorDetect {
                 name,
@@ -173,27 +188,27 @@ pub async fn run_sequence(
     ControlFlow::Continue(())
 }
 
-struct WatchedSensor {
+struct WatchedSensor<T: ValueWithUnit<f32>> {
     key: Option<String>,
-    watcher: WatchedWatchable<BarG>,
+    watcher: WatchedWatchable<T>,
     range: RangeInclusive<f32>,
     abort_state: StateName,
 }
 
 /// Map of sensors which are currently watched.
-struct SensorWatcher(HashMap<SensorName, Vec<WatchedSensor>>);
+struct SensorWatcher<T: ValueWithUnit<f32>>(HashMap<SensorName, Vec<WatchedSensor<T>>>);
 
-impl SensorWatcher {
+impl<T: Send + Sync + Clone + ValueWithUnit<f32>> SensorWatcher<T> {
     pub fn new() -> Self {
         Self(HashMap::new())
     }
 
     /// Add a new sensor which should be watched.
-    pub fn add_pressure_watcher(
+    pub fn add_watcher(
         &mut self,
         name: SensorName,
         key: Option<String>,
-        watchable: &Watchable<BarG>,
+        watchable: &Watchable<T>,
         min: f32,
         max: f32,
         abort_state: StateName,
@@ -220,7 +235,7 @@ impl SensorWatcher {
 
     /// Remove a sensor from being watched. When `key` is [`Some`], only a specific watched
     /// sensor will be removed; otherwise all watchers of the `name` sensor are removed.
-    pub fn remove_pressure_watcher(&mut self, name: SensorName, key: Option<&String>) {
+    pub fn remove_watcher(&mut self, name: SensorName, key: Option<&String>) {
         let Some(key) = key else {
             self.0.remove(&name);
             return;
@@ -245,7 +260,7 @@ impl SensorWatcher {
                     ..
                 } = watched;
                 watcher
-                    .next_satisfying(|value| !range.contains(&value.0))
+                    .next_satisfying(|value| !range.contains(&value.value()))
                     .map(|_| abort_state.clone())
             })
         });
