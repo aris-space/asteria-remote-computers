@@ -2,11 +2,11 @@
 
 use crate::io::types::{MainDeploymentState, SeparationState};
 
+use datapoints::dp_backplane::Message as BPMessage;
 use datapoints::dp_engine_control_board::Message as ECUMessage;
 use datapoints::dp_flight_computer::Message as FCMessage;
 use datapoints::dp_fuel_control_board::Message as FCBMessage;
 use datapoints::dp_oxidizer_control_board::Message as OCBMessage;
-use datapoints::dp_backplane::Message as BPMessage;
 use datapoints::dp_recovery_board::Message as RECMessage;
 use datapoints::dp_recovery_board::SteeringPositions;
 use datapoints::dp_rfs_computer::Message as RFSCMessage;
