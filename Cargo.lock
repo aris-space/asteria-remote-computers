@@ -730,6 +730,20 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1435fa1053d8b2fbbe9be7e97eca7f33d37b28409959813daefc1446a14247f1"
 
 [[package]]
+name = "dp-backplane"
+version = "0.4.0"
+dependencies = [
+ "arbitrary",
+ "bincode",
+ "data-core",
+ "datatypes",
+ "defmt",
+ "gated-derive",
+ "serde",
+ "utoipa",
+]
+
+[[package]]
 name = "dp-engine-control-board"
 version = "0.5.0"
 dependencies = [
@@ -777,18 +791,6 @@ version = "0.5.0"
 dependencies = [
  "arbitrary",
  "bincode",
- "data-core",
- "datatypes",
- "defmt",
- "gated-derive",
- "serde",
- "utoipa",
-]
-
-[[package]]
-name = "dp-power-board"
-version = "0.3.0"
-dependencies = [
  "data-core",
  "datatypes",
  "defmt",
@@ -2048,11 +2050,11 @@ name = "messages"
 version = "0.3.0"
 dependencies = [
  "data-core",
+ "dp-backplane",
  "dp-engine-control-board",
  "dp-flight-computer",
  "dp-fuel-control-board",
  "dp-oxidizer-control-board",
- "dp-power-board",
  "dp-recovery-board",
  "dp-rfs-computer",
  "dp-sensor-carrier",

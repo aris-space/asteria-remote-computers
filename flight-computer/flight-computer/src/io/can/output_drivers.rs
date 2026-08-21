@@ -1,20 +1,18 @@
 use std::time::Duration;
 
-use datatypes::actuator::CameraPowerStatus;
 use datatypes::status::{ArmingState, BuildInformationCommon, StatusCommonMessage};
 use dp_flight_computer::FlightComputerStatus;
 use dp_recovery_board::{RecoveryPowerConfig, SteeringPositions};
 use lib_mission::reactive::{Repeatedly, Watched, WatchedExt};
 use lib_mission::util::init::BuildInfo;
 use lib_mission::util::time::MissionTime;
-use messages::datapoints::{dp_flight_computer, dp_power_board, dp_recovery_board};
+use messages::datapoints::{dp_flight_computer, dp_recovery_board};
 use tokio::task::AbortHandle;
 use tracing::Instrument;
 use watchable::Watchable;
 
 use crate::io::types::{
-    CameraPowerState, MainDeploymentState, RecoveryArmingState, SeparationState,
-    SteeringMotorRevolutions,
+    MainDeploymentState, RecoveryArmingState, SeparationState, SteeringMotorRevolutions,
 };
 
 /// Sends [`dp_recovery_board::Message::SteeringTargetPositions`].
@@ -103,37 +101,6 @@ pub fn spawn_recovery_arming_driver(
         }
         .instrument(tracing::info_span!("drivers::RecoveryArming")),
     )
-    .abort_handle()
-}
-
-/// Sends [`dp_power_board::Message::CameraPowerControl`]
-pub fn spawn_camera_driver(
-    mut watched_camera_power: impl Watched<CameraPowerState> + Send + 'static,
-    tx: std::sync::mpsc::Sender<messages::Message>,
-) -> AbortHandle {
-    tokio::spawn(async move {
-        loop {
-            let camera_on = watched_camera_power.next().await.is_on();
-            if camera_on {
-                tracing::info!("turning camera on");
-            } else {
-                tracing::info!("turning camera off");
-            }
-
-            // Send the message 1 time, we suppose that CAN is reliable.
-            let msg = messages::Message::PowerBoard(dp_power_board::Message::CameraPowerControl(
-                CameraPowerStatus {
-                    live_pwr_enabled: camera_on,
-                    recording_pwr_enabled: camera_on,
-                },
-            ));
-
-            if tx.send(msg).is_err() {
-                tracing::warn!("CAN channel was closed. Shutting down!");
-                break;
-            }
-        }
-    })
     .abort_handle()
 }
 
