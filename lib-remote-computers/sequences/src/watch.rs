@@ -1,4 +1,7 @@
-use std::{collections::HashMap, ops::RangeInclusive};
+use std::{
+    collections::HashMap,
+    ops::{ControlFlow, RangeInclusive},
+};
 
 use datatypes::units::ValueWithUnit;
 use futures::{FutureExt, StreamExt, stream::FuturesUnordered};
@@ -10,9 +13,16 @@ use pss_drivers::input::SensorName;
 use watchable::Watchable;
 
 struct WatchedSensor<T: ValueWithUnit<f32>> {
+    /// Optional key of the watched sensor used to
+    /// ignore it later on.
     key: Option<String>,
+    /// Watcher of the underlying sensor.
     watcher: WatchedWatchable<T>,
+    /// Range of allowed values of the sensor.
     range: RangeInclusive<f32>,
+    /// State into which the state machine should transition
+    /// when the underlying sensor contains a value outside
+    /// its allowed range.
     abort_state: StateName,
 }
 
@@ -67,13 +77,24 @@ impl<T: Send + Sync + Clone + ValueWithUnit<f32>> SensorWatcher<T> {
         watchers.retain(|watched| watched.key.as_ref().is_none_or(|k| k != key));
     }
 
-    /// Check whether any sensor watcher received a value which isn't in the range of allowed
-    /// values. If [`None`] is returned either no sensor received a value or all values are
-    /// within the specified ranges. Otherwise, [`Some`] with the name of the abort state is
-    /// returned.
-    pub async fn check(&mut self) -> Option<StateName> {
+    /// Check whether any sensor contains a value which isn't in the range of allowed values.
+    ///
+    /// If no sensor is registered at the [`SensorWatcher`] instance, [`ControlFlow::Continue`]
+    /// is returned. Otherwise, this method waits until one of the following things occur:
+    /// - At least one of the registered sensors contains a value outside of the allowed
+    ///   range.
+    ///   In this case [`ControlFlow::Break`] is returned with the [`StateName`] of the abort
+    ///   state into which the state machine should transition.
+    /// - The underlying [`Future`] is cancelled because some other [`Future`] inside the
+    ///   [`tokio::select!`] completes earlier.
+    pub async fn check(&mut self) -> ControlFlow<StateName> {
+        // "Stream" of abort states which yields as soon as a registered watcher contains
+        // a value outside its allowed range.
         let iter = self.0.values_mut().flat_map(|watchers| {
             watchers.iter_mut().map(|watched| {
+                // For each registered watcher we return a "stream" containing the abort state
+                // for every unallowed value its sensor contains.
+
                 let WatchedSensor {
                     watcher,
                     range,
@@ -86,19 +107,27 @@ impl<T: Send + Sync + Clone + ValueWithUnit<f32>> SensorWatcher<T> {
             })
         });
 
+        // We wait for the first watcher to produce a value outside its allowed range.
         let aborted = iter
             .collect::<FuturesUnordered<_>>()
             .collect::<Vec<_>>()
             .await;
         let first = aborted.first().cloned();
+
         if let Some(first) = &first
             && aborted.iter().any(|state| state != first)
         {
+            // There are multiple different watchers which produced unallowed values at the same time.
+            // We can only transition into one abort state, thus we also emit a warning here.
             tracing::warn!(
                 "Multiple sensors aborted to different states at the same time. The aborted states are {} and we now aborted into '{first}'",
                 aborted.join(", ")
             );
         }
-        first
+
+        match first {
+            Some(abort_state) => ControlFlow::Break(abort_state),
+            None => ControlFlow::Continue(()),
+        }
     }
 }

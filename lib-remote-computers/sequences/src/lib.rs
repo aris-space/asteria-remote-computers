@@ -11,9 +11,19 @@ use pss_drivers::{
 };
 pub use sequence_parser::{Command, parse_sequence_str};
 
-use crate::watch::SensorWatcher;
+use crate::{detect::SensorDetector, watch::SensorWatcher};
 
+mod detect;
 mod watch;
+
+enum Blocker<'a> {
+    /// We're blocked on a [`Command::Wait`] until the underlying
+    /// deadline exceeds.
+    Wait(Instant),
+    /// We're blocked on a [`Command::SensorDetect`] until the
+    /// underlying [`SensorDetector`] either finishes or aborts.
+    Detector(SensorDetectorKind<'a>),
+}
 
 /// Run a sequence of [`Command`]s on a remote computer.
 #[expect(clippy::too_many_lines)] // yeeeeah a bit ugly.
@@ -24,33 +34,52 @@ pub async fn run_sequence(
 ) -> ControlFlow<StateName> {
     let mut pressure_watcher = SensorWatcher::<BarG>::new();
     let mut temperature_watcher = SensorWatcher::<Celsius>::new();
-    let mut wait_deadline = Option::<Instant>::None;
+
+    let mut blocker = Option::<Blocker>::None;
     let mut settables = actuators.as_settables();
 
     for (i, command) in sequence.into_iter().enumerate() {
-        // Check whether any sensors triggered an abort or wait until the
-        // `wait_deadline` is reached, if it's set.
-        let mut should_wait = true;
-        while should_wait {
-            // The duration we need to sleep before executing the next command; when no wait
-            // deadline is specified, we "sleep" zero millseconds.
-            let duration = wait_deadline.map_or(Duration::ZERO, |deadline| {
-                deadline.duration_since(Instant::now())
-            });
+        // Before we execute the next sequence command we first need to check whether
+        // there is still a blocker. Should that be the case, we execute the blocker
+        // until it's removed.
+        loop {
+            match &mut blocker {
+                Some(Blocker::Detector(detector)) => {
+                    tokio::select! {
+                        result = detector.detect() => {
+                            result?;
+                            // The detector finished; we can thus remove the blocker.
+                            blocker = None;
+                        },
+                        result = pressure_watcher.check() => result?,
+                        result = temperature_watcher.check() => result?,
+                    };
+                }
+                Some(Blocker::Wait(deadline)) => {
+                    // Sleep until `deadline`. If `deadline` is no longer in the future we sleep
+                    // for zero milliseconds and then remove the blocker.
+                    let duration = deadline
+                        .checked_duration_since(Instant::now())
+                        .unwrap_or(Duration::ZERO);
 
-            let result = tokio::select! {
-                biased;
-                result = pressure_watcher.check() => result,
-                result = temperature_watcher.check() => result,
-                _ = tokio::time::sleep(duration) => break,
-            };
-
-            if let Some(abort_state) = result {
-                return ControlFlow::Break(abort_state);
+                    tokio::select! {
+                        biased;
+                        result = pressure_watcher.check() => result?,
+                        result = temperature_watcher.check() => result?,
+                        _ = tokio::time::sleep(duration) => {
+                            // The wait is finished; we can thus remove the blocker.
+                            blocker = None;
+                        },
+                    };
+                }
+                // We're no longer blocked on anything before being able to execute the next
+                // sequence command.
+                None => break,
             }
-            // We might still need to sleep to reach the wait deadline.
-            should_wait = wait_deadline.is_some_and(|deadline| deadline > Instant::now());
         }
+
+        // There is no blocker for the next sequence command. We can thus start executing the
+        // next sequence command.
 
         match command {
             Command::Msg(msg) => tracing::info!("Command {i}: [LOG] {msg}"),
@@ -58,7 +87,7 @@ pub async fn run_sequence(
             Command::Error(msg) => tracing::error!("Command {i}: [ERR] {msg}"),
             Command::Wait(duration) => {
                 tracing::info!("Command {i}: Sleeping for {:2}s", duration.as_secs_f32());
-                wait_deadline = Some(Instant::now() + *duration);
+                blocker = Some(Blocker::Wait(Instant::now() + *duration));
             }
             Command::ToState(_state) => todo!("unsupported sequence command"),
             Command::ActuatorOpen(actuator) => {
@@ -165,7 +194,14 @@ pub async fn run_sequence(
                 abort_state,
                 patience,
                 duration,
-            } if name.is_pressure_sensor() => todo!("unsupported sequence command"),
+            } if name.is_pressure_sensor() => {
+                let sensor = sensors
+                    .get_pressure_datapoint(name)
+                    .expect("we ensured that the name is for a pressure sensor");
+                let detector =
+                    SensorDetector::new(sensor, *value, *rising, abort_state, *patience, *duration);
+                blocker = Some(Blocker::Detector(SensorDetectorKind::Pressure(detector)));
+            }
             Command::SensorDetect {
                 name,
                 value,
@@ -174,7 +210,12 @@ pub async fn run_sequence(
                 patience,
                 duration,
             } if name.is_temperature_sensor() => {
-                todo!("temperature sensor sequence commands are not yet supported")
+                let sensor = sensors
+                    .get_temperature_datapoint(name)
+                    .expect("we ensured that the name is for a temperature sensor");
+                let detector =
+                    SensorDetector::new(sensor, *value, *rising, abort_state, *patience, *duration);
+                blocker = Some(Blocker::Detector(SensorDetectorKind::Temperature(detector)));
             }
             _ => unreachable!(
                 "we know that every sensor is either a temperature or a pressure sensor"
@@ -183,4 +224,18 @@ pub async fn run_sequence(
     }
 
     ControlFlow::Continue(())
+}
+
+pub enum SensorDetectorKind<'a> {
+    Temperature(SensorDetector<'a, Celsius>),
+    Pressure(SensorDetector<'a, BarG>),
+}
+
+impl SensorDetectorKind<'_> {
+    pub async fn detect(&mut self) -> ControlFlow<StateName> {
+        match self {
+            SensorDetectorKind::Temperature(detector) => detector.detect().await,
+            SensorDetectorKind::Pressure(detector) => detector.detect().await,
+        }
+    }
 }
