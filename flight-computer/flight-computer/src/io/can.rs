@@ -76,7 +76,7 @@ where
         deploy_main_chute,
         steering_motor_target_deflections,
         recovery_actuators_armed,
-        camera_powered_on,
+        camera_powered_on: _,
         valves: _,
         hash_config: _,
         fc_status,
@@ -102,7 +102,6 @@ where
             clock.watched(),
             tx.clone(),
         ),
-        output_drivers::spawn_camera_driver(camera_powered_on.watched(), tx.clone()),
         output_drivers::spawn_deployment_driver(
             deploy_main_chute.watched(),
             clock.watched(),

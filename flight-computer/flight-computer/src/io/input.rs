@@ -6,7 +6,7 @@ use datapoints::dp_engine_control_board::Message as ECUMessage;
 use datapoints::dp_flight_computer::Message as FCMessage;
 use datapoints::dp_fuel_control_board::Message as FCBMessage;
 use datapoints::dp_oxidizer_control_board::Message as OCBMessage;
-use datapoints::dp_power_board::Message as PWBMessage;
+use datapoints::dp_backplane::Message as BPMessage;
 use datapoints::dp_recovery_board::Message as RECMessage;
 use datapoints::dp_recovery_board::SteeringPositions;
 use datapoints::dp_rfs_computer::Message as RFSCMessage;
@@ -40,11 +40,11 @@ pub struct RawUnprocessedData {
     #[broadcast(min_freq_hz = 0.5, max_freq_hz = 2.)]
     pub environmental_data: Watchable<EnvironmentalData>,
     /// The power status of the 24V rail of the AV stack.
-    #[datapoint(pattern = "Message::PowerBoard(PWBMessage::RailStatus24V(#value))")]
+    #[datapoint(pattern = "Message::Backplane(BPMessage::RailStatus24V(#value))")]
     #[broadcast(min_freq_hz = 0.5, max_freq_hz = 2.)]
     pub rail_status_24v: Watchable<RailStatus>,
     /// The power status of the 5V rail of the AV stack.
-    #[datapoint(pattern = "Message::PowerBoard(PWBMessage::RailStatus5V(#value))")]
+    #[datapoint(pattern = "Message::Backplane(BPMessage::RailStatus5V(#value))")]
     #[broadcast(min_freq_hz = 0.5, max_freq_hz = 2.)]
     pub rail_status_5v: Watchable<RailStatus>,
 }
@@ -204,7 +204,7 @@ pub struct BoardsStatus {
     #[broadcast(min_freq_hz = 0.5, max_freq_hz = 2.)]
     pub sensor_carrier: Watchable<StatusReport<datapoints::dp_sensor_carrier::SensorCarrierStatus>>,
 
-    #[datapoint(pattern = "Message::PowerBoard(PWBMessage::BoardStatus(#value))")]
+    #[datapoint(pattern = "Message::Backplane(BPMessage::BoardStatus(#value))")]
     #[broadcast(min_freq_hz = 0.5, max_freq_hz = 2.)]
     pub power_board: Watchable<StatusReport<datatypes::status::StatusCommonMessage>>,
 
