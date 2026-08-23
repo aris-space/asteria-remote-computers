@@ -92,9 +92,19 @@ pub enum SensorName {
     oss_tnk_t,
 }
 
-impl SensorName {
-    /// Boolean whether the [`SensorName`] is for a pressure sensor.
-    pub fn is_pressure_sensor(&self) -> bool {
+/// Trait which must be implemented by any type which represents
+/// sensor names. The trait allows to determine the kind of sensor
+/// this name is for (e.g., pressure, temperature, ...).
+pub trait SensorNameExt {
+    /// Boolean whether `self` is the name of a pressure sensor.
+    fn is_pressure_sensor(&self) -> bool;
+
+    /// Boolean whether `self` is the name of a temperature sensor.
+    fn is_temperature_sensor(&self) -> bool;
+}
+
+impl SensorNameExt for SensorName {
+    fn is_pressure_sensor(&self) -> bool {
         matches!(
             self,
             SensorName::prz_copv_p
@@ -110,8 +120,7 @@ impl SensorName {
         )
     }
 
-    /// Boolean whether the [`SensorName`] is for a temperature sensor.
-    pub fn is_temperature_sensor(&self) -> bool {
+    fn is_temperature_sensor(&self) -> bool {
         matches!(self, SensorName::eng_inj_t | SensorName::oss_tnk_t)
     }
 }
@@ -388,18 +397,17 @@ impl PSSSensors {
     }
 }
 
-pub trait SensorDatapointStore {
-    /// Get a watchable for a pressure sensor by it's [`SensorName`].
+pub trait SensorStore<T> {
+    /// Get a watchable for a pressure sensor by its `name`.
     /// Returns [`None`] if the provided `name` is not the name of a pressure sensor.
-    fn get_pressure_datapoint<'a>(&'a self, name: &SensorName) -> Option<&'a Watchable<BarG>>;
+    fn get_pressure_datapoint<'a>(&'a self, name: &T) -> Option<&'a Watchable<BarG>>;
 
-    /// Get a watchable for a temperature sensor by it's [`SensorName`].
+    /// Get a watchable for a temperature sensor by its `name`.
     /// Returns [`None`] if the provided `name` is not the name of a temperature sensor.
-    fn get_temperature_datapoint<'a>(&'a self, name: &SensorName)
-    -> Option<&'a Watchable<Celsius>>;
+    fn get_temperature_datapoint<'a>(&'a self, name: &T) -> Option<&'a Watchable<Celsius>>;
 }
 
-impl SensorDatapointStore for PSSSensors {
+impl SensorStore<SensorName> for PSSSensors {
     fn get_pressure_datapoint<'a>(&'a self, name: &SensorName) -> Option<&'a Watchable<BarG>> {
         let watchable = match name {
             SensorName::prz_copv_p => &self.pressurization_line_pressure,

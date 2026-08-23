@@ -184,14 +184,14 @@ impl std::str::FromStr for ValveName {
     }
 }
 
-pub trait AsSettables {
-    /// Returns a map of [`ValveName`]s with their associated [`Settable`]
+pub trait ActuatorStore<T> {
+    /// Returns a map of actuator names with their associated [`Settable`]
     /// that builds and sends the right CAN message when [`Settable::set_value`]
     /// is called.
-    fn as_settables(&self) -> BTreeMap<ValveName, Box<dyn Settable + Send>>;
+    fn as_settables(&self) -> BTreeMap<T, Box<dyn Settable + Send>>;
 }
 
-impl AsSettables for PSSValves {
+impl ActuatorStore<ValveName> for PSSValves {
     fn as_settables(&self) -> BTreeMap<ValveName, Box<dyn Settable + Send>> {
         let mut map: BTreeMap<ValveName, Box<dyn Settable + Send>> = BTreeMap::new();
         let sender = self.sender;

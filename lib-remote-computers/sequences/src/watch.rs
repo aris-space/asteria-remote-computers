@@ -1,5 +1,6 @@
 use std::{
     collections::HashMap,
+    hash::Hash,
     ops::{ControlFlow, RangeInclusive},
 };
 
@@ -9,7 +10,6 @@ use lib_mission::{
     reactive::{IntoWatched, WatchedExt, WatchedWatchable},
     state_machine::StateName,
 };
-use pss_drivers::input::SensorName;
 use watchable::Watchable;
 
 struct WatchedSensor<T: ValueWithUnit<f32>> {
@@ -27,9 +27,9 @@ struct WatchedSensor<T: ValueWithUnit<f32>> {
 }
 
 /// Map of sensors which are currently watched.
-pub struct SensorWatcher<T: ValueWithUnit<f32>>(HashMap<SensorName, Vec<WatchedSensor<T>>>);
+pub struct SensorWatcher<S: Hash + Eq, T: ValueWithUnit<f32>>(HashMap<S, Vec<WatchedSensor<T>>>);
 
-impl<T: Send + Sync + Clone + ValueWithUnit<f32>> SensorWatcher<T> {
+impl<S: Hash + Eq, T: Send + Sync + Clone + ValueWithUnit<f32>> SensorWatcher<S, T> {
     pub fn new() -> Self {
         Self(HashMap::new())
     }
@@ -37,7 +37,7 @@ impl<T: Send + Sync + Clone + ValueWithUnit<f32>> SensorWatcher<T> {
     /// Add a new sensor which should be watched.
     pub fn add_watcher(
         &mut self,
-        name: SensorName,
+        name: S,
         key: Option<String>,
         watchable: &Watchable<T>,
         min: f32,
@@ -66,12 +66,12 @@ impl<T: Send + Sync + Clone + ValueWithUnit<f32>> SensorWatcher<T> {
 
     /// Remove a sensor from being watched. When `key` is [`Some`], only a specific watched
     /// sensor will be removed; otherwise all watchers of the `name` sensor are removed.
-    pub fn remove_watcher(&mut self, name: SensorName, key: Option<&String>) {
+    pub fn remove_watcher(&mut self, name: &S, key: Option<&String>) {
         let Some(key) = key else {
-            self.0.remove(&name);
+            self.0.remove(name);
             return;
         };
-        let Some(watchers) = self.0.get_mut(&name) else {
+        let Some(watchers) = self.0.get_mut(name) else {
             return;
         };
         watchers.retain(|watched| watched.key.as_ref().is_none_or(|k| k != key));
@@ -129,7 +129,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_continue_when_empty() {
-        let mut watcher = SensorWatcher::<Celsius>::new();
+        let mut watcher = SensorWatcher::<SensorName, Celsius>::new();
         for _ in 0..5 {
             tokio::time::sleep(Duration::from_millis(50)).await;
             assert_eq!(watcher.check().await, ControlFlow::Continue(()));
@@ -138,7 +138,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_abort_when_violated() {
-        let mut watcher = SensorWatcher::<Celsius>::new();
+        let mut watcher = SensorWatcher::<SensorName, Celsius>::new();
         let sensor = Watchable::<Celsius>::default();
         let abort_state = StateName::new_unchecked("asdf").expect("state name should be valid");
 

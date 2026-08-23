@@ -1,4 +1,6 @@
 use std::{
+    fmt::Debug,
+    hash::Hash,
     ops::ControlFlow,
     time::{Duration, Instant},
 };
@@ -6,8 +8,8 @@ use std::{
 use datatypes::units::{BarG, Celsius};
 use lib_mission::state_machine::StateName;
 use pss_drivers::{
-    input::{SensorDatapointStore, SensorName},
-    output::{AsSettables, ValveName},
+    input::{SensorNameExt, SensorStore},
+    output::ActuatorStore,
 };
 pub use sequence_parser::{Command, parse_sequence_str};
 
@@ -27,13 +29,17 @@ enum Blocker<'a> {
 
 /// Run a sequence of [`Command`]s on a remote computer.
 #[expect(clippy::too_many_lines)] // yeeeeah a bit ugly.
-pub async fn run_sequence(
+pub async fn run_sequence<ValveName, SensorName>(
     sequence: impl IntoIterator<Item = &Command<ValveName, SensorName, StateName>>,
-    actuators: &impl AsSettables,
-    sensors: &impl SensorDatapointStore,
-) -> ControlFlow<StateName> {
-    let mut pressure_watcher = SensorWatcher::<BarG>::new();
-    let mut temperature_watcher = SensorWatcher::<Celsius>::new();
+    actuators: &impl ActuatorStore<ValveName>,
+    sensors: &impl SensorStore<SensorName>,
+) -> ControlFlow<StateName>
+where
+    ValveName: Clone + Debug + Ord + 'static,
+    SensorName: SensorNameExt + Clone + Hash + Eq + 'static,
+{
+    let mut pressure_watcher = SensorWatcher::<SensorName, BarG>::new();
+    let mut temperature_watcher = SensorWatcher::<SensorName, Celsius>::new();
 
     let mut blocker = Option::<Blocker>::None;
     let mut settables = actuators.as_settables();
@@ -167,7 +173,7 @@ pub async fn run_sequence(
                     .get_pressure_datapoint(name)
                     .expect("we ensured that the name is for a pressure sensor");
                 pressure_watcher.add_watcher(
-                    *name,
+                    name.clone(),
                     key.clone(),
                     sensor,
                     *min,
@@ -186,7 +192,7 @@ pub async fn run_sequence(
                     .get_temperature_datapoint(name)
                     .expect("we ensured that the name is for a temperature sensor");
                 temperature_watcher.add_watcher(
-                    *name,
+                    name.clone(),
                     key.clone(),
                     sensor,
                     *min,
@@ -195,8 +201,8 @@ pub async fn run_sequence(
                 );
             }
             Command::SensorIgnore { name, key } => {
-                temperature_watcher.remove_watcher(*name, key.as_ref());
-                pressure_watcher.remove_watcher(*name, key.as_ref());
+                temperature_watcher.remove_watcher(name, key.as_ref());
+                pressure_watcher.remove_watcher(name, key.as_ref());
             }
             Command::SensorDetect {
                 name,

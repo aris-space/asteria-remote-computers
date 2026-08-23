@@ -1,4 +1,4 @@
-use pss_drivers::output::AsSettables;
+use pss_drivers::output::ActuatorStore;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
