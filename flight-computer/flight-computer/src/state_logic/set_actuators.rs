@@ -1,3 +1,4 @@
+use pss_drivers::output::AsSettables;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 

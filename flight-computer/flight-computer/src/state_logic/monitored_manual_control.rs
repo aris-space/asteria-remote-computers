@@ -6,7 +6,7 @@ use lib_mission::actuator_control::command::{ActuatorControl, NeverReturns};
 use lib_mission::state_machine::{AdditionalState, StateLogic, StateName};
 use lib_mission::telemetry::await_telemetry_loss;
 use lib_mission::transition::ManualTransitions;
-use pss_drivers::output::ValveName;
+use pss_drivers::output::{AsSettables, ValveName};
 
 /// This state gives manual control for the configured actuators,
 /// and otherwise waits for a manual transition or a threshold violation

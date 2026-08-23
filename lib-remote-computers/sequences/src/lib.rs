@@ -7,7 +7,7 @@ use datatypes::units::{BarG, Celsius};
 use lib_mission::state_machine::StateName;
 use pss_drivers::{
     input::{SensorDatapointStore, SensorName},
-    output::ValveName,
+    output::{AsSettables, ValveName},
 };
 pub use sequence_parser::{Command, parse_sequence_str};
 
@@ -29,8 +29,8 @@ enum Blocker<'a> {
 #[expect(clippy::too_many_lines)] // yeeeeah a bit ugly.
 pub async fn run_sequence(
     sequence: impl IntoIterator<Item = &Command<ValveName, SensorName, StateName>>,
-    actuators: &pss_drivers::output::PSSValves,
-    sensors: &pss_drivers::input::PSSSensors,
+    actuators: &impl AsSettables,
+    sensors: &impl SensorDatapointStore,
 ) -> ControlFlow<StateName> {
     let mut pressure_watcher = SensorWatcher::<BarG>::new();
     let mut temperature_watcher = SensorWatcher::<Celsius>::new();

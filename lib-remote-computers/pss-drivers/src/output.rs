@@ -184,11 +184,15 @@ impl std::str::FromStr for ValveName {
     }
 }
 
-impl PSSValves {
-    /// Returns a map keyed by `ValveName`, with each entry being a boxed
-    /// `Settable` that builds and sends the right CAN message when
-    /// `set_value` is called.
-    pub fn as_settables(&self) -> BTreeMap<ValveName, Box<dyn Settable + Send>> {
+pub trait AsSettables {
+    /// Returns a map of [`ValveName`]s with their associated [`Settable`]
+    /// that builds and sends the right CAN message when [`Settable::set_value`]
+    /// is called.
+    fn as_settables(&self) -> BTreeMap<ValveName, Box<dyn Settable + Send>>;
+}
+
+impl AsSettables for PSSValves {
+    fn as_settables(&self) -> BTreeMap<ValveName, Box<dyn Settable + Send>> {
         let mut map: BTreeMap<ValveName, Box<dyn Settable + Send>> = BTreeMap::new();
         let sender = self.sender;
 

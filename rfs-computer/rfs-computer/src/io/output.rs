@@ -5,6 +5,7 @@ use std::collections::BTreeMap;
 use datatypes::actuator::Settable;
 use datatypes::actuator::ThrottleableValve;
 use messages::Message;
+use pss_drivers::output::AsSettables;
 use pss_drivers::output::PSSValves;
 use uremote_electronics::output as uremote;
 use watchable::Watchable;
