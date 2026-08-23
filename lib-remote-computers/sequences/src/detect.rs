@@ -10,6 +10,19 @@ use std::{
 };
 use watchable::Watchable;
 
+enum DetectorState {
+    /// The detector is waiting for its detection condition to be fulfilled.
+    Waiting,
+    /// The detector's detection condition is fulfilled but it needs to be
+    /// held until the specified [`Instant`].
+    Holding(Instant),
+    /// The detector's detection condition wasn't fulfilled (long enough)
+    /// before the detection deadline exceeded.
+    Aborted(StateName),
+    /// The detector's detection condition was fulfilled (long enough).
+    Finished,
+}
+
 pub struct SensorDetector<'a, T: ValueWithUnit<f32>> {
     /// Watcher of the underlying sensor.
     watcher: WatchedWatchable<T>,
@@ -23,14 +36,8 @@ pub struct SensorDetector<'a, T: ValueWithUnit<f32>> {
     deadline: Instant,
     /// Optional duration for how long the value needs to stay above/below the threshold.
     duration: Option<Duration>,
-    /// If a `duration` is specified and the detection condition is currently fulfilled,
-    /// this field contains the instant until which the value needs to stay above the
-    /// detection threshold until the execution can continue. Otherwise, this field
-    /// is [`None`].
-    duration_deadline: Option<Instant>,
-    /// Boolean condition whether the detector is finished. Calling
-    /// [`SensorDetector::detect`] on a finished detector will panic.
-    finished: bool,
+    /// Current state of the sensor detector's state machine.
+    state: DetectorState,
 }
 
 impl<'a, T: Send + Sync + Clone + ValueWithUnit<f32>> SensorDetector<'a, T> {
@@ -49,8 +56,7 @@ impl<'a, T: Send + Sync + Clone + ValueWithUnit<f32>> SensorDetector<'a, T> {
             abort: abort_state,
             deadline: Instant::now() + patience,
             duration,
-            duration_deadline: None,
-            finished: false,
+            state: DetectorState::Waiting,
         }
     }
 
@@ -67,25 +73,24 @@ impl<'a, T: Send + Sync + Clone + ValueWithUnit<f32>> SensorDetector<'a, T> {
     ///   state into which the state machine should transition.
     /// - The underlying [`Future`] is cancelled because some other [`Future`] inside the
     ///   [`tokio::select!`] completes earlier.
-    ///
-    /// After the method returned [`ControlFlow::Continue`] or [`ControlFlow::Break`] the
-    /// [`SensorDetector`] instance should be treated as "consumed". This means any subsequent
-    /// calls to [`SensorDetector::detect`] will panic.
     pub async fn detect(&mut self) -> ControlFlow<StateName> {
-        assert!(
-            !self.finished,
-            "called `detect` on a finished sensor detector"
-        );
-
         loop {
-            // If the condition is currently fulfilled, this is the duration to sleep
-            // until the condition is met for at least `duration`. Otherwise, this is
-            // the [`Duration::MAX`], meaning we wait until the sensor changes and the
-            // new value fulfills the detection condition.
-            let duration_until_finished = self
-                .duration_deadline
-                .and_then(|instant| instant.checked_duration_since(Instant::now()))
-                .unwrap_or(Duration::MAX);
+            // Duration to sleep until the detector is finished.
+            let duration_until_finished = match &self.state {
+                // The condition was not fulfilled, so the "sleep until finished" sleep
+                // should never complete.
+                DetectorState::Waiting => Duration::MAX,
+                // If `instant` is in the past we return [`Duration::ZERO`] such that the
+                // sleep completes immediately. Otherwise, it's the duration from
+                // [`Instant::now`] to `instant`.
+                DetectorState::Holding(instant) => instant
+                    .checked_duration_since(Instant::now())
+                    .unwrap_or(Duration::ZERO),
+                // The detector previously aborted; we simply abort "again".
+                DetectorState::Aborted(state) => return ControlFlow::Break(state.clone()),
+                // The detector previously finished; we simply finish "again".
+                DetectorState::Finished => return ControlFlow::Continue(()),
+            };
 
             // Duration until the patience of the detection is exceeded and we need to
             // transition into the abort state.
@@ -94,7 +99,7 @@ impl<'a, T: Send + Sync + Clone + ValueWithUnit<f32>> SensorDetector<'a, T> {
                 .checked_duration_since(Instant::now())
                 .unwrap_or(Duration::ZERO);
 
-            // Boolean whether the dection condition is fulfilled after either the sensor
+            // Boolean whether the detection condition is fulfilled after either the sensor
             // returned a new value or after a sleep finished.
             let fulfills = tokio::select! {
                 biased;
@@ -102,40 +107,31 @@ impl<'a, T: Send + Sync + Clone + ValueWithUnit<f32>> SensorDetector<'a, T> {
                     let inner = value.value();
                     (self.rising && inner > self.threshold) || (!self.rising && inner < self.threshold)
                 },
-                // `detection_until` is only `Some` when the detection condition is currently
-                // fulfilled.
-                _ = tokio::time::sleep(duration_until_finished) => self.duration_deadline.is_some(),
+                _ = tokio::time::sleep(duration_until_finished) => {
+                    self.state = DetectorState::Finished;
+                    continue;
+                },
                 _ = tokio::time::sleep(duration_until_abort) => {
-                    self.finished = true;
-                    return ControlFlow::Break(self.abort.clone())
+                    self.state = DetectorState::Aborted(self.abort.clone());
+                    continue;
                 },
             };
 
-            match self.duration_deadline {
-                // The condition was already fulfilled; we need to check whether
-                // it was fulfilled for long enough.
-                Some(goal) if fulfills => {
-                    if goal <= Instant::now() {
-                        // The duration deadline is exceeded and we can continue
-                        // the sequence execution.
-                        self.finished = true;
-                        return ControlFlow::Continue(());
-                    }
+            if fulfills {
+                // The condition is fulfilled.
+                if let Some(duration) = self.duration {
+                    // The condition must be fulfilled for `duration`; we thus need
+                    // to wait until the condition was held for long enough.
+                    self.state = DetectorState::Holding(Instant::now() + duration);
+                } else {
+                    // The condition must not hold for a certain duration; the
+                    // detector is thus immediately finished.
+                    self.state = DetectorState::Finished;
                 }
-                // The condition is freshly fulfilled.
-                None if fulfills => {
-                    if let Some(duration) = self.duration {
-                        // The condition must be fulfilled for `duration`; we thus
-                        // cannot return from here now.
-                        self.duration_deadline = Some(Instant::now() + duration);
-                    } else {
-                        self.finished = true;
-                        return ControlFlow::Continue(());
-                    }
-                }
-                // The condition is not fulfilled; we need to reset the detection
-                // deadline.
-                _ => self.duration_deadline = None,
+            } else {
+                // The condition is not fulfilled; we transition into the
+                // [`DetectorState::Waiting`] state.
+                self.state = DetectorState::Waiting;
             }
         }
     }

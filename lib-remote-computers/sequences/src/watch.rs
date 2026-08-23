@@ -108,24 +108,8 @@ impl<T: Send + Sync + Clone + ValueWithUnit<f32>> SensorWatcher<T> {
         });
 
         // We wait for the first watcher to produce a value outside its allowed range.
-        let aborted = iter
-            .collect::<FuturesUnordered<_>>()
-            .collect::<Vec<_>>()
-            .await;
-        let first = aborted.first().cloned();
-
-        if let Some(first) = &first
-            && aborted.iter().any(|state| state != first)
-        {
-            // There are multiple different watchers which produced unallowed values at the same time.
-            // We can only transition into one abort state, thus we also emit a warning here.
-            tracing::warn!(
-                "Multiple sensors aborted to different states at the same time. The aborted states are {} and we now aborted into '{first}'",
-                aborted.join(", ")
-            );
-        }
-
-        match first {
+        let aborted = iter.collect::<FuturesUnordered<_>>().next().await;
+        match aborted {
             Some(abort_state) => ControlFlow::Break(abort_state),
             None => ControlFlow::Continue(()),
         }
