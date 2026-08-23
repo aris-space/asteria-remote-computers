@@ -136,3 +136,150 @@ impl<'a, T: Send + Sync + Clone + ValueWithUnit<f32>> SensorDetector<'a, T> {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use std::{
+        ops::ControlFlow,
+        time::{Duration, Instant},
+    };
+
+    use datatypes::units::Celsius;
+    use lib_mission::state_machine::StateName;
+    use tokio::sync::oneshot;
+    use watchable::Watchable;
+
+    use crate::detect::SensorDetector;
+
+    #[tokio::test]
+    async fn test_abort() {
+        let sensor = Watchable::<Celsius>::default();
+        let abort_state = StateName::new_unchecked("asdf").expect("state name should be valid");
+        let mut detector = SensorDetector::<Celsius>::new(
+            &sensor,
+            10.0,
+            true,
+            &abort_state,
+            Duration::from_millis(100),
+            None,
+        );
+
+        let result = detector.detect().await;
+        assert!(matches!(result, ControlFlow::Break(state) if state == abort_state));
+    }
+
+    #[tokio::test]
+    async fn test_finished_immediately() {
+        let sensor = Watchable::<Celsius>::default();
+        let abort_state = StateName::new_unchecked("asdf").expect("state name should be valid");
+        let mut detector = SensorDetector::<Celsius>::new(
+            &sensor,
+            10.0,
+            true,
+            &abort_state,
+            Duration::from_millis(1000),
+            None,
+        );
+
+        // A value of 4.0 should not trigger a detection.
+        sensor.replace(Celsius(4.0));
+        tokio::select! {
+            _ = detector.detect() => panic!("should not detect"),
+            _ = tokio::time::sleep(Duration::from_millis(10)) => { /* fall-through to below */ },
+        }
+
+        tokio::spawn(async move {
+            tokio::time::sleep(Duration::from_millis(100)).await;
+            // A value of 12.0 should trigger a detection in the main thread.
+            sensor.replace(Celsius(12.0));
+        });
+
+        let result = detector.detect().await;
+        assert_eq!(result, ControlFlow::Continue(()));
+    }
+
+    #[tokio::test]
+    async fn test_finished_with_duration() {
+        let sensor = Watchable::<Celsius>::default();
+        let abort_state = StateName::new_unchecked("asdf").expect("state name should be valid");
+        let mut detector = SensorDetector::<Celsius>::new(
+            &sensor,
+            10.0,
+            true,
+            &abort_state,
+            Duration::from_millis(1000),
+            Some(Duration::from_millis(250)),
+        );
+
+        let (tx, rx) = oneshot::channel::<Instant>();
+
+        tokio::spawn(async move {
+            tokio::time::sleep(Duration::from_millis(100)).await;
+            // A value of 12.0 should trigger a detection in the main thread.
+            sensor.replace(Celsius(12.0));
+            tx.send(Instant::now())
+                .expect("should transmit write instant");
+        });
+
+        let result = detector.detect().await;
+        assert_eq!(result, ControlFlow::Continue(()));
+
+        let finished_at = Instant::now();
+        let written_at = rx.await.expect("should receive write instant");
+        // Ensure that the detection waited for at least `duration` until the hold
+        // timeout of the detector exceeded.
+        assert!(finished_at >= written_at + Duration::from_millis(250));
+    }
+
+    #[tokio::test]
+    async fn test_abort_during_hold() {
+        let sensor = Watchable::<Celsius>::default();
+        let abort_state = StateName::new_unchecked("asdf").expect("state name should be valid");
+        let mut detector = SensorDetector::<Celsius>::new(
+            &sensor,
+            10.0,
+            true,
+            &abort_state,
+            Duration::from_millis(1000),
+            Some(Duration::from_millis(250)),
+        );
+
+        tokio::spawn(async move {
+            tokio::time::sleep(Duration::from_millis(800)).await;
+            // A value of 12.0 should trigger a detection in the main thread.
+            sensor.replace(Celsius(12.0));
+        });
+
+        let result = detector.detect().await;
+        // The detection should abort because 800ms (sleep) + 250ms (hold time) > 1000ms (patience).
+        assert_eq!(result, ControlFlow::Break(abort_state));
+    }
+
+    #[tokio::test]
+    async fn test_abort_after_hold_violation() {
+        let sensor = Watchable::<Celsius>::default();
+        let abort_state = StateName::new_unchecked("asdf").expect("state name should be valid");
+        let mut detector = SensorDetector::<Celsius>::new(
+            &sensor,
+            10.0,
+            true,
+            &abort_state,
+            Duration::from_millis(1000),
+            Some(Duration::from_millis(250)),
+        );
+
+        tokio::spawn(async move {
+            tokio::time::sleep(Duration::from_millis(100)).await;
+            // A value of 12.0 should trigger a detection in the main thread.
+            sensor.replace(Celsius(12.0));
+
+            // 150ms (sleep) < 250ms (hold time), thus the detector should not
+            // finish.
+            tokio::time::sleep(Duration::from_millis(150)).await;
+            sensor.replace(Celsius(5.0));
+        });
+
+        let result = detector.detect().await;
+        assert_eq!(result, ControlFlow::Break(abort_state));
+    }
+}

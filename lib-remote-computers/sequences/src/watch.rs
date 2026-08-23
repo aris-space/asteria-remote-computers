@@ -93,7 +93,7 @@ impl<T: Send + Sync + Clone + ValueWithUnit<f32>> SensorWatcher<T> {
         let iter = self.0.values_mut().flat_map(|watchers| {
             watchers.iter_mut().map(|watched| {
                 // For each registered watcher we return a "stream" containing the abort state
-                // for every unallowed value its sensor contains.
+                // for every disallowed value its sensor contains.
 
                 let WatchedSensor {
                     watcher,
@@ -113,5 +113,60 @@ impl<T: Send + Sync + Clone + ValueWithUnit<f32>> SensorWatcher<T> {
             Some(abort_state) => ControlFlow::Break(abort_state),
             None => ControlFlow::Continue(()),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::{ops::ControlFlow, time::Duration};
+
+    use datatypes::units::Celsius;
+    use lib_mission::state_machine::StateName;
+    use pss_drivers::input::SensorName;
+    use watchable::Watchable;
+
+    use crate::watch::SensorWatcher;
+
+    #[tokio::test]
+    async fn test_continue_when_empty() {
+        let mut watcher = SensorWatcher::<Celsius>::new();
+        for _ in 0..5 {
+            tokio::time::sleep(Duration::from_millis(50)).await;
+            assert_eq!(watcher.check().await, ControlFlow::Continue(()));
+        }
+    }
+
+    #[tokio::test]
+    async fn test_abort_when_violated() {
+        let mut watcher = SensorWatcher::<Celsius>::new();
+        let sensor = Watchable::<Celsius>::default();
+        let abort_state = StateName::new_unchecked("asdf").expect("state name should be valid");
+
+        watcher.add_watcher(
+            SensorName::eng_cc_p,
+            None,
+            &sensor,
+            10.0,
+            15.0,
+            abort_state.clone(),
+        );
+
+        tokio::time::sleep(Duration::from_millis(50)).await;
+        // A value of 12.0 should not violate the watcher.
+        sensor.replace(Celsius(12.0));
+        tokio::select! {
+            _ = watcher.check() => panic!("should not finish"),
+            _ = tokio::time::sleep(Duration::from_millis(10)) => { /* fall-through to below */ },
+        }
+
+        tokio::spawn(async move {
+            tokio::time::sleep(Duration::from_millis(100)).await;
+            // A value of 5.0 should violate the watcher and the `watcher.check()` on
+            // the main thread should return `ControlFlow::Break(abort)`.
+            sensor.replace(Celsius(5.0));
+        });
+
+        let result = watcher.check().await;
+        assert!(matches!(result, ControlFlow::Break(state) if state == abort_state));
     }
 }

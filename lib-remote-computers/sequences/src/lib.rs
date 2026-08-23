@@ -42,6 +42,8 @@ pub async fn run_sequence(
         // Before we execute the next sequence command we first need to check whether
         // there is still a blocker. Should that be the case, we execute the blocker
         // until it's removed.
+        // Additionally, we also check whether any of the active watchers was violated
+        // in the meantime. If that's the case, we return an abort state.
         loop {
             match &mut blocker {
                 Some(Blocker::Detector(detector)) => {
@@ -72,9 +74,18 @@ pub async fn run_sequence(
                         },
                     };
                 }
-                // We're no longer blocked on anything before being able to execute the next
-                // sequence command.
-                None => break,
+                // We're not blocked on anything before being able to execute the next sequence
+                // command. Since there might have been a watcher event since the last command was
+                // executed, we need to check for such events before continuing the execution of
+                // the next sequence command.
+                None => tokio::select! {
+                        biased;
+                        result = pressure_watcher.check() => result?,
+                        result = temperature_watcher.check() => result?,
+                        // No watcher had an event; we can thus start executing the next
+                        // sequence command.
+                        _ = tokio::time::sleep(Duration::ZERO) => break,
+                },
             }
         }
 
