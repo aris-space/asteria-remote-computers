@@ -49,6 +49,7 @@ bincode = { version = "2.0.1", features = ["derive", "serde"], default-features 
 defmt = { version = "1.0.1" }
 arbitrary = { version = "1.4.1", features = ["derive"] }
 utoipa = { version = "5.4.0" }
+facet = "0.46.0"
 # for GNC:
 nav-types = { git = "https://github.com/nordmoen/nav-types.git", rev = "0b69095" }
 
