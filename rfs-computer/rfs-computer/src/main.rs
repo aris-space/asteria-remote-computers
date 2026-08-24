@@ -36,7 +36,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         state_tree.rfs_computer_status.clone(),
     );
 
-    let (can_tx, can_rx) = std::sync::mpsc::channel();
+    let (can_tx, _can_rx) = std::sync::mpsc::channel();
     let output_tree = OutputTree::new(can_tx.clone(), controllino_driver.clone(), &None);
 
     let state_machine = StateMachine::new(config_file.state_machine)?;

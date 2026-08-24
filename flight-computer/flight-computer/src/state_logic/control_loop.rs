@@ -2,7 +2,7 @@ use crate::util::timer::Timer;
 #[cfg(feature = "gnc")]
 use gnc_algorithms::guidance::sysid_flight::SysIdGuidance;
 #[cfg(feature = "gnc")]
-use gnc_algorithms::SafetySpiralGuidance;
+use gnc_algorithms::{CompositeController, LimitCycleGuidance, PController, SafetySpiralGuidance};
 use lib_mission::reactive::{IntoWatched, Repeatedly, Watched};
 use lib_mission::state_machine::{AdditionalState, StateLogic, StateName};
 use lib_mission::transition::ManualTransitions;
@@ -273,7 +273,25 @@ pub enum AnyGncController {
         descent_per_tick: f32,
     },
     #[cfg(feature = "gnc")]
+    LimitCyclesHIL {
+        gnc: Box<
+            gnc_interface::adapter::CompatAdapter<
+                SafetySpiralGuidance<CompositeController<LimitCycleGuidance, PController>>,
+            >,
+        >,
+        height: f32,
+        descent_per_tick: f32,
+    },
+    #[cfg(feature = "gnc")]
     SysID(Box<gnc_interface::adapter::CompatAdapter<SafetySpiralGuidance<SysIdGuidance>>>),
+    #[cfg(feature = "gnc")]
+    LimitCycles(
+        Box<
+            gnc_interface::adapter::CompatAdapter<
+                SafetySpiralGuidance<CompositeController<LimitCycleGuidance, PController>>,
+            >,
+        >,
+    ),
 }
 
 /// The config for any of the implemented GNC controllers.
@@ -292,7 +310,16 @@ pub enum AnyGncControllerConfig {
         descent_per_tick: f32,
     },
     #[cfg(feature = "gnc")]
+    LimitCyclesHIL {
+        gnc: <gnc_interface::adapter::CompatAdapter<SafetySpiralGuidance<CompositeController<LimitCycleGuidance, PController>>>
+        as gnc_interface::CompatGuidanceController>::Config,
+        initial_height: f32,
+        descent_per_tick: f32,
+    },
+    #[cfg(feature = "gnc")]
     SysID(<gnc_interface::adapter::CompatAdapter<SafetySpiralGuidance<SysIdGuidance>>as gnc_interface::CompatGuidanceController>::Config),
+    #[cfg(feature = "gnc")]
+    LimitCycles(<gnc_interface::adapter::CompatAdapter<SafetySpiralGuidance<CompositeController<LimitCycleGuidance, PController>>>as gnc_interface::CompatGuidanceController>::Config),
 }
 
 impl gnc_interface::CompatGuidanceController for AnyGncController {
@@ -319,6 +346,24 @@ impl gnc_interface::CompatGuidanceController for AnyGncController {
                 gnc_interface::adapter::CompatAdapter::<SafetySpiralGuidance<SysIdGuidance>>::new(
                     gnc,
                 )?,
+            ))),
+            #[cfg(feature = "gnc")]
+            AnyGncControllerConfig::LimitCyclesHIL {
+                gnc,
+                initial_height,
+                descent_per_tick,
+            } => Ok(Self::LimitCyclesHIL {
+                gnc: Box::new(gnc_interface::adapter::CompatAdapter::<
+                    SafetySpiralGuidance<CompositeController<LimitCycleGuidance, PController>>,
+                >::new(gnc)?),
+                height: initial_height,
+                descent_per_tick,
+            }),
+            #[cfg(feature = "gnc")]
+            AnyGncControllerConfig::LimitCycles(gnc) => Ok(Self::LimitCycles(Box::new(
+                gnc_interface::adapter::CompatAdapter::<
+                    SafetySpiralGuidance<CompositeController<LimitCycleGuidance, PController>>,
+                >::new(gnc)?,
             ))),
         }
     }
@@ -347,13 +392,31 @@ impl gnc_interface::CompatGuidanceController for AnyGncController {
                 let prev_height = *height;
                 *height -= *descent_per_tick;
                 #[allow(clippy::float_cmp)] // fine for integers
-                if (prev_height / 100.).round() != height.round() {
+                if (prev_height / 10.).round() != (*height / 10.).round() {
                     tracing::info!("Simulating at {height}m");
                 }
                 position.altitude = f64::from(*height);
                 gnc.step(time_unix, position, velocity, acceleration, orientation)
             }
             AnyGncController::SysID(gnc) => {
+                gnc.step(time_unix, position, velocity, acceleration, orientation)
+            }
+            #[cfg(feature = "gnc")]
+            AnyGncController::LimitCyclesHIL {
+                gnc,
+                height,
+                descent_per_tick,
+            } => {
+                let prev_height = *height;
+                *height -= *descent_per_tick;
+                #[allow(clippy::float_cmp)] // fine for integers
+                if (prev_height / 10.).round() != (*height / 10.).round() {
+                    tracing::info!("Simulating at {height}m");
+                }
+                position.altitude = f64::from(*height);
+                gnc.step(time_unix, position, velocity, acceleration, orientation)
+            }
+            AnyGncController::LimitCycles(gnc) => {
                 gnc.step(time_unix, position, velocity, acceleration, orientation)
             }
         }

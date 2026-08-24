@@ -2,11 +2,11 @@
 
 use crate::io::types::{MainDeploymentState, SeparationState};
 
+use datapoints::dp_backplane::Message as BPMessage;
 use datapoints::dp_engine_control_board::Message as ECUMessage;
 use datapoints::dp_flight_computer::Message as FCMessage;
 use datapoints::dp_fuel_control_board::Message as FCBMessage;
 use datapoints::dp_oxidizer_control_board::Message as OCBMessage;
-use datapoints::dp_power_board::Message as PWBMessage;
 use datapoints::dp_recovery_board::Message as RECMessage;
 use datapoints::dp_recovery_board::SteeringPositions;
 use datapoints::dp_rfs_computer::Message as RFSCMessage;
@@ -15,6 +15,7 @@ use datapoints::dp_sensor_carrier::{
     EnvironmentalData, ImuData, OrientationData, PositionData, VelocityData,
 };
 use datatypes::status::{ArmingState, DownlinkTelemetryStats, UplinkTelemetryHealth};
+use datatypes::units::HPa;
 use datatypes::units::RailStatus;
 use io_utils::{Broadcast, Collector};
 use lib_mission::state_machine::StateName;
@@ -22,6 +23,7 @@ use lib_mission::util::time::MissionTime;
 use lib_mission::{actuator_control, transition};
 use messages::datapoints;
 use messages::datapoints::dp_flight_computer::__message_meta_types::ManualStateTransition;
+use messages::datapoints::dp_sensor_carrier::MagnetometerData;
 use messages::Message;
 use pss_drivers::input::{PSSSensors, PSSValves};
 use watchable::Watchable;
@@ -38,11 +40,11 @@ pub struct RawUnprocessedData {
     #[broadcast(min_freq_hz = 0.5, max_freq_hz = 2.)]
     pub environmental_data: Watchable<EnvironmentalData>,
     /// The power status of the 24V rail of the AV stack.
-    #[datapoint(pattern = "Message::PowerBoard(PWBMessage::RailStatus24V(#value))")]
+    #[datapoint(pattern = "Message::Backplane(BPMessage::RailStatus24V(#value))")]
     #[broadcast(min_freq_hz = 0.5, max_freq_hz = 2.)]
     pub rail_status_24v: Watchable<RailStatus>,
     /// The power status of the 5V rail of the AV stack.
-    #[datapoint(pattern = "Message::PowerBoard(PWBMessage::RailStatus5V(#value))")]
+    #[datapoint(pattern = "Message::Backplane(BPMessage::RailStatus5V(#value))")]
     #[broadcast(min_freq_hz = 0.5, max_freq_hz = 2.)]
     pub rail_status_5v: Watchable<RailStatus>,
 }
@@ -114,6 +116,13 @@ pub struct InputTree {
     #[datapoint(pattern = "Message::SensorCarrier(SCMessage::OrientationData(#value))")]
     #[broadcast(min_freq_hz = 5., max_freq_hz = 10.)]
     pub orientation: Watchable<OrientationData>,
+
+    #[datapoint(pattern = "Message::SensorCarrier(SCMessage::MagnetometerData(#value))")]
+    #[broadcast(min_freq_hz = 1., max_freq_hz = 4.)]
+    pub magnetometer: Watchable<MagnetometerData>,
+    #[datapoint(pattern = "Message::SensorCarrier(SCMessage::PressureData(#value))")]
+    #[broadcast(min_freq_hz = 1., max_freq_hz = 4.)]
+    pub pressure: Watchable<HPa>,
 
     /// The valve states of the PSS.
     #[broadcast(flatten)]
@@ -195,7 +204,7 @@ pub struct BoardsStatus {
     #[broadcast(min_freq_hz = 0.5, max_freq_hz = 2.)]
     pub sensor_carrier: Watchable<StatusReport<datapoints::dp_sensor_carrier::SensorCarrierStatus>>,
 
-    #[datapoint(pattern = "Message::PowerBoard(PWBMessage::BoardStatus(#value))")]
+    #[datapoint(pattern = "Message::Backplane(BPMessage::BoardStatus(#value))")]
     #[broadcast(min_freq_hz = 0.5, max_freq_hz = 2.)]
     pub power_board: Watchable<StatusReport<datatypes::status::StatusCommonMessage>>,
 
