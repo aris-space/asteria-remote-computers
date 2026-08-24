@@ -12,9 +12,11 @@ use datapoints::dp_recovery_board::SteeringPositions;
 use datapoints::dp_rfs_computer::Message as RFSCMessage;
 use datapoints::dp_sensor_carrier::Message as SCMessage;
 use datapoints::dp_sensor_carrier::{
-    EnvironmentalData, ImuData, OrientationData, PositionData, VelocityData,
+    EnvironmentalData, ImuData, MagnetometerData, OrientationData, PositionData, VelocityData,
 };
-use datatypes::status::{ArmingState, DownlinkTelemetryStats, UplinkTelemetryHealth};
+use datatypes::status::{
+    ArmingState, BuildInformationCommon, DownlinkTelemetryStats, UplinkTelemetryHealth,
+};
 use datatypes::units::HPa;
 use datatypes::units::RailStatus;
 use datatypes::units::{BarG, Celsius};
@@ -24,7 +26,6 @@ use lib_mission::util::time::MissionTime;
 use lib_mission::{actuator_control, transition};
 use messages::datapoints;
 use messages::datapoints::dp_flight_computer::__message_meta_types::ManualStateTransition;
-use messages::datapoints::dp_sensor_carrier::MagnetometerData;
 use messages::Message;
 use pss_drivers::input::{PSSSensors, PSSValves};
 use sequences::{SensorNameExt, SensorStore};
@@ -118,13 +119,17 @@ pub struct InputTree {
     #[datapoint(pattern = "Message::SensorCarrier(SCMessage::OrientationData(#value))")]
     #[broadcast(min_freq_hz = 5., max_freq_hz = 10.)]
     pub orientation: Watchable<OrientationData>,
-
     #[datapoint(pattern = "Message::SensorCarrier(SCMessage::MagnetometerData(#value))")]
-    #[broadcast(min_freq_hz = 1., max_freq_hz = 4.)]
+    #[broadcast(min_freq_hz = 5., max_freq_hz = 10.)]
     pub magnetometer: Watchable<MagnetometerData>,
     #[datapoint(pattern = "Message::SensorCarrier(SCMessage::PressureData(#value))")]
-    #[broadcast(min_freq_hz = 1., max_freq_hz = 4.)]
+    #[broadcast(min_freq_hz = 5., max_freq_hz = 10.)]
     pub pressure: Watchable<HPa>,
+
+    /// Build information reported by each board on the CAN bus.
+    #[broadcast(flatten)]
+    #[collector(flatten)]
+    pub boards_build_info: BoardsBuildInfo,
 
     /// The valve states of the PSS.
     #[broadcast(flatten)]
@@ -238,6 +243,46 @@ pub struct BoardsStatus {
     #[broadcast(min_freq_hz = 0.5, max_freq_hz = 2.)]
     pub engine_control_board:
         Watchable<StatusReport<datapoints::dp_engine_control_board::EngineControlBoardStatus>>,
+}
+
+/// Build information for every board on the CAN bus.
+#[derive(Debug, Default, Clone, Broadcast, Collector)]
+#[broadcast(message_type = "Message")]
+#[collector(
+    message_type = "Message",
+    update_expr = "let _ = #field.update(#value);"
+)]
+pub struct BoardsBuildInfo {
+    #[datapoint(pattern = "Message::FlightComputer(FCMessage::BuildInfo(#value))")]
+    #[broadcast(min_freq_hz = 0.05, max_freq_hz = 0.2)]
+    pub flight_computer: Watchable<BuildInformationCommon>,
+
+    #[datapoint(pattern = "Message::RfsComputer(RFSCMessage::BuildInfo(#value))")]
+    #[broadcast(min_freq_hz = 0.05, max_freq_hz = 0.2)]
+    pub rfs_computer: Watchable<BuildInformationCommon>,
+
+    #[datapoint(pattern = "Message::SensorCarrier(SCMessage::BuildInfo(#value))")]
+    #[broadcast(min_freq_hz = 0.05, max_freq_hz = 0.2)]
+    pub sensor_carrier: Watchable<BuildInformationCommon>,
+
+    // #[datapoint(pattern = "Message::PowerBoard(PWBMessage::BuildInfo(#value))")]
+    // #[broadcast(min_freq_hz = 0.05, max_freq_hz = 0.2)]
+    // pub power_board: Watchable<BuildInformationCommon>,
+    #[datapoint(pattern = "Message::RecoveryBoard(RECMessage::BuildInfo(#value))")]
+    #[broadcast(min_freq_hz = 0.05, max_freq_hz = 0.2)]
+    pub recovery_board: Watchable<BuildInformationCommon>,
+
+    #[datapoint(pattern = "Message::FuelControlBoard(FCBMessage::BuildInfo(#value))")]
+    #[broadcast(min_freq_hz = 0.05, max_freq_hz = 0.2)]
+    pub fuel_control_board: Watchable<BuildInformationCommon>,
+
+    #[datapoint(pattern = "Message::OxidizerControlBoard(OCBMessage::BuildInfo(#value))")]
+    #[broadcast(min_freq_hz = 0.05, max_freq_hz = 0.2)]
+    pub oxidizer_control_board: Watchable<BuildInformationCommon>,
+
+    #[datapoint(pattern = "Message::EngineControlBoard(ECUMessage::BuildInfo(#value))")]
+    #[broadcast(min_freq_hz = 0.05, max_freq_hz = 0.2)]
+    pub engine_control_board: Watchable<BuildInformationCommon>,
 }
 
 /// Allow common code to read the ground station transition command.
