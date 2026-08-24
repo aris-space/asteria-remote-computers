@@ -120,10 +120,10 @@ pub struct InputTree {
     #[broadcast(min_freq_hz = 5., max_freq_hz = 10.)]
     pub orientation: Watchable<OrientationData>,
     #[datapoint(pattern = "Message::SensorCarrier(SCMessage::MagnetometerData(#value))")]
-    #[broadcast(min_freq_hz = 5., max_freq_hz = 10.)]
+    #[broadcast(min_freq_hz = 1., max_freq_hz = 4.)]
     pub magnetometer: Watchable<MagnetometerData>,
     #[datapoint(pattern = "Message::SensorCarrier(SCMessage::PressureData(#value))")]
-    #[broadcast(min_freq_hz = 5., max_freq_hz = 10.)]
+    #[broadcast(min_freq_hz = 1., max_freq_hz = 4.)]
     pub pressure: Watchable<HPa>,
 
     /// Build information reported by each board on the CAN bus.
