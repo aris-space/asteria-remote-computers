@@ -23,9 +23,9 @@ pub fn spawn_rfsc_status_driver(
             interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
             loop {
                 interval.tick().await;
-                let status = &rfsc_status;
+                let status = rfsc_status.get();
                 let msg =
-                    messages::Message::RfsComputer(dp_rfs_computer::Message::Status(status.get()));
+                    messages::Message::RfsComputer(dp_rfs_computer::Message::Status(status));
 
                 if tx.send(msg).is_err() {
                     tracing::warn!("CAN channel was closed. Shutting down!");
