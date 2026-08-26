@@ -24,8 +24,7 @@ pub fn spawn_rfsc_status_driver(
             loop {
                 interval.tick().await;
                 let status = rfsc_status.get();
-                let msg =
-                    messages::Message::RfsComputer(dp_rfs_computer::Message::Status(status));
+                let msg = messages::Message::RfsComputer(dp_rfs_computer::Message::Status(status));
 
                 if tx.send(msg).is_err() {
                     tracing::warn!("CAN channel was closed. Shutting down!");
