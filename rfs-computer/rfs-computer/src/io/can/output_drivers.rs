@@ -1,5 +1,6 @@
 use std::time::Duration;
 
+use datatypes::actuator::{DigitalOut, NormallyClosedValve};
 use datatypes::status::BuildInformationCommon;
 use datatypes::units::BarG;
 use lib_mission::reactive::Watched;
