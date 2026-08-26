@@ -83,6 +83,7 @@ fn init_output_drivers(
 ) -> Vec<AbortHandle> {
     let State {
         rfs_computer_status,
+
         ..
     } = state_tree;
     // Register the emitters
@@ -93,6 +94,27 @@ fn init_output_drivers(
             input_tree.controllino_sensors.igniter_pressure.watched(),
             tx.clone(),
         ),
+        output_drivers::spawn_gox_igniter_valve_state_driver(
+            input_tree.uremote_actuators.gox_igniter_valve.watched(),
+            tx.clone(),
+        ),
+        output_drivers::spawn_h2_igniter_valve_state_driver(
+            input_tree.uremote_actuators.h2_igniter_valve.watched(),
+            tx.clone(),
+        ),
+        output_drivers::spawn_gox_purge_valve_state_driver(
+            input_tree.uremote_actuators.gox_purge_valve.watched(),
+            tx.clone(),
+        ),
+        output_drivers::spawn_h2_purge_valve_state_driver(
+            input_tree.uremote_actuators.h2_purge_valve.watched(),
+            tx.clone(),
+        ),
+        output_drivers::spawn_igniter_spark_plug_state_driver(
+            input_tree.uremote_actuators.igniter_spark.watched(),
+            tx.clone(),
+        ),
+
     ];
     handles
 }
