@@ -24,7 +24,8 @@ pub fn spawn_rfsc_status_driver(
             loop {
                 interval.tick().await;
                 let status = &rfsc_status;
-                let msg = messages::Message::RfsComputer(dp_rfs_computer::Message::Status(status.get()));
+                let msg =
+                    messages::Message::RfsComputer(dp_rfs_computer::Message::Status(status.get()));
 
                 if tx.send(msg).is_err() {
                     tracing::warn!("CAN channel was closed. Shutting down!");
@@ -126,11 +127,7 @@ pub fn spawn_gox_igniter_valve_state_driver(
                     dp_rfs_computer::Message::GoxIgniterValveState(state.current()),
                 );
 
-                if matches!(
-                    rocket_power.get(),
-                    DigitalIn::Off
-               )
-                {
+                if matches!(rocket_power.get(), DigitalIn::Off) {
                     tracing::trace!("ignoring CAN error messages while the rocket is disconnected");
                     continue;
                 }
@@ -164,11 +161,7 @@ pub fn spawn_h2_igniter_valve_state_driver(
                     dp_rfs_computer::Message::H2IgniterValveState(state.current()),
                 );
 
-                if matches!(
-                    rocket_power.get(),
-                    DigitalIn::Off
-               )
-                {
+                if matches!(rocket_power.get(), DigitalIn::Off) {
                     tracing::trace!("ignoring CAN error messages while the rocket is disconnected");
                     continue;
                 }
@@ -202,11 +195,7 @@ pub fn spawn_gox_purge_valve_state_driver(
                     dp_rfs_computer::Message::GoxPurgeValveState(state.current()),
                 );
 
-                if matches!(
-                    rocket_power.get(),
-                    DigitalIn::Off
-               )
-                {
+                if matches!(rocket_power.get(), DigitalIn::Off) {
                     tracing::trace!("ignoring CAN error messages while the rocket is disconnected");
                     continue;
                 }
@@ -240,11 +229,7 @@ pub fn spawn_h2_purge_valve_state_driver(
                     dp_rfs_computer::Message::H2PurgeValveState(state.current()),
                 );
 
-                if matches!(
-                    rocket_power.get(),
-                    DigitalIn::Off
-               )
-                {
+                if matches!(rocket_power.get(), DigitalIn::Off) {
                     tracing::trace!("ignoring CAN error messages while the rocket is disconnected");
                     continue;
                 }
@@ -278,11 +263,7 @@ pub fn spawn_igniter_spark_plug_state_driver(
                     dp_rfs_computer::Message::IgniterSparkPlugState(state.current()),
                 );
 
-                if matches!(
-                    rocket_power.get(),
-                    DigitalIn::Off
-               )
-                {
+                if matches!(rocket_power.get(), DigitalIn::Off) {
                     tracing::trace!("ignoring CAN error messages while the rocket is disconnected");
                     continue;
                 }
