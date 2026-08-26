@@ -11,8 +11,6 @@ use tokio::task::AbortHandle;
 use tracing::Instrument;
 use watchable::Watchable;
 
-use crate::io::input::InputTree;
-
 /// Sends `RfsComputerStatus` at 1Hz.
 #[allow(clippy::cast_possible_truncation)] // u64 micros since start
 pub fn spawn_rfsc_status_driver(
@@ -25,8 +23,8 @@ pub fn spawn_rfsc_status_driver(
             interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
             loop {
                 interval.tick().await;
-                let status = rfsc_status;
-                let msg = messages::Message::RfsComputer(dp_rfs_computer::Message::Status(status.watch()));
+                let status = &rfsc_status;
+                let msg = messages::Message::RfsComputer(dp_rfs_computer::Message::Status(status.get()));
 
                 if tx.send(msg).is_err() {
                     tracing::warn!("CAN channel was closed. Shutting down!");
