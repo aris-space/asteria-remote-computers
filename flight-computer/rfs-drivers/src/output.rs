@@ -43,6 +43,15 @@ impl std::str::FromStr for ActuatorName {
 }
 
 impl ActuatorChannel {
+    /// This method is needed for the OutputTree constructor.
+    /// We cannot derive Default for ActuatorChannel for the same 
+    /// reason as PSSValves
+    pub fn new(tx: mpsc::Sender<messages::Message>) -> Self {
+        Self { tx }
+    }
+}
+
+impl ActuatorChannel {
     /// Returns a map keyed by `ActuatorName`, with each entry being a boxed
     /// `Settable` that builds and sends the right CAN message when
     /// `set_value` is called.

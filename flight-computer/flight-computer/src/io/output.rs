@@ -7,6 +7,7 @@ use messages::datapoints::dp_flight_computer;
 use messages::Message;
 use pss_drivers::output::PSSValves;
 use watchable::Watchable;
+use rfs_drivers::output::ActuatorChannel;
 
 use super::types::{
     CameraPowerState, MainDeploymentState, RecoveryArmingState, SeparationState,
@@ -35,6 +36,9 @@ pub struct OutputTree {
     /// The target states of the tank and engine valves.
     pub valves: PSSValves,
 
+    /// The target states of the RFS actuators
+    pub rfs_actuators: ActuatorChannel,
+
     /// First 5 hex chars of the config file Git object hash. Set once at startup.
     #[datapoint(
         pattern = "Message::FlightComputer(dp_flight_computer::Message::ConfigHash(#value))"
@@ -51,14 +55,17 @@ pub struct OutputTree {
 /// The constructor for OutputTree. It must be provided
 /// given that Default cannot be derived for every field.
 impl OutputTree {
-    pub fn new(tx: std::sync::mpsc::Sender<Message>) -> Self {
+    pub fn new(
+        tx: std::sync::mpsc::Sender<Message>
+    ) -> Self {
         Self {
             separate_drogue: Watchable::default(),
             deploy_main_chute: Watchable::default(),
             steering_motor_target_deflections: Watchable::default(),
             recovery_actuators_armed: Watchable::default(),
             camera_powered_on: Watchable::default(),
-            valves: PSSValves::new(tx, pss_drivers::output::CommandSender::FC),
+            valves: PSSValves::new(tx.clone(), pss_drivers::output::CommandSender::FC),
+            rfs_actuators: ActuatorChannel::new(tx.clone()),
             hash_config: Watchable::default(),
             fc_status: Watchable::default(),
         }

@@ -398,6 +398,7 @@ impl OutputTree {
             recovery_actuators_armed,
             camera_powered_on,
             valves: _,
+            rfs_actuators: _,
             hash_config: _,
             fc_status: _,
         } = self;
