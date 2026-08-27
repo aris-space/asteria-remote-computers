@@ -110,7 +110,7 @@ pub fn spawn_fc_igniter_pressure_driver(
 
 /// Sends `GoxIgniterValveState` at 5Hz.
 pub fn spawn_gox_igniter_valve_state_driver(
-    rocket_power: Watchable<DigitalIn>,
+    rocket_connection_detect: Watchable<DigitalIn>,
     state: impl Watched<NormallyClosedValve> + Send + 'static,
     tx: std::sync::mpsc::Sender<messages::Message>,
 ) -> AbortHandle {
@@ -126,8 +126,7 @@ pub fn spawn_gox_igniter_valve_state_driver(
                     dp_rfs_computer::Message::GoxIgniterValveState(state.current()),
                 );
 
-                if matches!(rocket_power.get(), DigitalIn::Off) {
-                    tracing::trace!("ignoring CAN error messages while the rocket is disconnected");
+                if matches!(rocket_connection_detect.get(), DigitalIn::Off) {
                     continue;
                 }
 
@@ -144,7 +143,7 @@ pub fn spawn_gox_igniter_valve_state_driver(
 
 /// Sends `H2IgniterValveState` at 5Hz.
 pub fn spawn_h2_igniter_valve_state_driver(
-    rocket_power: Watchable<DigitalIn>,
+    rocket_conn_detect: Watchable<DigitalIn>,
     state: impl Watched<NormallyClosedValve> + Send + 'static,
     tx: std::sync::mpsc::Sender<messages::Message>,
 ) -> AbortHandle {
@@ -160,8 +159,7 @@ pub fn spawn_h2_igniter_valve_state_driver(
                     dp_rfs_computer::Message::H2IgniterValveState(state.current()),
                 );
 
-                if matches!(rocket_power.get(), DigitalIn::Off) {
-                    tracing::trace!("ignoring CAN error messages while the rocket is disconnected");
+                if matches!(rocket_connection_detect.get(), DigitalIn::Off) {
                     continue;
                 }
 
@@ -178,7 +176,7 @@ pub fn spawn_h2_igniter_valve_state_driver(
 
 /// Sends `GoxPurgeValveState` at 5Hz.
 pub fn spawn_gox_purge_valve_state_driver(
-    rocket_power: Watchable<DigitalIn>,
+    rocket_connection_detect: Watchable<DigitalIn>,
     state: impl Watched<NormallyClosedValve> + Send + 'static,
     tx: std::sync::mpsc::Sender<messages::Message>,
 ) -> AbortHandle {
@@ -194,8 +192,7 @@ pub fn spawn_gox_purge_valve_state_driver(
                     dp_rfs_computer::Message::GoxPurgeValveState(state.current()),
                 );
 
-                if matches!(rocket_power.get(), DigitalIn::Off) {
-                    tracing::trace!("ignoring CAN error messages while the rocket is disconnected");
+                if matches!(rocket_connection_detect.get(), DigitalIn::Off) {
                     continue;
                 }
 
@@ -212,7 +209,7 @@ pub fn spawn_gox_purge_valve_state_driver(
 
 /// Sends `H2PurgeValveState` at 5Hz.
 pub fn spawn_h2_purge_valve_state_driver(
-    rocket_power: Watchable<DigitalIn>,
+    rocket_connection_detect: Watchable<DigitalIn>,
     state: impl Watched<NormallyClosedValve> + Send + 'static,
     tx: std::sync::mpsc::Sender<messages::Message>,
 ) -> AbortHandle {
@@ -228,8 +225,7 @@ pub fn spawn_h2_purge_valve_state_driver(
                     dp_rfs_computer::Message::H2PurgeValveState(state.current()),
                 );
 
-                if matches!(rocket_power.get(), DigitalIn::Off) {
-                    tracing::trace!("ignoring CAN error messages while the rocket is disconnected");
+                if matches!(rocket_connection_detect.get(), DigitalIn::Off) {
                     continue;
                 }
 
@@ -246,7 +242,7 @@ pub fn spawn_h2_purge_valve_state_driver(
 
 /// Sends `IgniterSparkPlugState` at 5Hz.
 pub fn spawn_igniter_spark_plug_state_driver(
-    rocket_power: Watchable<DigitalIn>,
+    rocket_connection_detect: Watchable<DigitalIn>,
     state: impl Watched<DigitalOut> + Send + 'static,
     tx: std::sync::mpsc::Sender<messages::Message>,
 ) -> AbortHandle {
@@ -262,8 +258,7 @@ pub fn spawn_igniter_spark_plug_state_driver(
                     dp_rfs_computer::Message::IgniterSparkPlugState(state.current()),
                 );
 
-                if matches!(rocket_power.get(), DigitalIn::Off) {
-                    tracing::trace!("ignoring CAN error messages while the rocket is disconnected");
+                if matches!(rocket_connection_detect.get(), DigitalIn::Off) {
                     continue;
                 }
 
