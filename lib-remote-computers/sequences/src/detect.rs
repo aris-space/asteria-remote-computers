@@ -240,18 +240,18 @@ mod tests {
             10.0,
             true,
             &abort_state,
-            Duration::from_millis(1000),
-            Some(Duration::from_millis(250)),
+            Duration::from_millis(100),
+            Some(Duration::from_millis(25)),
         );
 
         tokio::spawn(async move {
-            tokio::time::sleep(Duration::from_millis(800)).await;
+            tokio::time::sleep(Duration::from_millis(80)).await;
             // A value of 12.0 should trigger a detection in the main thread.
             sensor.replace(Celsius(12.0));
         });
 
         let result = detector.detect().await;
-        // The detection should abort because 800ms (sleep) + 250ms (hold time) > 1000ms (patience).
+        // The detection should abort because 80ms (sleep) + 25ms (hold time) > 100ms (patience).
         assert_eq!(result, ControlFlow::Break(abort_state));
     }
 
@@ -264,18 +264,18 @@ mod tests {
             10.0,
             true,
             &abort_state,
-            Duration::from_millis(1000),
-            Some(Duration::from_millis(250)),
+            Duration::from_millis(100),
+            Some(Duration::from_millis(25)),
         );
 
         tokio::spawn(async move {
-            tokio::time::sleep(Duration::from_millis(100)).await;
+            tokio::time::sleep(Duration::from_millis(10)).await;
             // A value of 12.0 should trigger a detection in the main thread.
             sensor.replace(Celsius(12.0));
 
-            // 150ms (sleep) < 250ms (hold time), thus the detector should not
+            // 5ms (sleep) < 25ms (hold time), thus the detector should not
             // finish.
-            tokio::time::sleep(Duration::from_millis(150)).await;
+            tokio::time::sleep(Duration::from_millis(5)).await;
             sensor.replace(Celsius(5.0));
         });
 
