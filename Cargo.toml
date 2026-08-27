@@ -13,6 +13,7 @@ members = [
     "rfs-computer/lox-fill-valve",
     "rfs-computer/tokio-modbus-shared",
     "flight-computer/flight-computer",
+    "flight-computer/rfs-drivers",
     "flight-computer/asteria-gnc/gnc-interface",
     "flight-computer/asteria-gnc/gnc-configurations",
     "data-definitions/can-hal",

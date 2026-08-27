@@ -1,0 +1,21 @@
+[package]
+name = "rfs-drivers"
+version = "0.1.0"
+edition = "2024"
+
+[lints]
+workspace = true
+
+[dependencies]
+lib-mission = { path = "../../lib-remote-computers/lib-mission" }
+io-utils = { path = "../../lib-remote-computers/io-utils" }
+datatypes = { path = "../../data-definitions/datatypes" }
+messages = { path = "../../data-definitions/messages", features = [
+    "derive_debug",
+    "derive_serde",
+    "mavlink",
+], default-features = false }
+watchable = "1.1.2"
+tracing = "0.1.41"
+serde = { version = "1.0.219", features = ["derive"] }
+tokio = { version = "1.45.1", features = ["time", "rt"] }

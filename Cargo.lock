@@ -2653,6 +2653,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "rfs-drivers"
+version = "0.1.0"
+dependencies = [
+ "datatypes",
+ "io-utils",
+ "lib-mission",
+ "messages",
+ "serde",
+ "tokio",
+ "tracing",
+ "watchable",
+]
+
+[[package]]
 name = "robust"
 version = "1.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
