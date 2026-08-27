@@ -36,7 +36,7 @@ pub async fn run_sequence<ValveName, SensorName>(
 ) -> ControlFlow<StateName>
 where
     ValveName: Clone + Debug + Ord + 'static,
-    SensorName: SensorNameExt + Clone + Hash + Eq + 'static,
+    SensorName: SensorNameExt + Clone + Debug + Hash + Eq + 'static,
 {
     let mut pressure_watcher = SensorWatcher::<SensorName, BarG>::new();
     let mut temperature_watcher = SensorWatcher::<SensorName, Celsius>::new();
@@ -106,11 +106,11 @@ where
                 tracing::info!("Command {i}: Sleeping for {:2}s", duration.as_secs_f32());
                 blocker = Some(Blocker::Wait(Instant::now() + *duration));
             }
-            Command::ToState(_state) => todo!("unsupported sequence command"),
+            Command::ToState(state) => return ControlFlow::Break(state.clone()),
             Command::ActuatorOpen(actuator) => {
                 let Some(settable) = settables.get_mut(actuator) else {
                     // Ignore when the actuator doesn't exist.
-                    tracing::info!(
+                    tracing::error!(
                         "Command {i}: Actuator {actuator:?} doesn't exist, ignoring actuator open command"
                     );
                     return ControlFlow::Continue(());
@@ -123,7 +123,7 @@ where
             Command::ActuatorClose(actuator) => {
                 let Some(settable) = settables.get_mut(actuator) else {
                     // Ignore when the actuator doesn't exist.
-                    tracing::info!(
+                    tracing::error!(
                         "Command {i}: Actuator {actuator:?} doesn't exist, ignoring actuator close command"
                     );
                     return ControlFlow::Continue(());
@@ -139,7 +139,7 @@ where
             } => {
                 let Some(settable) = settables.get_mut(actuator) else {
                     // Ignore when the actuator doesn't exist.
-                    tracing::info!(
+                    tracing::error!(
                         "Command {i}: Actuator {actuator:?} doesn't exist, ignoring DPR activate command"
                     );
                     return ControlFlow::Continue(());
@@ -152,7 +152,7 @@ where
             Command::DprDeactivate(actuator) => {
                 let Some(settable) = settables.get_mut(actuator) else {
                     // Ignore when the actuator doesn't exist.
-                    tracing::info!(
+                    tracing::error!(
                         "Command {i}: Actuator {actuator:?} doesn't exist, ignoring DPR deactivate command"
                     );
                     return ControlFlow::Continue(());
@@ -169,9 +169,12 @@ where
                 min,
                 key,
             } if name.is_pressure_sensor() => {
-                let sensor = sensors
-                    .get_pressure_datapoint(name)
-                    .expect("we ensured that the name is for a pressure sensor");
+                let Some(sensor) = sensors.get_pressure_datapoint(name) else {
+                    tracing::error!(
+                        "got a pressure sensor {name:?} whose name is valid but datapoint isn't",
+                    );
+                    return ControlFlow::Continue(());
+                };
                 pressure_watcher.add_watcher(
                     name.clone(),
                     key.clone(),
@@ -188,9 +191,12 @@ where
                 min,
                 key,
             } if name.is_temperature_sensor() => {
-                let sensor = sensors
-                    .get_temperature_datapoint(name)
-                    .expect("we ensured that the name is for a temperature sensor");
+                let Some(sensor) = sensors.get_temperature_datapoint(name) else {
+                    tracing::error!(
+                        "got a temperature sensor {name:?} whose name is valid but datapoint isn't",
+                    );
+                    return ControlFlow::Continue(());
+                };
                 temperature_watcher.add_watcher(
                     name.clone(),
                     key.clone(),
@@ -212,9 +218,12 @@ where
                 patience,
                 duration,
             } if name.is_pressure_sensor() => {
-                let sensor = sensors
-                    .get_pressure_datapoint(name)
-                    .expect("we ensured that the name is for a pressure sensor");
+                let Some(sensor) = sensors.get_pressure_datapoint(name) else {
+                    tracing::error!(
+                        "got a pressure sensor {name:?} whose name is valid but datapoint isn't",
+                    );
+                    return ControlFlow::Continue(());
+                };
                 let detector =
                     SensorDetector::new(sensor, *value, *rising, abort_state, *patience, *duration);
                 blocker = Some(Blocker::Detector(SensorDetectorKind::Pressure(detector)));
@@ -227,16 +236,20 @@ where
                 patience,
                 duration,
             } if name.is_temperature_sensor() => {
-                let sensor = sensors
-                    .get_temperature_datapoint(name)
-                    .expect("we ensured that the name is for a temperature sensor");
+                let Some(sensor) = sensors.get_temperature_datapoint(name) else {
+                    tracing::error!(
+                        "got a temperature sensor {name:?} whose name is valid but datapoint isn't",
+                    );
+                    return ControlFlow::Continue(());
+                };
                 let detector =
                     SensorDetector::new(sensor, *value, *rising, abort_state, *patience, *duration);
                 blocker = Some(Blocker::Detector(SensorDetectorKind::Temperature(detector)));
             }
-            _ => unreachable!(
-                "we know that every sensor is either a temperature or a pressure sensor"
-            ),
+            Command::SensorWatch { name, .. } | Command::SensorDetect { name, .. } => {
+                tracing::error!("got a sensor {name:?} that is neither temperature nor pressure");
+                return ControlFlow::Continue(());
+            }
         }
     }
 
