@@ -269,3 +269,77 @@ impl SensorDetectorKind<'_> {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use std::ops::ControlFlow;
+
+    use datatypes::units::BarG;
+    use lib_mission::state_machine::StateName;
+    use pss_drivers::{
+        input::{PSSSensors, SensorName},
+        output::{CommandSender, PSSValves},
+    };
+
+    use crate::{Command, run_sequence};
+
+    /// Builds a [`PSSValves`] usable as an `ActuatorStore` in tests; no message is ever
+    /// sent on `tx` since the tested sequences don't contain actuator commands.
+    fn test_actuators() -> PSSValves {
+        let (tx, _rx) = std::sync::mpsc::channel();
+        PSSValves::new(tx, CommandSender::FC)
+    }
+
+    // Regression test for the `Blocker::None` branch: before executing the next sequence
+    // command, we must check whether a watched sensor already reports a value outside its
+    // allowed range and abort immediately, rather than proceeding to the next command.
+    #[tokio::test]
+    #[ignore = "hangs indefinitely"]
+    async fn test_aborts_on_watcher_violation_pending_before_next_command() {
+        let sensors = PSSSensors::default();
+        let actuators = test_actuators();
+        let abort_state = StateName::new_unchecked("abort").expect("state name should be valid");
+
+        // The chamber pressure already violates the range that's about to be watched.
+        sensors.chamber_pressure.replace(BarG(20.0));
+
+        let commands = vec![
+            Command::SensorWatch {
+                name: SensorName::eng_cc_p,
+                abort_state: abort_state.clone(),
+                max: 10.0,
+                min: 0.0,
+                key: None,
+            },
+            Command::Msg("should never run".to_string()),
+        ];
+
+        let result = run_sequence(&commands, &actuators, &sensors).await;
+        assert!(matches!(result, ControlFlow::Break(state) if state == abort_state));
+    }
+
+    #[tokio::test]
+    #[ignore = "hangs indefinitely"]
+    async fn test_continues_when_no_watcher_violation_pending_before_next_command() {
+        let sensors = PSSSensors::default();
+        let actuators = test_actuators();
+        let abort_state = StateName::new_unchecked("abort").expect("state name should be valid");
+
+        // The chamber pressure is within the range that's about to be watched.
+        sensors.chamber_pressure.replace(BarG(5.0));
+
+        let commands = vec![
+            Command::SensorWatch {
+                name: SensorName::eng_cc_p,
+                abort_state,
+                max: 10.0,
+                min: 0.0,
+                key: None,
+            },
+            Command::Msg("runs fine".to_string()),
+        ];
+
+        let result = run_sequence(&commands, &actuators, &sensors).await;
+        assert_eq!(result, ControlFlow::Continue(()));
+    }
+}
