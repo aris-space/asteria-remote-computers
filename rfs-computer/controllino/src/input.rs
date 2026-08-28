@@ -5,6 +5,7 @@ use datatypes::units::{BarG, Celsius};
 use io_utils::{Broadcast, Collector};
 use messages::Message;
 use messages::datapoints::dp_rfs_computer::Message as RFSCMessage;
+use sequences::{SensorNameExt, SensorStore};
 use watchable::Watchable;
 
 #[derive(Debug, Default, Clone, Broadcast, Collector)]
@@ -43,6 +44,63 @@ pub struct Sensors {
     #[datapoint(pattern = "Message::RfsComputer(RFSCMessage::SmartBoxTemperature(#value))")]
     #[broadcast(min_freq_hz = 0.5, max_freq_hz = 2.)]
     pub smart_box_temperature: Watchable<Celsius>,
+}
+
+/// See the matching fields in [`Sensors`].
+///
+/// Names follow the `#[pss(name = "...")]` instrumentation names in
+/// [`messages::datapoints::dp_rfs_computer::Message`].
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, serde::Deserialize, serde::Serialize, Hash,
+)]
+#[allow(non_camel_case_types)]
+pub enum SensorName {
+    /// Name of the igniter pressure sensor.
+    ign_cc_p,
+    /// Name of the igniter temperature sensor.
+    ign_cc_t,
+    /// Name of the SMART box temperature sensor.
+    smart_cabinent_t,
+}
+
+impl SensorNameExt for SensorName {
+    fn is_pressure_sensor(&self) -> bool {
+        matches!(self, SensorName::ign_cc_p)
+    }
+
+    fn is_temperature_sensor(&self) -> bool {
+        matches!(self, SensorName::ign_cc_t | SensorName::smart_cabinent_t)
+    }
+}
+
+impl std::str::FromStr for SensorName {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        use serde::Deserialize as _;
+        Self::deserialize(<&str as serde::de::IntoDeserializer>::into_deserializer(s))
+            .map_err(|e| e.to_string())
+    }
+}
+
+impl SensorStore<SensorName> for Sensors {
+    fn get_pressure_datapoint<'a>(&'a self, name: &SensorName) -> Option<&'a Watchable<BarG>> {
+        match name {
+            SensorName::ign_cc_p => Some(&self.igniter_pressure),
+            SensorName::ign_cc_t | SensorName::smart_cabinent_t => None,
+        }
+    }
+
+    fn get_temperature_datapoint<'a>(
+        &'a self,
+        name: &SensorName,
+    ) -> Option<&'a Watchable<Celsius>> {
+        match name {
+            SensorName::ign_cc_t => Some(&self.igniter_temperature),
+            SensorName::smart_cabinent_t => Some(&self.smart_box_temperature),
+            SensorName::ign_cc_p => None,
+        }
+    }
 }
 
 /// The states of the actuators connected to the SMART box Controllino.
