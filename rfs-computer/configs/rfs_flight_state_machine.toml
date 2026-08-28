@@ -127,63 +127,50 @@ on_cancelled = "Abort Ign Test"
 manual_transitions = [
     { target = "Abort Ign Test", display = "Abort", abort = true },
 ]
+sequence = """
+# Start purging
+gox_prg_vlv.open();
+h2_prg_vlv.open();
+sys.wait(time=5s);
+
+# Stop purging and start spark plug
+gox_prg_vlv.close();
+h2_prg_vlv.close();
+ign_spk_plg.open();
+sys.wait(time=0.5s);
+
+# First open GOX then H2 valve
+gox_ign_vlv.open();
+sys.wait(time=0.5s);
+h2_ign_vlv.open();
+
+# Detect firing
+ign_cc_p.detect(value=6, rising=true, abort='Abort Ign Test', patience=1s);
+
+# Sustain firing, abort if pressure becomes too low
+ign_cc_p.watch(min=5, abort='Abort Ign Test', key=sustain);
+sys.wait(time=4s);
+ign_cc_p.ignore(key=sustain);
+
+# After ignition purge sequence:
+gox_ign_vlv.close();
+h2_ign_vlv.close();
+gox_prg_vlv.open();
+h2_prg_vlv.open();
+sys.wait(time=0.5s);
+
+ign_spk_plg.close();
+sys.wait(time=5s);
+
+gox_prg_vlv.close();
+h2_prg_vlv.close();
+"""
 [state_machine.states."Igniter Test".thresholds.upper_thresholds_barg]
 gox = 15
 h2 = 15
 igniter = 10
 [state_machine.states."Igniter Test".thresholds.upper_thresholds_celsius]
 igniter = 200
-# Start purging
-[[state_machine.states."Igniter Test".sequence]]
-action = "SetActuators"
-targets = { "gox_prg_vlv" = "Open", "h2_prg_vlv" = "Open" }
-# Purge
-[[state_machine.states."Igniter Test".sequence]]
-action = "Wait"
-duration_sec = 5
-# Stop purging and start spark plug
-[[state_machine.states."Igniter Test".sequence]]
-action = "SetActuators"
-targets = { "gox_prg_vlv" = "Close", "h2_prg_vlv" = "Close", "ign_spk_plg" = "On" }
-[[state_machine.states."Igniter Test".sequence]]
-action = "Wait"
-duration_sec = 0.5
-# First open GOX then H2 valve
-[[state_machine.states."Igniter Test".sequence]]
-action = "SetActuators"
-targets = { "gox_ign_vlv" = "Open" }
-[[state_machine.states."Igniter Test".sequence]]
-action = "Wait"
-duration_sec = 0.5
-[[state_machine.states."Igniter Test".sequence]]
-action = "SetActuators"
-targets = { "h2_ign_vlv" = "Open" }
-# Detect firing, analogous to `igniter_pres.detect(value=6, rising=true, abort=ign_abort, patience=1s);`
-[[state_machine.states."Igniter Test".sequence]]
-action = "IgnitionDetection"
-pressure_lower_thresh_barg = 6.0
-patience_sec = 1.0
-# Sustain firing, abort if pressure becomes too low
-[[state_machine.states."Igniter Test".sequence]]
-action = "SustainedIgnition"
-min_pressure_barg = 5.0
-duration_sec = 4.0
-# After ignition purge sequence:
-[[state_machine.states."Igniter Test".sequence]]
-action = "SetActuators"
-targets = { "gox_ign_vlv" = "Close", "h2_ign_vlv" = "Close", "gox_prg_vlv" = "Open", "h2_prg_vlv" = "Open" }
-[[state_machine.states."Igniter Test".sequence]]
-action = "Wait"
-duration_sec = 0.5
-[[state_machine.states."Igniter Test".sequence]]
-action = "SetActuators"
-targets = { "ign_spk_plg" = "Off" }
-[[state_machine.states."Igniter Test".sequence]]
-action = "Wait"
-duration_sec = 5
-[[state_machine.states."Igniter Test".sequence]]
-action = "SetActuators"
-targets = { "gox_prg_vlv" = "Close", "h2_prg_vlv" = "Close" }
 
 # This runs the ignition abort sequence in case a manual or automatic abort was triggered
 [state_machine.states."Abort Ign Test"]
@@ -193,24 +180,22 @@ on_cancelled = "Safe Abort"
 manual_transitions = [
     { target = "Safe Abort", display = "Abort Abort Seq", abort = true },
 ]
+sequence = """
 # Open purge valves and close fuel valve
-[[state_machine.states."Abort Ign Test".sequence]]
-action = "SetActuators"
-targets = { "h2_ign_vlv" = "Close", "gox_ign_vlv" = "Close", "gox_prg_vlv" = "Open", "h2_prg_vlv" = "Open" }
-[[state_machine.states."Abort Ign Test".sequence]]
-action = "Wait"
-duration_sec = 0.5
+h2_ign_vlv.close();
+gox_ign_vlv.close();
+gox_prg_vlv.open();
+h2_prg_vlv.open();
+sys.wait(time=0.5s);
+
 # 0.5s later turn off spark plug
-[[state_machine.states."Abort Ign Test".sequence]]
-action = "SetActuators"
-targets = { "ign_spk_plg" = "Off" }
+ign_spk_plg.close();
+
 # Now purge for 5 sec and then closed the purge valves again
-[[state_machine.states."Abort Ign Test".sequence]]
-action = "Wait"
-duration_sec = 5
-[[state_machine.states."Abort Ign Test".sequence]]
-action = "SetActuators"
-targets = { "gox_prg_vlv" = "Close", "h2_prg_vlv" = "Close" }
+sys.wait(time=5s);
+gox_prg_vlv.close();
+h2_prg_vlv.close();
+"""
 
 # ======================================= Takeover =======================================
 
@@ -318,9 +303,10 @@ on_done = "Waiting for Filling 2"
 type = "RunSequence"
 on_completed = "Waiting for Filling 3"
 on_cancelled = "Waiting for Filling 3"
-[[state_machine.states."Waiting for Filling 2".sequence]]
-action = "SetActuators"
-targets = { "n2_shw_vlv" = "Open" } # enforces that n2 shower valves is always open
+# enforces that n2 shower valves is always open
+sequence = """
+n2_shw_vlv.open();
+"""
 [state_machine.states."Waiting for Filling 3"]
 type = "Waiting"
 manual_transitions = [
@@ -338,38 +324,34 @@ on_cancelled = "Purge 2" # Sequence contains no cancellable actions
 manual_transitions = [
     { target = "Pre Filling Abort", display = "Abort", abort = true },
 ]
+sequence = """
 # Close n2 bleed, open n2 purge. Prz Vent and Fuel prz are already open/closed respectively.
-[[state_machine.states."Purge".sequence]]
-action = "SetActuators"
-targets = { "n2_bld_vlv" = "Close", "n2_prg_vlv" = "Open", "prz_copv_vnt" = "Open", "prz_fss_dpr" = "DPRDisabled" }
+n2_bld_vlv.close();
+n2_prg_vlv.open();
+prz_copv_vnt.open();
+prz_fss_dpr.deactivate();
 # Purge pressure tank for 5 sec
-[[state_machine.states."Purge".sequence]]
-action = "Wait"
-duration_sec = 5
+sys.wait(time=5s);
+
 # Open fuel prz valve and close prz Vent.
-[[state_machine.states."Purge".sequence]]
-action = "SetActuators"
-targets = { "prz_copv_vnt" = "Close", "fss_tnk_vnt" = "Open", "prz_fss_dpr" = { "SetpointBarG" = 10.0 } }
+prz_copv_vnt.close();
+fss_tnk_vnt.open();
+prz_fss_dpr.activate(setpoint=10.0);
 # Purge fuel tank for 10 sec
-[[state_machine.states."Purge".sequence]]
-action = "Wait"
-duration_sec = 10
+sys.wait(time=10s);
+
 # Close fuel vent and open main valve fully
-[[state_machine.states."Purge".sequence]]
-action = "SetActuators"
-targets = { "fss_tnk_vnt" = "Close", "fss_ml_vlv" = "Open" }
+fss_tnk_vnt.close();
+fss_ml_vlv.open();
 # Purge fuel line for 5 sec
-[[state_machine.states."Purge".sequence]]
-action = "Wait"
-duration_sec = 5
+sys.wait(time=5s);
+
 # Close FSS prz valve, but open OSS one.
-[[state_machine.states."Purge".sequence]]
-action = "SetActuators"
-targets = { "prz_fss_dpr" = "DPRDisabled", "prz_oss_dpr" = { "SetpointBarG" = 10.0 } }
+prz_fss_dpr.deactivate();
+prz_oss_dpr.activate(setpoint=10.0);
 # Purge oxidizer tank for 10 sec
-[[state_machine.states."Purge".sequence]]
-action = "Wait"
-duration_sec = 10
+sys.wait(time=10s);
+"""
 # Close n2 purge and reset rest to normal.
 [state_machine.states."Purge 2"]
 type = "SetNormalState"
@@ -381,40 +363,37 @@ on_cancelled = "Purge 4" # Sequence contains no cancellable actions
 manual_transitions = [
     { target = "Pre Filling Abort", display = "Abort", abort = true },
 ]
-[[state_machine.states."Purge 3".sequence]]
-action = "SetActuators"
-targets = { "n2_prg_vlv" = "Close", "prz_oss_dpr" = "DPRDisabled", "prz_copv_vnt" = "Open", "fss_tnk_vnt" = "Open", "n2_bld_vlv" = "Open", "fss_ml_vlv" = "Close" }
-[[state_machine.states."Purge 3".sequence]]
-action = "Wait"
-duration_sec = 0.4
+sequence = """
+n2_prg_vlv.close();
+prz_oss_dpr.deactivate();
+prz_copv_vnt.open();
+fss_tnk_vnt.open();
+n2_bld_vlv.open();
+fss_ml_vlv.close();
+sys.wait(time=0.4s);
+
 # Now open lox purge
-[[state_machine.states."Purge 3".sequence]]
-action = "SetActuators"
-targets = { "lox_prg_vlv" = "Open" }
+lox_prg_vlv.open();
 # Purge lox decoupler line (?) for 5 sec
-[[state_machine.states."Purge 3".sequence]]
-action = "Wait"
-duration_sec = 5
+sys.wait(time=5s);
+
 # Now open lox main, but close oss vent
-[[state_machine.states."Purge 3".sequence]]
-action = "SetActuators"
-targets = { "oss_ml_vlv" = "Open", "oss_tnk_vnt" = "Close" }
+oss_ml_vlv.open();
+oss_tnk_vnt.close();
 # Purge lox main line  for 5 sec
-[[state_machine.states."Purge 3".sequence]]
-action = "Wait"
-duration_sec = 5
+sys.wait(time=5s);
+
 # Open OSS vent, close OSS main, open lox fill valve to 100%
-[[state_machine.states."Purge 3".sequence]]
-action = "SetActuators"
-targets = { "oss_tnk_vnt" = "Open", "oss_ml_vlv" = "Close", "lox_fll_vlv" = "Open" }
+oss_tnk_vnt.open();
+oss_ml_vlv.close();
+lox_fll_vlv.open();
 # Purge dewar flex pipe for 5 sec
-[[state_machine.states."Purge 3".sequence]]
-action = "Wait"
-duration_sec = 5
+sys.wait(time=5s);
+
 # Reset back to normal
-[[state_machine.states."Purge 3".sequence]]
-action = "SetActuators"
-targets = { "lox_prg_vlv" = "Close", "lox_fll_vlv" = "Close" }
+lox_prg_vlv.close();
+lox_fll_vlv.close();
+"""
 [state_machine.states."Purge 4"]
 type = "SetNormalState"
 on_done = "Waiting for Filling"
@@ -527,41 +506,32 @@ allowed_actuators = [
 telemetry_loss_threshold_sec = 900 # 15min
 on_violation = "Filling Abort"
 on_completed = "LOX Filling"
-on_sequence_problem = "Filling"
 manual_transitions = [
     { target = "Filling", display = "Cancel Seq" },
     { target = "Filling Abort", display = "Abort Filling", abort = true },
 ]
-
+sequence = """
 # Close vent valves
-[[state_machine.states."Parallel Filling".sequence]]
-action = "SetActuators"
-targets = { "n2_bld_vlv" = "Close", "prz_copv_vnt" = "Close" }
-[[state_machine.states."Parallel Filling".sequence]]
-action = "Wait"
-duration_sec = 0.4
+n2_bld_vlv.close();
+prz_copv_vnt.close();
+sys.wait(time=0.4s);
+
 # Then open N2 fill valve
-[[state_machine.states."Parallel Filling".sequence]]
-action = "SetActuators"
-targets = { "n2_fll_vlv" = "Open" }
-# Detect proper opening, analogous to `n2_tank_pressure.detect(value=30, rising=true, abort=ign_abort, patience=5s);`
-[[state_machine.states."Parallel Filling".sequence]]
-action = "N2FillDetection"
-pressure_lower_thresh_barg = 30.0
-patience_sec = 5.0
+n2_fll_vlv.open();
+
+# Detect proper opening of the pre-booster line
+n2_pre_bst_p.detect(value=30, rising=true, abort='Filling', patience=5s);
+
 # Then open booster valve
-[[state_machine.states."Parallel Filling".sequence]]
-action = "SetActuators"
-targets = { "n2_bst_vlv" = "Open" }
-# And wait for filling to 300 bar
-[[state_machine.states."Parallel Filling".sequence]]
-action = "N2FillDetection"
-pressure_lower_thresh_barg = 320.0
-patience_sec = 3600                # 1h
+n2_bst_vlv.open();
+
+# And wait for filling to 320 bar post-booster
+n2_post_bst_p.detect(value=320, rising=true, abort='Filling', patience=3600s);
+
 # Finnally close the booster and fill valve again
-[[state_machine.states."Parallel Filling".sequence]]
-action = "SetActuators"
-targets = { "n2_bst_vlv" = "Close", "n2_fll_vlv" = "Close" }
+n2_bst_vlv.close();
+n2_fll_vlv.close();
+"""
 
 # A state where lox filling can continue, and n2 is locked.
 [state_machine.states."LOX Filling"]
@@ -587,20 +557,19 @@ manual_transitions = [
 type = "RunSequence"
 on_completed = "Decouple"
 on_cancelled = "Decouple"
-[[state_machine.states."Set Known State".sequence]]
-action = "SetActuators"
-[state_machine.states."Set Known State".sequence.targets]
+sequence = """
 # Off normal: oss & prz vent closed, lox bleed closed
-prz_copv_vnt = "Close"
-oss_tnk_vnt = "Close"
-lox_bld_vlv = "Close"
-n2_shw_vlv = "Open"
+prz_copv_vnt.close();
+oss_tnk_vnt.close();
+lox_bld_vlv.close();
+n2_shw_vlv.open();
 # Normal
-lox_fll_vlv = "Close"
-oss_ml_vlv = "Close"
-n2_fll_vlv = "Close"
-n2_bld_vlv = "Open"
-n2_bst_vlv = "Close"
+lox_fll_vlv.close();
+oss_ml_vlv.close();
+n2_fll_vlv.close();
+n2_bld_vlv.open();
+n2_bst_vlv.close();
+"""
 
 # State to try to decouple the hoses
 [state_machine.states."Decouple"]
@@ -682,9 +651,10 @@ on_done = "Shutoff 2"
 type = "RunSequence"
 on_completed = "Safeing Normal"
 on_cancelled = "Safeing Normal"
-[[state_machine.states."Shutoff 2".sequence]]
-action = "SetActuators"
-targets = { "lox_prg_vlv" = "Open", "h2_bld_vlv" = "Open" }
+sequence = """
+lox_prg_vlv.open();
+h2_bld_vlv.open();
+"""
 
 # This state is compose of 3 substates and sets the system in a known state before manual safeing
 [state_machine.states."Safeing Normal"]
