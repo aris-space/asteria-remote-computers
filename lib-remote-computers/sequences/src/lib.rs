@@ -94,7 +94,7 @@ where
                     return ControlFlow::Continue(());
                 };
                 tracing::info!("Command {i}: Closing actuator {actuator:?}");
-                if let Err(err) = settable.set_value(1.0) {
+                if let Err(err) = settable.set_value(0.0) {
                     tracing::error!("Command {i}: Could not close {actuator:?}: {err}");
                 }
             }
@@ -257,8 +257,7 @@ where
 mod tests {
     use std::collections::BTreeMap;
     use std::ops::ControlFlow;
-    use std::sync::Arc;
-    use std::sync::atomic::{AtomicBool, Ordering};
+    use std::sync::{Arc, Mutex};
     use std::time::Duration;
 
     use datatypes::actuator::{OutOfRange, Settable};
@@ -289,13 +288,19 @@ mod tests {
         }
     }
 
-    /// A [`Settable`] that just records whether it was ever set, for assertions.
+    /// A [`Settable`] that records the last value it was set to, for assertions.
     #[derive(Clone, Default)]
-    struct RecordingSettable(Arc<AtomicBool>);
+    struct RecordingSettable(Arc<Mutex<Option<f32>>>);
+
+    impl RecordingSettable {
+        fn last_value(&self) -> Option<f32> {
+            *self.0.lock().expect("lock shouldn't be poisoned")
+        }
+    }
 
     impl Settable for RecordingSettable {
-        fn set_value(&mut self, _value: f32) -> Result<(), OutOfRange> {
-            self.0.store(true, Ordering::SeqCst);
+        fn set_value(&mut self, value: f32) -> Result<(), OutOfRange> {
+            *self.0.lock().expect("lock shouldn't be poisoned") = Some(value);
             Ok(())
         }
     }
@@ -364,8 +369,9 @@ mod tests {
 
         let result = run_sequence(&commands, &actuators, &sensors).await;
         assert!(matches!(result, ControlFlow::Break(state) if state == abort_state));
-        assert!(
-            !actuators.valve.0.load(Ordering::SeqCst),
+        assert_eq!(
+            actuators.valve.last_value(),
+            None,
             "the actuator command after the violated watch should never have run"
         );
     }
@@ -408,10 +414,9 @@ mod tests {
 
         let result = run_sequence(&commands, &actuators, &sensors).await;
         assert_eq!(result, ControlFlow::Continue(()));
-        assert!(
-            actuators.valve.0.load(Ordering::SeqCst),
-            "the actuator commands should have run"
-        );
+        // The sequence ends with `ActuatorClose`, so the last observed value must be 0.0,
+        // not 1.0 (that would mean `close` actuated the valve instead of closing it).
+        assert_eq!(actuators.valve.last_value(), Some(0.0));
     }
 
     // Smoke test for a sequence that watches a sensor within range and then stops
