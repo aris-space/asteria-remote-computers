@@ -13,8 +13,11 @@ use watchable::Watchable;
 
 pub use sequence_parser::{Command, parse_sequence_str};
 
+mod config;
 mod detect;
 mod watch;
+
+pub use config::{deserialize_sequence, validate_sequence};
 
 /// Trait which must be implemented by any type which represents
 /// sensor names. The trait allows to determine the kind of sensor
