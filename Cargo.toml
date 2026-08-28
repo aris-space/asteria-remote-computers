@@ -51,10 +51,6 @@ arbitrary = { version = "1.4.1", features = ["derive"] }
 utoipa = { version = "5.4.0" }
 # for GNC:
 nav-types = { git = "https://github.com/nordmoen/nav-types.git", rev = "0b69095" }
-rand = "0.10.0-rc.5"
-rand_distr = "0.6.0-rc.0"
-rand_xoshiro = "0.8.0-rc.0"
-rayon = "1.11.0"
 
 [patch.crates-io]
 ur20 = { git = "https://github.com/slowtec/ur20", rev = "592771d18d547e100aacd7204e65bf7d989910ac" }

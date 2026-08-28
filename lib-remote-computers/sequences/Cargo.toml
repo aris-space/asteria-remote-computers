@@ -13,13 +13,13 @@ messages = { path = "../../data-definitions/messages", default-features = false,
   "derive_debug",
   "derive_serde",
 ] }
-pss-drivers = { path = "../pss-drivers" }
 sequence-parser = { path = "../../sequence-parser" }
 serde = { version = "1.0", features = ["derive"] }
 tokio = { version = "1.37.0", features = ["full"] }
 tracing = "0.1.41"
 watchable = "1.1.2"
 thiserror = "1.0.64"
+futures = "0.3.32"
 
 [lints]
 workspace = true

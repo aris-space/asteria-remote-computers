@@ -1,4 +1,5 @@
 use datatypes::actuator::{DPRValve, NormallyClosedValve, NormallyOpenValve, OutOfRange, Settable};
+use lib_mission::actuator_control::ActuatorStore;
 use messages::datapoints::{
     dp_engine_control_board, dp_fuel_control_board, dp_oxidizer_control_board,
 };
@@ -184,11 +185,8 @@ impl std::str::FromStr for ValveName {
     }
 }
 
-impl PSSValves {
-    /// Returns a map keyed by `ValveName`, with each entry being a boxed
-    /// `Settable` that builds and sends the right CAN message when
-    /// `set_value` is called.
-    pub fn as_settables(&self) -> BTreeMap<ValveName, Box<dyn Settable + Send>> {
+impl ActuatorStore<ValveName> for PSSValves {
+    fn as_settables(&self) -> BTreeMap<ValveName, Box<dyn Settable + Send>> {
         let mut map: BTreeMap<ValveName, Box<dyn Settable + Send>> = BTreeMap::new();
         let sender = self.sender;
 

@@ -10,6 +10,7 @@ use lib_mission::config::{BoxableState, MakeState};
 use lib_mission::state_machine::{BoxedState, StateName};
 use lib_mission::transition::ManualTransitions;
 use lib_mission::util::init::CONFIG;
+use pss_drivers::input::SensorName;
 use pss_drivers::output::ValveName;
 use sequences::{parse_sequence_str, Command};
 use serde::{Deserialize, Deserializer, Serialize};
@@ -269,15 +270,9 @@ pub enum StateLogicConfig<Gnc: CompatGuidanceController> {
         /// The sequence to run.
         #[serde(deserialize_with = "deserialize_sequence", skip_serializing)]
         // TODO: Why do we need to be serializable?
-        sequence: Vec<Command<ValveName, String, String>>,
-        /// Thresholds on sensors to watch during the whole of the sequence.
-        /// If any of them are violated, this will end the sequence and proceeds to `on_cancelled`.
-        #[serde(default)]
-        thresholds: ThresholdWatcher,
+        sequence: Vec<Command<ValveName, SensorName, String>>,
         /// The state to transition to when the sequence has been completed.
         on_completed: String,
-        /// The state to transition to when an action demands the sequence be cancelled.
-        on_cancelled: String,
     },
     /// Describes a [`common_states::Shutdown`].
     Shutdown,
@@ -567,15 +562,11 @@ impl<Gnc: CompatGuidanceController> MakeState for StateLogicConfig<Gnc> {
             .into_box(),
             Self::RunSequence {
                 sequence,
-                thresholds,
-                on_cancelled,
                 on_completed,
             } => state_logic::RunSequence {
                 manual_transitions,
-                sequence,
-                thresholds,
+                sequence: validate_sequence(sequence, names)?,
                 on_completed: StateName::try_new(&on_completed, names)?,
-                on_cancelled: StateName::try_new(&on_cancelled, names)?,
             }
             .into_box(),
             StateLogicConfig::Shutdown => common_states::Shutdown::default().into_box(),
@@ -591,14 +582,14 @@ fn yes() -> bool {
 /// Custom deserializer for inline sequences in TOML strings.
 fn deserialize_sequence<'de, D>(
     deserializer: D,
-) -> Result<Vec<Command<ValveName, String, String>>, D::Error>
+) -> Result<Vec<Command<ValveName, SensorName, String>>, D::Error>
 where
     D: Deserializer<'de>,
 {
     let sequence_str = String::deserialize(deserializer)?;
     let sequence_span = 0..sequence_str.len();
 
-    let errors = match parse_sequence_str::<ValveName, String, String>(&sequence_str) {
+    let errors = match parse_sequence_str::<ValveName, SensorName, String>(&sequence_str) {
         Ok(commands) => return Ok(commands),
         Err(errors) => errors,
     };
@@ -629,4 +620,62 @@ where
     Err(serde::de::Error::custom(
         String::from_utf8(output).expect("Should be valid UTF-8"),
     ))
+}
+
+/// Validate the sequence by ensuring that all referenced states
+/// actually exist on the state machine.
+fn validate_sequence<ValveName, SensorName>(
+    sequence: Vec<Command<ValveName, SensorName, String>>,
+    names: &HashSet<StateName>,
+) -> lib_mission::Result<Vec<Command<ValveName, SensorName, StateName>>>
+where
+    ValveName: Clone,
+    SensorName: Clone,
+{
+    sequence
+        .into_iter()
+        .map(|command| {
+            let safe_command = match command {
+                Command::SensorWatch {
+                    name,
+                    abort_state,
+                    max,
+                    min,
+                    key,
+                } => Command::SensorWatch {
+                    name,
+                    abort_state: StateName::try_new(&abort_state, names)?,
+                    max,
+                    min,
+                    key,
+                },
+                Command::SensorDetect {
+                    name,
+                    value,
+                    rising,
+                    abort_state,
+                    patience,
+                    duration,
+                } => Command::SensorDetect {
+                    name,
+                    value,
+                    rising,
+                    abort_state: StateName::try_new(&abort_state, names)?,
+                    patience,
+                    duration,
+                },
+                Command::ToState(state) => Command::ToState(StateName::try_new(&state, names)?),
+                Command::Msg(msg) => Command::Msg(msg),
+                Command::Warning(msg) => Command::Warning(msg),
+                Command::Error(msg) => Command::Error(msg),
+                Command::Wait(duration) => Command::Wait(duration),
+                Command::ActuatorOpen(name) => Command::ActuatorOpen(name),
+                Command::ActuatorClose(name) => Command::ActuatorClose(name),
+                Command::DprActivate { name, setpoint } => Command::DprActivate { name, setpoint },
+                Command::DprDeactivate(name) => Command::DprDeactivate(name),
+                Command::SensorIgnore { name, key } => Command::SensorIgnore { name, key },
+            };
+            Ok(safe_command)
+        })
+        .collect::<Result<Vec<_>, _>>()
 }

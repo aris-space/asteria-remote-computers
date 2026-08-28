@@ -2510,6 +2510,7 @@ dependencies = [
  "io-utils",
  "lib-mission",
  "messages",
+ "sequences",
  "serde",
  "tokio",
  "tracing",
@@ -2753,9 +2754,9 @@ name = "sequences"
 version = "0.1.0"
 dependencies = [
  "datatypes",
+ "futures",
  "lib-mission",
  "messages",
- "pss-drivers",
  "sequence-parser",
  "serde",
  "thiserror 1.0.69",
