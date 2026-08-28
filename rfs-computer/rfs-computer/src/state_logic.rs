@@ -2,8 +2,6 @@ pub type Input = crate::io::input::InputTree;
 pub type Output = crate::io::output::OutputTree;
 pub type Parameter = crate::state::State;
 
-pub mod helpers;
-
 pub mod manual_control;
 pub use manual_control::ManualControl;
 

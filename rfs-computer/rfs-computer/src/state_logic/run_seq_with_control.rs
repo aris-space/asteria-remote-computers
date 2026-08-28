@@ -10,13 +10,12 @@ use sequences::Command;
 
 use crate::io::input::SensorName;
 use crate::io::output::ActuatorName;
-use crate::state_logic::helpers::ThresholdWatcher;
 
 /// This state runs a sequence, but at the same time also gives manual control for the configured actuators,
-/// and otherwise waits for a manual transition or a threshold violation.
+/// and otherwise waits for a manual transition or telemetry loss.
 ///
 /// This is used for Parallel Filling, where N2 is filled using a sequence, while LOX is still manually filled.
-/// At this time, the sensors and telemetry must also be monitored and manual aborts must be possible.
+/// At this time, telemetry must also be monitored and manual aborts must be possible.
 #[derive(Debug)]
 pub struct RunSeqWithControl {
     /// Where we can manually transition
@@ -25,10 +24,7 @@ pub struct RunSeqWithControl {
     pub actuator_control: ActuatorControl<ActuatorName>,
     /// If the last telemetry message is older than this, transition to `on_violation`.
     pub telemetry_loss_threshold: Duration,
-    /// Thresholds on sensors to watch during the whole operations.
-    /// If any of them are violated, this will end the sequence and proceeds to `on_violation`.
-    pub thresholds: ThresholdWatcher,
-    /// The state to transition to when a threshold has been violated.
+    /// The state to transition to when telemetry has been lost.
     pub on_violation: StateName,
     /// The sequence to run.
     pub sequence: Vec<Command<ActuatorName, SensorName, StateName>>,
@@ -62,10 +58,6 @@ impl StateLogic for RunSeqWithControl {
         // Then waits for a manual transition or violation.
         tokio::select! {
             next_state = self.manual_transitions.next(input, param) => next_state,
-            violation = self.thresholds.watch(input) => {
-                tracing::warn!("threshold violation: {violation}");
-                self.on_violation.clone()
-            }
             _ = await_telemetry_loss(&param
                 .parameters.uplink_telemetry_health, &input.time, self.telemetry_loss_threshold) => {
                 tracing::warn!("telemetry loss detected");

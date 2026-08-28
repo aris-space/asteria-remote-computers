@@ -121,11 +121,16 @@ manual_transitions = [
 [state_machine.states."Igniter Test"]
 type = "RunSequence"
 on_completed = "System Controllable"
-on_cancelled = "Abort Ign Test"
 manual_transitions = [
     { target = "Abort Ign Test", display = "Abort", abort = true },
 ]
 sequence = """
+# Watch thresholds for the whole duration of the sequence.
+gox_line_p.watch(max=15, abort='Abort Ign Test');
+h2_line_p.watch(max=15, abort='Abort Ign Test');
+ign_cc_p.watch(max=10, abort='Abort Ign Test');
+ign_cc_t.watch(max=200, abort='Abort Ign Test');
+
 # Start purging
 gox_prg_vlv.open();
 h2_prg_vlv.open();
@@ -163,18 +168,11 @@ sys.wait(time=5s);
 gox_prg_vlv.close();
 h2_prg_vlv.close();
 """
-[state_machine.states."Igniter Test".thresholds.upper_thresholds_barg]
-gox = 15
-h2 = 15
-igniter = 10
-[state_machine.states."Igniter Test".thresholds.upper_thresholds_celsius]
-igniter = 200
 
 # This runs the ignition abort sequence in case a manual or automatic abort was triggered
 [state_machine.states."Abort Ign Test"]
 type = "RunSequence"
 on_completed = "Safe Abort"
-on_cancelled = "Safe Abort"
 manual_transitions = [
     { target = "Safe Abort", display = "Abort Abort Seq", abort = true },
 ]
