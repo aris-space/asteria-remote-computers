@@ -44,14 +44,14 @@ diagram_path = "state-machines/rfs-flight-state-machine.drawio.svg"
 [state_machine.states."Idle"]
 type = "Waiting"
 manual_transitions = [
-    { target = "Diagnostics", display = "Startup" },
-    { target = "System Normal", display = "Skip Diagnostics" },
+    "Diagnostics",
+    "System Normal",
 ]
 
 # This state exists for acknowledging diagnostic failures
 [state_machine.states."Soft Failure"]
 type = "Waiting"
-manual_transitions = [{ target = "Idle", display = "Restart" }]
+manual_transitions = ["Idle"]
 
 # This state only lets the SM pass on if all sensors are reading good values
 [state_machine.states."Diagnostics"]
@@ -65,7 +65,7 @@ type = "DepressurizeRFS"
 on_done = "Safe Abort 2"
 [state_machine.states."Safe Abort 2"]
 type = "Waiting"
-manual_transitions = [{ target = "System Normal", display = "Reset" }]
+manual_transitions = ["System Normal"]
 
 # This state is compose of 3 substates and sets the system in a known state before waiting
 [state_machine.states."System Normal"]
@@ -74,17 +74,17 @@ on_done = "System Normal 3"
 [state_machine.states."System Normal 3"]
 type = "Waiting"
 manual_transitions = [
-    { target = "System Idle", display = "Idle" },
-    { target = "Safe Abort", display = "Depressurize", abort = true },
+    "System Idle",
+    { target = "Safe Abort", abort = true },
 ]
 
 # This state allows no valve control during human interactions.
 [state_machine.states."System Idle"]
 type = "Waiting"
 manual_transitions = [
-    { target = "System Normal", display = "Normal" },
-    { target = "System Controllable", display = "Unlock" },
-    { target = "Safe Abort", display = "Depressurize", abort = true },
+    "System Normal",
+    "System Controllable",
+    { target = "Safe Abort", abort = true },
 ]
 
 # This state allows full valve control of all RFS actuators for testing procedures.
@@ -112,9 +112,9 @@ allowed_actuators = [
     "ign_spk_plg", # Igniter spark
 ]
 manual_transitions = [
-    { target = "System Idle", display = "Lock" },
-    { target = "Igniter Test", display = "Start Igniter Test" },
-    { target = "Safe Abort", display = "Depressurize", abort = true },
+    "System Idle",
+    "Igniter Test",
+    { target = "Safe Abort", abort = true },
 ]
 
 # This state runs the igniter test sequence to test ignition.
@@ -122,7 +122,7 @@ manual_transitions = [
 type = "RunSequence"
 on_completed = "System Controllable"
 manual_transitions = [
-    { target = "Abort Ign Test", display = "Abort", abort = true },
+    { target = "Abort Ign Test", abort = true },
 ]
 sequence = """
 # Watch thresholds for the whole duration of the sequence.
@@ -174,7 +174,7 @@ h2_prg_vlv.close();
 type = "RunSequence"
 on_completed = "Safe Abort"
 manual_transitions = [
-    { target = "Safe Abort", display = "Abort Abort Seq", abort = true },
+    { target = "Safe Abort", abort = true },
 ]
 sequence = """
 # Open purge valves and close fuel valve
