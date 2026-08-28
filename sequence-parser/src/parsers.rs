@@ -13,10 +13,10 @@ pub type E<'a> = extra::Err<Rich<'a, char>>;
 ///        // The arguments are returned in the order they are defined.
 ///        let (abort, max, min, key) = extract_args! {
 ///            args, emitter, e => {
-///                // `abort` is a required argument of type ident.
+///                // `abort` is a required argument of type string.
 ///                // It will be mapped into an `Actuator` which implements `std::str::FromStr`.
-///                // Mapping to other types is only possible for identifiers.
-///                abort: Ident as Actuator
+///                // Mapping to other types is only possible for strings.
+///                abort: String as Actuator
 ///                // `max` is a required argument of type float.
 ///                max: Float
 ///                // `key` is an optional argument of type ident; if it doesn't exist
@@ -38,13 +38,13 @@ macro_rules! extract_args {
     (@process $args:expr, $emitter:expr, $e:expr, [$($acc:tt)*] ; ) => {{
         extract_args!(@build $args, $emitter, $e, [$($acc)*])
     }};
-    /* required `Ident` with cast */
-    (@process $args:expr, $emitter:expr, $e:expr, [$($acc:tt)*] ; $name:ident : Ident as $cast:ident $($rest:tt)*) => {
-        extract_args!(@process $args, $emitter, $e, [$($acc)* ($name, /* optional */ false, Ident, as $cast)]; $($rest)*)
+    /* required `String` with cast */
+    (@process $args:expr, $emitter:expr, $e:expr, [$($acc:tt)*] ; $name:ident : String as $cast:ident $($rest:tt)*) => {
+        extract_args!(@process $args, $emitter, $e, [$($acc)* ($name, /* optional */ false, String, as $cast)]; $($rest)*)
     };
-    /* optional `Ident` with cast */
-    (@process $args:expr, $emitter:expr, $e:expr, [$($acc:tt)*] ; $name:ident ?: Ident as $cast:ident $($rest:tt)*) => {
-        extract_args!(@process $args, $emitter, $e, [$($acc)* ($name, /* optional */ true, Ident, as $cast)]; $($rest)*)
+    /* optional `String` with cast */
+    (@process $args:expr, $emitter:expr, $e:expr, [$($acc:tt)*] ; $name:ident ?: String as $cast:ident $($rest:tt)*) => {
+        extract_args!(@process $args, $emitter, $e, [$($acc)* ($name, /* optional */ true, String, as $cast)]; $($rest)*)
     };
     (@process $args:expr, $emitter:expr, $e:expr, [$($acc:tt)*] ; $name:ident : $ty:ident $($rest:tt)*) => {
         extract_args!(@process $args, $emitter, $e, [$($acc)* ($name, /* optional */ false, $ty, /* cast */ none)]; $($rest)*)
@@ -77,10 +77,10 @@ macro_rules! extract_args {
             }
         }
     }};
-    /* required `Ident` with cast */
-    (@extract $args:ident, $emitter:expr, $e:expr, $name:ident, true, Ident, as $cast:ident) => {{
+    /* required `String` with cast */
+    (@extract $args:ident, $emitter:expr, $e:expr, $name:ident, true, String, as $cast:ident) => {{
         match $args.remove(stringify!($name)) {
-            Some(Spanned { inner: parsers::Arg::Ident(v), span }) => {
+            Some(Spanned { inner: parsers::Arg::String(v), span }) => {
                 let cast = <$cast as std::str::FromStr>::from_str(v.as_str()).map_err(|err| {
                     $emitter.emit(Rich::custom(span, format!("invalid `{}`: {err}", stringify!($cast))));
                 }).ok();
@@ -88,15 +88,15 @@ macro_rules! extract_args {
             },
             None => None,
             Some(Spanned { span, .. }) => {
-                $emitter.emit(Rich::custom(span, format!("expected argument `{}` of type `{}`", stringify!($name), stringify!(Ident))));
+                $emitter.emit(Rich::custom(span, format!("expected argument `{}` of type `{}`", stringify!($name), stringify!(String))));
                 None
             }
         }
     }};
-    /* optional `Ident` with cast */
-    (@extract $args:ident, $emitter:expr, $e:expr, $name:ident, false, Ident, as $cast:ident) => {{
+    /* optional `String` with cast */
+    (@extract $args:ident, $emitter:expr, $e:expr, $name:ident, false, String, as $cast:ident) => {{
         match $args.remove(stringify!($name)) {
-            Some(Spanned { inner: parsers::Arg::Ident(v), span }) => {
+            Some(Spanned { inner: parsers::Arg::String(v), span }) => {
                 <$cast as std::str::FromStr>::from_str(v.as_str()).map_err(|err| {
                     $emitter.emit(Rich::custom(span, format!("invalid `{}`: {err}", stringify!($cast))));
                 })
@@ -104,11 +104,11 @@ macro_rules! extract_args {
                 .map(|cast| Spanned { inner: cast, span })
             },
             None => {
-                $emitter.emit(Rich::custom($e.span(), format!("missing argument `{}` of type `{}`", stringify!($name), stringify!(Ident))));
+                $emitter.emit(Rich::custom($e.span(), format!("missing argument `{}` of type `{}`", stringify!($name), stringify!(String))));
                 None
             },
             Some(Spanned { span, .. }) => {
-                $emitter.emit(Rich::custom(span, format!("expected argument `{}` of type `{}`", stringify!($name), stringify!(Ident))));
+                $emitter.emit(Rich::custom(span, format!("expected argument `{}` of type `{}`", stringify!($name), stringify!(String))));
                 None
             }
         }
