@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
-use lib_mission::actuator_control::ActuatorStore;
 use lib_mission::actuator_control::command::{ActuatorControl, NeverReturns};
+use lib_mission::actuator_control::ActuatorStore as _;
 use lib_mission::state_machine::{AdditionalState, StateLogic, StateName};
 use lib_mission::transition::ManualTransitions;
 use pss_drivers::output::ValveName;
