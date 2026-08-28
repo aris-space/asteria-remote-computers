@@ -8,13 +8,14 @@ use crate::state::State;
 use super::input::InputTree;
 use super::output::OutputTree;
 
+mod input_drivers;
 mod output_drivers;
 
 /// Initializes CAN and its drivers
 pub fn init_can_drivers(
     config: &CANConfig,
     input_tree: &InputTree,
-    _output_tree: &OutputTree,
+    output_tree: &OutputTree,
     state_tree: &State,
     tx: &std::sync::mpsc::Sender<messages::Message>,
     rx: std::sync::mpsc::Receiver<messages::Message>,
@@ -43,8 +44,21 @@ pub fn init_can_drivers(
     };
 
     // Initialize the driver tasks
-    let output_handles = init_output_drivers(state_tree, input_tree, tx);
+    let mut output_handles = init_output_drivers(state_tree, input_tree, tx);
     let mut consumers = ConsumerRegistry::new().with_collector(input_tree.clone());
+
+    // Register the gated igniter control consumer. This takes precedence over the collector and
+    // only applies commands while the RFS is armed.
+    let actuators = &output_tree.rfs_actuators;
+    output_handles.push(input_drivers::spawn_and_register_igniter_control(
+        &mut consumers,
+        state_tree.rfs_computer_status.clone(),
+        actuators.gox_igniter_valve.clone(),
+        actuators.h2_igniter_valve.clone(),
+        actuators.gox_purge_valve.clone(),
+        actuators.h2_purge_valve.clone(),
+        actuators.igniter_spark.clone(),
+    ));
 
     // Spawn the receiving thread
     std::thread::spawn(move || {
@@ -77,6 +91,46 @@ fn init_output_drivers(
         output_drivers::spawn_rfsc_debug_driver(crate::build_info::THIS_BUILD, tx.clone()),
         output_drivers::spawn_fc_igniter_pressure_driver(
             input_tree.controllino_sensors.igniter_pressure.watched(),
+            tx.clone(),
+        ),
+        output_drivers::spawn_gox_igniter_valve_state_driver(
+            input_tree
+                .controllino_sensors
+                .rocket_connection_detect
+                .clone(),
+            input_tree.uremote_actuators.gox_igniter_valve.watched(),
+            tx.clone(),
+        ),
+        output_drivers::spawn_h2_igniter_valve_state_driver(
+            input_tree
+                .controllino_sensors
+                .rocket_connection_detect
+                .clone(),
+            input_tree.uremote_actuators.h2_igniter_valve.watched(),
+            tx.clone(),
+        ),
+        output_drivers::spawn_gox_purge_valve_state_driver(
+            input_tree
+                .controllino_sensors
+                .rocket_connection_detect
+                .clone(),
+            input_tree.uremote_actuators.gox_purge_valve.watched(),
+            tx.clone(),
+        ),
+        output_drivers::spawn_h2_purge_valve_state_driver(
+            input_tree
+                .controllino_sensors
+                .rocket_connection_detect
+                .clone(),
+            input_tree.uremote_actuators.h2_purge_valve.watched(),
+            tx.clone(),
+        ),
+        output_drivers::spawn_igniter_spark_plug_state_driver(
+            input_tree
+                .controllino_sensors
+                .rocket_connection_detect
+                .clone(),
+            input_tree.uremote_actuators.igniter_spark.watched(),
             tx.clone(),
         ),
     ];

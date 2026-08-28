@@ -1,5 +1,7 @@
 use std::time::Duration;
 
+use datatypes::actuator::{DigitalOut, NormallyClosedValve};
+use datatypes::sensor::DigitalIn;
 use datatypes::status::BuildInformationCommon;
 use datatypes::units::BarG;
 use lib_mission::reactive::Watched;
@@ -102,6 +104,171 @@ pub fn spawn_fc_igniter_pressure_driver(
             }
         }
         .instrument(tracing::info_span!("drivers::FCIgniterPressure")),
+    )
+    .abort_handle()
+}
+
+/// Sends `GoxIgniterValveState` at 5Hz.
+pub fn spawn_gox_igniter_valve_state_driver(
+    rocket_connection_detect: Watchable<DigitalIn>,
+    state: impl Watched<NormallyClosedValve> + Send + 'static,
+    tx: std::sync::mpsc::Sender<messages::Message>,
+) -> AbortHandle {
+    const STATE_RATE: f32 = 5.;
+
+    tokio::spawn(
+        async move {
+            let mut interval = tokio::time::interval(Duration::from_secs_f32(1. / STATE_RATE));
+            interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+            loop {
+                interval.tick().await;
+                let msg = messages::Message::RfsComputer(
+                    dp_rfs_computer::Message::GoxIgniterValveState(state.current()),
+                );
+
+                if matches!(rocket_connection_detect.get(), DigitalIn::Off) {
+                    continue;
+                }
+
+                if tx.send(msg).is_err() {
+                    tracing::warn!("CAN channel was closed. Shutting down!");
+                    break;
+                }
+            }
+        }
+        .instrument(tracing::info_span!("drivers::GoxIgniterValveState")),
+    )
+    .abort_handle()
+}
+
+/// Sends `H2IgniterValveState` at 5Hz.
+pub fn spawn_h2_igniter_valve_state_driver(
+    rocket_connection_detect: Watchable<DigitalIn>,
+    state: impl Watched<NormallyClosedValve> + Send + 'static,
+    tx: std::sync::mpsc::Sender<messages::Message>,
+) -> AbortHandle {
+    const STATE_RATE: f32 = 5.;
+
+    tokio::spawn(
+        async move {
+            let mut interval = tokio::time::interval(Duration::from_secs_f32(1. / STATE_RATE));
+            interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+            loop {
+                interval.tick().await;
+                let msg = messages::Message::RfsComputer(
+                    dp_rfs_computer::Message::H2IgniterValveState(state.current()),
+                );
+
+                if matches!(rocket_connection_detect.get(), DigitalIn::Off) {
+                    continue;
+                }
+
+                if tx.send(msg).is_err() {
+                    tracing::warn!("CAN channel was closed. Shutting down!");
+                    break;
+                }
+            }
+        }
+        .instrument(tracing::info_span!("drivers::H2IgniterValveState")),
+    )
+    .abort_handle()
+}
+
+/// Sends `GoxPurgeValveState` at 5Hz.
+pub fn spawn_gox_purge_valve_state_driver(
+    rocket_connection_detect: Watchable<DigitalIn>,
+    state: impl Watched<NormallyClosedValve> + Send + 'static,
+    tx: std::sync::mpsc::Sender<messages::Message>,
+) -> AbortHandle {
+    const STATE_RATE: f32 = 5.;
+
+    tokio::spawn(
+        async move {
+            let mut interval = tokio::time::interval(Duration::from_secs_f32(1. / STATE_RATE));
+            interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+            loop {
+                interval.tick().await;
+                let msg = messages::Message::RfsComputer(
+                    dp_rfs_computer::Message::GoxPurgeValveState(state.current()),
+                );
+
+                if matches!(rocket_connection_detect.get(), DigitalIn::Off) {
+                    continue;
+                }
+
+                if tx.send(msg).is_err() {
+                    tracing::warn!("CAN channel was closed. Shutting down!");
+                    break;
+                }
+            }
+        }
+        .instrument(tracing::info_span!("drivers::GoxPurgeValveState")),
+    )
+    .abort_handle()
+}
+
+/// Sends `H2PurgeValveState` at 5Hz.
+pub fn spawn_h2_purge_valve_state_driver(
+    rocket_connection_detect: Watchable<DigitalIn>,
+    state: impl Watched<NormallyClosedValve> + Send + 'static,
+    tx: std::sync::mpsc::Sender<messages::Message>,
+) -> AbortHandle {
+    const STATE_RATE: f32 = 5.;
+
+    tokio::spawn(
+        async move {
+            let mut interval = tokio::time::interval(Duration::from_secs_f32(1. / STATE_RATE));
+            interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+            loop {
+                interval.tick().await;
+                let msg = messages::Message::RfsComputer(
+                    dp_rfs_computer::Message::H2PurgeValveState(state.current()),
+                );
+
+                if matches!(rocket_connection_detect.get(), DigitalIn::Off) {
+                    continue;
+                }
+
+                if tx.send(msg).is_err() {
+                    tracing::warn!("CAN channel was closed. Shutting down!");
+                    break;
+                }
+            }
+        }
+        .instrument(tracing::info_span!("drivers::H2PurgeValveState")),
+    )
+    .abort_handle()
+}
+
+/// Sends `IgniterSparkPlugState` at 5Hz.
+pub fn spawn_igniter_spark_plug_state_driver(
+    rocket_connection_detect: Watchable<DigitalIn>,
+    state: impl Watched<DigitalOut> + Send + 'static,
+    tx: std::sync::mpsc::Sender<messages::Message>,
+) -> AbortHandle {
+    const STATE_RATE: f32 = 5.;
+
+    tokio::spawn(
+        async move {
+            let mut interval = tokio::time::interval(Duration::from_secs_f32(1. / STATE_RATE));
+            interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+            loop {
+                interval.tick().await;
+                let msg = messages::Message::RfsComputer(
+                    dp_rfs_computer::Message::IgniterSparkPlugState(state.current()),
+                );
+
+                if matches!(rocket_connection_detect.get(), DigitalIn::Off) {
+                    continue;
+                }
+
+                if tx.send(msg).is_err() {
+                    tracing::warn!("CAN channel was closed. Shutting down!");
+                    break;
+                }
+            }
+        }
+        .instrument(tracing::info_span!("drivers::IgniterSparkPlugState")),
     )
     .abort_handle()
 }
