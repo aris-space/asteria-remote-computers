@@ -1,3 +1,5 @@
+use std::matches;
+
 use datatypes::actuator::{DigitalOut, NormallyClosedValve};
 use datatypes::units::{BarG, Celsius};
 use io_utils::Broadcast;
