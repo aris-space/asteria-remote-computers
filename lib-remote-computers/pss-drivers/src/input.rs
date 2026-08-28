@@ -6,6 +6,7 @@ use messages::datapoints::dp_oxidizer_control_board::Message as OCBMessage;
 
 use io_utils::{Broadcast, Collector};
 use messages::Message;
+use sequences::{SensorNameExt, SensorStore};
 use watchable::Watchable;
 
 /// The feedback for the valves in the propellant supply system.
@@ -90,17 +91,6 @@ pub enum SensorName {
     eng_inj_t,
     /// Name of the injector oxidizer temperature sensor.
     oss_tnk_t,
-}
-
-/// Trait which must be implemented by any type which represents
-/// sensor names. The trait allows to determine the kind of sensor
-/// this name is for (e.g., pressure, temperature, ...).
-pub trait SensorNameExt {
-    /// Boolean whether `self` is the name of a pressure sensor.
-    fn is_pressure_sensor(&self) -> bool;
-
-    /// Boolean whether `self` is the name of a temperature sensor.
-    fn is_temperature_sensor(&self) -> bool;
 }
 
 impl SensorNameExt for SensorName {
@@ -395,16 +385,6 @@ impl PSSSensors {
             ),
         ])
     }
-}
-
-pub trait SensorStore<T> {
-    /// Get a watchable for a pressure sensor by its `name`.
-    /// Returns [`None`] if the provided `name` is not the name of a pressure sensor.
-    fn get_pressure_datapoint<'a>(&'a self, name: &T) -> Option<&'a Watchable<BarG>>;
-
-    /// Get a watchable for a temperature sensor by its `name`.
-    /// Returns [`None`] if the provided `name` is not the name of a temperature sensor.
-    fn get_temperature_datapoint<'a>(&'a self, name: &T) -> Option<&'a Watchable<Celsius>>;
 }
 
 impl SensorStore<SensorName> for PSSSensors {

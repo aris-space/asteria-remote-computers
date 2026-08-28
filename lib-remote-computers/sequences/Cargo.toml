@@ -13,7 +13,6 @@ messages = { path = "../../data-definitions/messages", default-features = false,
   "derive_debug",
   "derive_serde",
 ] }
-pss-drivers = { path = "../pss-drivers" }
 sequence-parser = { path = "../../sequence-parser" }
 serde = { version = "1.0", features = ["derive"] }
 tokio = { version = "1.37.0", features = ["full"] }

@@ -1,9 +1,10 @@
 use std::sync::Arc;
 
+use lib_mission::actuator_control::ActuatorStore;
 use lib_mission::actuator_control::command::{ActuatorControl, NeverReturns};
 use lib_mission::state_machine::{AdditionalState, StateLogic, StateName};
 use lib_mission::transition::ManualTransitions;
-use pss_drivers::output::{ActuatorStore, ValveName};
+use pss_drivers::output::ValveName;
 
 /// This state gives manual control for the configured actuators,
 /// and otherwise waits for a manual transition.

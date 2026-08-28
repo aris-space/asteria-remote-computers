@@ -122,14 +122,18 @@ mod tests {
 
     use datatypes::units::Celsius;
     use lib_mission::state_machine::StateName;
-    use pss_drivers::input::SensorName;
     use watchable::Watchable;
 
     use crate::watch::SensorWatcher;
 
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+    enum DummySensorName {
+        ChamberPressure,
+    }
+
     #[tokio::test]
     async fn test_continue_when_empty() {
-        let mut watcher = SensorWatcher::<SensorName, Celsius>::new();
+        let mut watcher = SensorWatcher::<DummySensorName, Celsius>::new();
         for _ in 0..5 {
             tokio::time::sleep(Duration::from_millis(50)).await;
             assert_eq!(watcher.check().await, ControlFlow::Continue(()));
@@ -138,12 +142,12 @@ mod tests {
 
     #[tokio::test]
     async fn test_abort_when_violated() {
-        let mut watcher = SensorWatcher::<SensorName, Celsius>::new();
+        let mut watcher = SensorWatcher::<DummySensorName, Celsius>::new();
         let sensor = Watchable::<Celsius>::default();
         let abort_state = StateName::new_unchecked("asdf").expect("state name should be valid");
 
         watcher.add_watcher(
-            SensorName::eng_cc_p,
+            DummySensorName::ChamberPressure,
             None,
             &sensor,
             10.0,

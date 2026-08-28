@@ -1,4 +1,5 @@
 use datatypes::actuator::{DPRValve, NormallyClosedValve, NormallyOpenValve, OutOfRange, Settable};
+use lib_mission::actuator_control::ActuatorStore;
 use messages::datapoints::{
     dp_engine_control_board, dp_fuel_control_board, dp_oxidizer_control_board,
 };
@@ -182,13 +183,6 @@ impl std::str::FromStr for ValveName {
         Self::deserialize(<&str as serde::de::IntoDeserializer>::into_deserializer(s))
             .map_err(|e| e.to_string())
     }
-}
-
-pub trait ActuatorStore<T> {
-    /// Returns a map of actuator names with their associated [`Settable`]
-    /// that builds and sends the right CAN message when [`Settable::set_value`]
-    /// is called.
-    fn as_settables(&self) -> BTreeMap<T, Box<dyn Settable + Send>>;
 }
 
 impl ActuatorStore<ValveName> for PSSValves {

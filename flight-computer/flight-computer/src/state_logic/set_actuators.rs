@@ -1,7 +1,7 @@
-use pss_drivers::output::ActuatorStore;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
+use lib_mission::actuator_control::ActuatorStore;
 use lib_mission::state_machine::{AdditionalState, StateLogic, StateName};
 
 /// This state sets the configured actuators to their values and then continues to `on_done`

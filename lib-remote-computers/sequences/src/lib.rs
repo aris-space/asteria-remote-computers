@@ -6,17 +6,37 @@ use std::{
 };
 
 use datatypes::units::{BarG, Celsius};
-use lib_mission::state_machine::StateName;
-use pss_drivers::{
-    input::{SensorNameExt, SensorStore},
-    output::ActuatorStore,
-};
+use lib_mission::{actuator_control::ActuatorStore, state_machine::StateName};
 pub use sequence_parser::{Command, parse_sequence_str};
+use watchable::Watchable;
 
 use crate::{detect::SensorDetector, watch::SensorWatcher};
 
 mod detect;
 mod watch;
+
+/// Trait which must be implemented by any type which represents
+/// sensor names. The trait allows to determine the kind of sensor
+/// this name is for (e.g., pressure, temperature, ...).
+pub trait SensorNameExt {
+    /// Boolean whether `self` is the name of a pressure sensor.
+    fn is_pressure_sensor(&self) -> bool;
+
+    /// Boolean whether `self` is the name of a temperature sensor.
+    fn is_temperature_sensor(&self) -> bool;
+}
+
+/// Trait to get typed sensor values by name.
+/// The implementation must match the one of `T`.
+pub trait SensorStore<T: SensorNameExt> {
+    /// Get a watchable for a pressure sensor by its `name`.
+    /// Returns [`None`] if the provided `name` is not the name of a pressure sensor.
+    fn get_pressure_datapoint<'a>(&'a self, name: &T) -> Option<&'a Watchable<BarG>>;
+
+    /// Get a watchable for a temperature sensor by its `name`.
+    /// Returns [`None`] if the provided `name` is not the name of a temperature sensor.
+    fn get_temperature_datapoint<'a>(&'a self, name: &T) -> Option<&'a Watchable<Celsius>>;
+}
 
 enum Blocker<'a> {
     /// We're blocked on a [`Command::Wait`] until the underlying
@@ -272,22 +292,67 @@ impl SensorDetectorKind<'_> {
 
 #[cfg(test)]
 mod tests {
+    use std::collections::BTreeMap;
     use std::ops::ControlFlow;
 
-    use datatypes::units::BarG;
+    use datatypes::actuator::Settable;
+    use datatypes::units::{BarG, Celsius};
+    use lib_mission::actuator_control::ActuatorStore;
     use lib_mission::state_machine::StateName;
-    use pss_drivers::{
-        input::{PSSSensors, SensorName},
-        output::{CommandSender, PSSValves},
-    };
+    use watchable::Watchable;
 
-    use crate::{Command, run_sequence};
+    use crate::{Command, SensorNameExt, SensorStore, run_sequence};
 
-    /// Builds a [`PSSValves`] usable as an `ActuatorStore` in tests; no message is ever
-    /// sent on `tx` since the tested sequences don't contain actuator commands.
-    fn test_actuators() -> PSSValves {
-        let (tx, _rx) = std::sync::mpsc::channel();
-        PSSValves::new(tx, CommandSender::FC)
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+    enum DummyValveName {}
+
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+    enum DummySensorName {
+        ChamberPressure,
+    }
+
+    impl SensorNameExt for DummySensorName {
+        fn is_pressure_sensor(&self) -> bool {
+            matches!(self, DummySensorName::ChamberPressure)
+        }
+
+        fn is_temperature_sensor(&self) -> bool {
+            false
+        }
+    }
+
+    /// Dummy actuator store with no settables; the tested sequences don't contain
+    /// actuator commands.
+    #[derive(Default)]
+    struct DummyActuators;
+
+    impl ActuatorStore<DummyValveName> for DummyActuators {
+        fn as_settables(&self) -> BTreeMap<DummyValveName, Box<dyn Settable + Send>> {
+            BTreeMap::new()
+        }
+    }
+
+    #[derive(Default)]
+    struct DummySensors {
+        chamber_pressure: Watchable<BarG>,
+    }
+
+    impl SensorStore<DummySensorName> for DummySensors {
+        fn get_pressure_datapoint<'a>(
+            &'a self,
+            name: &DummySensorName,
+        ) -> Option<&'a Watchable<BarG>> {
+            match name {
+                DummySensorName::ChamberPressure => Some(&self.chamber_pressure),
+            }
+        }
+
+        fn get_temperature_datapoint<'a>(
+            &'a self,
+            _name: &DummySensorName,
+        ) -> Option<&'a Watchable<Celsius>> {
+            None
+        }
     }
 
     // Regression test for the `Blocker::None` branch: before executing the next sequence
@@ -296,8 +361,8 @@ mod tests {
     #[tokio::test]
     #[ignore = "hangs indefinitely"]
     async fn test_aborts_on_watcher_violation_pending_before_next_command() {
-        let sensors = PSSSensors::default();
-        let actuators = test_actuators();
+        let sensors = DummySensors::default();
+        let actuators = DummyActuators;
         let abort_state = StateName::new_unchecked("abort").expect("state name should be valid");
 
         // The chamber pressure already violates the range that's about to be watched.
@@ -305,7 +370,7 @@ mod tests {
 
         let commands = vec![
             Command::SensorWatch {
-                name: SensorName::eng_cc_p,
+                name: DummySensorName::ChamberPressure,
                 abort_state: abort_state.clone(),
                 max: 10.0,
                 min: 0.0,
@@ -321,8 +386,8 @@ mod tests {
     #[tokio::test]
     #[ignore = "hangs indefinitely"]
     async fn test_continues_when_no_watcher_violation_pending_before_next_command() {
-        let sensors = PSSSensors::default();
-        let actuators = test_actuators();
+        let sensors = DummySensors::default();
+        let actuators = DummyActuators;
         let abort_state = StateName::new_unchecked("abort").expect("state name should be valid");
 
         // The chamber pressure is within the range that's about to be watched.
@@ -330,7 +395,7 @@ mod tests {
 
         let commands = vec![
             Command::SensorWatch {
-                name: SensorName::eng_cc_p,
+                name: DummySensorName::ChamberPressure,
                 abort_state,
                 max: 10.0,
                 min: 0.0,
