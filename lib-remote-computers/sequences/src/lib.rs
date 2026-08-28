@@ -257,8 +257,11 @@ where
 mod tests {
     use std::collections::BTreeMap;
     use std::ops::ControlFlow;
+    use std::sync::Arc;
+    use std::sync::atomic::{AtomicBool, Ordering};
+    use std::time::Duration;
 
-    use datatypes::actuator::Settable;
+    use datatypes::actuator::{OutOfRange, Settable};
     use datatypes::units::{BarG, Celsius};
     use lib_mission::actuator_control::ActuatorStore;
     use lib_mission::state_machine::StateName;
@@ -267,7 +270,9 @@ mod tests {
     use crate::{Command, SensorNameExt, SensorStore, run_sequence};
 
     #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-    enum DummyValveName {}
+    enum DummyValveName {
+        Valve,
+    }
 
     #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
     enum DummySensorName {
@@ -284,14 +289,29 @@ mod tests {
         }
     }
 
-    /// Dummy actuator store with no settables; the tested sequences don't contain
-    /// actuator commands.
+    /// A [`Settable`] that just records whether it was ever set, for assertions.
+    #[derive(Clone, Default)]
+    struct RecordingSettable(Arc<AtomicBool>);
+
+    impl Settable for RecordingSettable {
+        fn set_value(&mut self, _value: f32) -> Result<(), OutOfRange> {
+            self.0.store(true, Ordering::SeqCst);
+            Ok(())
+        }
+    }
+
+    /// Dummy actuator store with a single [`DummyValveName::Valve`] settable, whose
+    /// activation can be observed through `valve`.
     #[derive(Default)]
-    struct DummyActuators;
+    struct DummyActuators {
+        valve: RecordingSettable,
+    }
 
     impl ActuatorStore<DummyValveName> for DummyActuators {
         fn as_settables(&self) -> BTreeMap<DummyValveName, Box<dyn Settable + Send>> {
-            BTreeMap::new()
+            let mut map: BTreeMap<DummyValveName, Box<dyn Settable + Send>> = BTreeMap::new();
+            map.insert(DummyValveName::Valve, Box::new(self.valve.clone()));
+            map
         }
     }
 
@@ -318,14 +338,14 @@ mod tests {
         }
     }
 
-    // Regression test for the `Blocker::None` branch: before executing the next sequence
+    // Regression test for the `SensorWatch` branch: before executing the next sequence
     // command, we must check whether a watched sensor already reports a value outside its
-    // allowed range and abort immediately, rather than proceeding to the next command.
+    // allowed range and abort immediately, rather than proceeding to (and executing) the
+    // next command.
     #[tokio::test]
-    #[ignore = "hangs indefinitely"]
     async fn test_aborts_on_watcher_violation_pending_before_next_command() {
         let sensors = DummySensors::default();
-        let actuators = DummyActuators;
+        let actuators = DummyActuators::default();
         let abort_state = StateName::new_unchecked("abort").expect("state name should be valid");
 
         // The chamber pressure already violates the range that's about to be watched.
@@ -339,18 +359,67 @@ mod tests {
                 min: 0.0,
                 key: None,
             },
-            Command::Msg("should never run".to_string()),
+            Command::ActuatorOpen(DummyValveName::Valve),
         ];
 
         let result = run_sequence(&commands, &actuators, &sensors).await;
         assert!(matches!(result, ControlFlow::Break(state) if state == abort_state));
+        assert!(
+            !actuators.valve.0.load(Ordering::SeqCst),
+            "the actuator command after the violated watch should never have run"
+        );
     }
 
+    // Smoke test for a sequence of purely informational/timing commands.
     #[tokio::test]
-    #[ignore = "hangs indefinitely"]
-    async fn test_continues_when_no_watcher_violation_pending_before_next_command() {
+    async fn test_msg_wait_and_state_transition() {
         let sensors = DummySensors::default();
-        let actuators = DummyActuators;
+        let actuators = DummyActuators::default();
+        let target_state = StateName::new_unchecked("next").expect("state name should be valid");
+
+        let commands = vec![
+            Command::Msg("starting".to_string()),
+            Command::Warning("careful".to_string()),
+            Command::Error("uh oh".to_string()),
+            Command::Wait(Duration::from_millis(10)),
+            Command::ToState(target_state.clone()),
+        ];
+
+        let result = run_sequence(&commands, &actuators, &sensors).await;
+        assert!(matches!(result, ControlFlow::Break(state) if state == target_state));
+    }
+
+    // Smoke test for a sequence of actuator commands, checking that they all run and
+    // reach the end of the sequence.
+    #[tokio::test]
+    async fn test_actuator_commands() {
+        let sensors = DummySensors::default();
+        let actuators = DummyActuators::default();
+
+        let commands = vec![
+            Command::ActuatorOpen(DummyValveName::Valve),
+            Command::DprActivate {
+                name: DummyValveName::Valve,
+                setpoint: 12.,
+            },
+            Command::DprDeactivate(DummyValveName::Valve),
+            Command::ActuatorClose(DummyValveName::Valve),
+        ];
+
+        let result = run_sequence(&commands, &actuators, &sensors).await;
+        assert_eq!(result, ControlFlow::Continue(()));
+        assert!(
+            actuators.valve.0.load(Ordering::SeqCst),
+            "the actuator commands should have run"
+        );
+    }
+
+    // Smoke test for a sequence that watches a sensor within range and then stops
+    // watching it again, reaching the end of the sequence without aborting.
+    #[tokio::test]
+    async fn test_sensor_watch_and_ignore() {
+        let sensors = DummySensors::default();
+        let actuators = DummyActuators::default();
         let abort_state = StateName::new_unchecked("abort").expect("state name should be valid");
 
         // The chamber pressure is within the range that's about to be watched.
@@ -362,6 +431,10 @@ mod tests {
                 abort_state,
                 max: 10.0,
                 min: 0.0,
+                key: None,
+            },
+            Command::SensorIgnore {
+                name: DummySensorName::ChamberPressure,
                 key: None,
             },
             Command::Msg("runs fine".to_string()),
