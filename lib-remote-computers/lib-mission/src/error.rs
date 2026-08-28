@@ -10,6 +10,8 @@ pub enum Error {
     TooLongStateName(Arc<str>),
     #[error("State `{0}` contains a null byte")]
     StateNameWithNullByte(Arc<str>),
+    #[error("State `{0}` contains a `'`, which is reserved for quoting state names in the sequence DSL")]
+    StateNameWithQuote(Arc<str>),
     #[error("Received state (~`{0}`) is invalid utf-8")]
     StateNameInvalidUTF8(String),
     #[error("Invariant `{0}` was broken")]
