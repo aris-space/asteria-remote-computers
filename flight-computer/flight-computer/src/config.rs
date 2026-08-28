@@ -2,6 +2,8 @@ use std::collections::HashSet;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
+use crate::io::input::SensorName;
+use crate::io::output::ActuatorName;
 use ariadne::{Label, Report, ReportKind, Source};
 use gnc_interface::CompatGuidanceController;
 use lib_mission::actuator_control::command::ActuatorControl;
@@ -10,8 +12,6 @@ use lib_mission::config::{BoxableState, MakeState};
 use lib_mission::state_machine::{BoxedState, StateName};
 use lib_mission::transition::ManualTransitions;
 use lib_mission::util::init::CONFIG;
-use pss_drivers::input::SensorName;
-use pss_drivers::output::ValveName;
 use sequences::{parse_sequence_str, Command};
 use serde::{Deserialize, Deserializer, Serialize};
 
@@ -184,7 +184,7 @@ pub enum StateLogicConfig<Gnc: CompatGuidanceController> {
     },
     /// Describes a [`state_logic::ManualControl`].
     ManualControl {
-        /// The [names][pss_drivers::output::ValveName] of the actuators that are allowed to be activated in this state.
+        /// The [names][crate::io::output::ActuatorName] of the actuators that are allowed to be activated in this state.
         allowed_actuators: Vec<String>,
     },
     /// Describes a [`state_logic::SetNormalState`].
@@ -195,10 +195,7 @@ pub enum StateLogicConfig<Gnc: CompatGuidanceController> {
     /// Describes a [`state_logic::SetActuators`].
     SetActuators {
         /// Which valves should be set to which position
-        targets: std::collections::BTreeMap<
-            pss_drivers::output::ValveName,
-            state_logic::set_actuators::Value,
-        >,
+        targets: std::collections::BTreeMap<ActuatorName, state_logic::set_actuators::Value>,
         /// The name of the state which to proceed to after completing setting the valves.
         on_done: String,
     },
@@ -254,7 +251,7 @@ pub enum StateLogicConfig<Gnc: CompatGuidanceController> {
     },
     /// Describes a [`state_logic::MonitoredManualControl`].
     MonitoredManualControl {
-        /// The [names][pss_drivers::output::ValveName] of the actuators that are allowed to be activated in this state.
+        /// The [names][crate::io::output::ActuatorName] of the actuators that are allowed to be activated in this state.
         allowed_actuators: Vec<String>,
         /// Thresholds on sensors to watch during the whole of the sequence.
         /// If any of them are violated, this will end the sequence and proceeds to `on_cancelled`.
@@ -270,7 +267,7 @@ pub enum StateLogicConfig<Gnc: CompatGuidanceController> {
         /// The sequence to run.
         #[serde(deserialize_with = "deserialize_sequence", skip_serializing)]
         // TODO: Why do we need to be serializable?
-        sequence: Vec<Command<ValveName, SensorName, String>>,
+        sequence: Vec<Command<ActuatorName, SensorName, String>>,
         /// The state to transition to when the sequence has been completed.
         on_completed: String,
     },
@@ -582,14 +579,14 @@ fn yes() -> bool {
 /// Custom deserializer for inline sequences in TOML strings.
 fn deserialize_sequence<'de, D>(
     deserializer: D,
-) -> Result<Vec<Command<ValveName, SensorName, String>>, D::Error>
+) -> Result<Vec<Command<ActuatorName, SensorName, String>>, D::Error>
 where
     D: Deserializer<'de>,
 {
     let sequence_str = String::deserialize(deserializer)?;
     let sequence_span = 0..sequence_str.len();
 
-    let errors = match parse_sequence_str::<ValveName, SensorName, String>(&sequence_str) {
+    let errors = match parse_sequence_str::<ActuatorName, SensorName, String>(&sequence_str) {
         Ok(commands) => return Ok(commands),
         Err(errors) => errors,
     };

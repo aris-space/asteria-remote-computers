@@ -40,6 +40,8 @@ impl InputTree {
             raw_unprocessed_data,
             pss_valves,
             pss_sensors,
+            rfs_actuators: _, // TODO: log, needs a start_logging in rfs-drivers
+            rfs_sensors: _,   // TODO: log, needs a start_logging in rfs-drivers
             magnetometer,
             pressure,
         } = self;

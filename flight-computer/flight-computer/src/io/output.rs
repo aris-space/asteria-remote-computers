@@ -1,13 +1,17 @@
 //! Contains [`OutputTree`].
 
+use std::collections::BTreeMap;
+
+use datatypes::actuator::Settable;
 use datatypes::status::ConfigHash;
 use dp_flight_computer::FlightComputerStatus;
 use io_utils::Broadcast;
+use lib_mission::actuator_control::ActuatorStore;
 use messages::datapoints::dp_flight_computer;
 use messages::Message;
 use pss_drivers::output::PSSValves;
-use watchable::Watchable;
 use rfs_drivers::output::ActuatorChannel;
+use watchable::Watchable;
 
 use super::types::{
     CameraPowerState, MainDeploymentState, RecoveryArmingState, SeparationState,
@@ -55,9 +59,7 @@ pub struct OutputTree {
 /// The constructor for OutputTree. It must be provided
 /// given that Default cannot be derived for every field.
 impl OutputTree {
-    pub fn new(
-        tx: std::sync::mpsc::Sender<Message>
-    ) -> Self {
+    pub fn new(tx: std::sync::mpsc::Sender<Message>) -> Self {
         Self {
             separate_drogue: Watchable::default(),
             deploy_main_chute: Watchable::default(),
@@ -70,4 +72,65 @@ impl OutputTree {
             fc_status: Watchable::default(),
         }
     }
+}
+
+/// A manually controllable actuator reachable from the flight computer.
+///
+/// This spans both the valves the FC drives on the PSS and the actuators it
+/// commands on the RFS over CAN, so that a single name resolves to the right
+/// one wherever it is written in a config or a sequence.
+///
+/// See the matching types in [`pss_drivers::output::ValveName`] and
+/// [`rfs_drivers::output::ActuatorName`].
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, serde::Serialize, serde::Deserialize,
+)]
+#[serde(untagged)]
+pub enum ActuatorName {
+    PSSValve(pss_drivers::output::ValveName),
+    RfsActuator(rfs_drivers::output::ActuatorName),
+}
+
+/// Implement parsing based on serde.
+impl std::str::FromStr for ActuatorName {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        use serde::Deserialize as _;
+        Self::deserialize(<&str as serde::de::IntoDeserializer>::into_deserializer(s))
+            .map_err(|e| e.to_string())
+    }
+}
+
+impl ActuatorStore<ActuatorName> for OutputTree {
+    /// Combines the PSS valves and the RFS actuators into one map.
+    fn as_settables(&self) -> BTreeMap<ActuatorName, Box<dyn Settable + Send>> {
+        let mut settables = BTreeMap::new();
+        settables.extend(
+            self.valves
+                .as_settables()
+                .into_iter()
+                .map(|(k, v)| (ActuatorName::PSSValve(k), v)),
+        );
+        settables.extend(
+            self.rfs_actuators
+                .as_settables()
+                .into_iter()
+                .map(|(k, v)| (ActuatorName::RfsActuator(k), v)),
+        );
+        settables
+    }
+}
+
+#[test]
+fn test_actuator_name_from_str() {
+    assert_eq!(
+        "oss_ml_vlv".parse::<ActuatorName>().expect("must parse"),
+        ActuatorName::PSSValve(pss_drivers::output::ValveName::oss_ml_vlv)
+    );
+    assert_eq!(
+        "gox_ign_vlv".parse::<ActuatorName>().expect("must parse"),
+        ActuatorName::RfsActuator(rfs_drivers::output::ActuatorName::gox_ign_vlv)
+    );
+    assert!("not_a_valve".parse::<ActuatorName>().is_err());
 }

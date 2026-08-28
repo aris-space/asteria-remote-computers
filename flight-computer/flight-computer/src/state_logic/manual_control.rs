@@ -1,10 +1,10 @@
 use std::sync::Arc;
 
+use crate::io::output::ActuatorName;
 use lib_mission::actuator_control::command::{ActuatorControl, NeverReturns};
 use lib_mission::actuator_control::ActuatorStore as _;
 use lib_mission::state_machine::{AdditionalState, StateLogic, StateName};
 use lib_mission::transition::ManualTransitions;
-use pss_drivers::output::ValveName;
 
 /// This state gives manual control for the configured actuators,
 /// and otherwise waits for a manual transition.
@@ -13,7 +13,7 @@ use pss_drivers::output::ValveName;
 #[derive(Debug)]
 pub struct ManualControl {
     pub(crate) manual_transitions: ManualTransitions,
-    pub(crate) actuator_control: Arc<ActuatorControl<ValveName>>,
+    pub(crate) actuator_control: Arc<ActuatorControl<ActuatorName>>,
 }
 
 #[async_trait::async_trait]
@@ -35,7 +35,7 @@ impl StateLogic for ManualControl {
         let actuator_future = self.actuator_control.act(
             input.state.current_state.get().0 as usize,
             &input.actuator_command,
-            output.valves.as_settables(),
+            output.as_settables(),
         );
         assert_future::<NeverReturns>(&actuator_future);
 

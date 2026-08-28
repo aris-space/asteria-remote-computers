@@ -7,7 +7,7 @@ use lib_mission::state_machine::{AdditionalState, StateLogic, StateName};
 /// This state sets the configured actuators to their values and then continues to `on_done`
 #[derive(Debug)]
 pub struct SetActuators {
-    pub targets: BTreeMap<pss_drivers::output::ValveName, Value>,
+    pub targets: BTreeMap<crate::io::output::ActuatorName, Value>,
     pub on_done: StateName,
 }
 
@@ -24,7 +24,7 @@ impl StateLogic for SetActuators {
         output: &Self::Output,
         _p: &AdditionalState<Self::Parameter>,
     ) -> StateName {
-        let mut settables = output.valves.as_settables();
+        let mut settables = output.as_settables();
 
         for (name, &target) in &self.targets {
             let Some(settable) = settables.get_mut(name) else {
