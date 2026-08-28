@@ -9,11 +9,11 @@ use lib_mission::reactive::{IntoWatched, WatchedExt as _};
 use lib_mission::state_machine::{AdditionalState, StateLogic, StateName};
 use lib_mission::transition::ManualTransitions;
 
-/// This state enable the ECU to start ignition if the FC and RFS are ready.
+/// This state enables the FC to start ignition if the FC and RFS are ready.
 /// Once it happens, it transitions to `on_ignition`. Otherwise to `on_not_ready` or any manual transition.
 /// Note that after this a [`super::DisarmIgniter`] state should occur soon, to reset the software arming state.
 ///
-/// This is used to disallow the ECU to control to the igniter and stop it should it already has started ignition.
+/// This is used to disallow the FC to control the igniter and stop it should it already have started ignition.
 /// While waiting for ignition this state also allows manual control. This is used to start purging manually before ignition.
 #[derive(Debug)]
 pub struct WaitForIgnition {
