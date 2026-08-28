@@ -1,16 +1,17 @@
-use std::{
-    fmt::Debug,
-    hash::Hash,
-    ops::ControlFlow,
-    time::{Duration, Instant},
-};
+//! This crate provides [`run_sequence`], a generic function that will read sensors, and actuate commands
+//! based off a parsed sequence.
 
-use datatypes::units::{BarG, Celsius};
-use lib_mission::{actuator_control::ActuatorStore, state_machine::StateName};
-pub use sequence_parser::{Command, parse_sequence_str};
-use watchable::Watchable;
+use std::fmt::Debug;
+use std::hash::Hash;
+use std::ops::ControlFlow;
+use std::time::Duration;
 
 use crate::{detect::SensorDetector, watch::SensorWatcher};
+use datatypes::units::{BarG, Celsius};
+use lib_mission::{actuator_control::ActuatorStore, state_machine::StateName};
+use watchable::Watchable;
+
+pub use sequence_parser::{Command, parse_sequence_str};
 
 mod detect;
 mod watch;
@@ -38,15 +39,6 @@ pub trait SensorStore<T: SensorNameExt> {
     fn get_temperature_datapoint<'a>(&'a self, name: &T) -> Option<&'a Watchable<Celsius>>;
 }
 
-enum Blocker<'a> {
-    /// We're blocked on a [`Command::Wait`] until the underlying
-    /// deadline exceeds.
-    Wait(Instant),
-    /// We're blocked on a [`Command::SensorDetect`] until the
-    /// underlying [`SensorDetector`] either finishes or aborts.
-    Detector(SensorDetectorKind<'a>),
-}
-
 /// Run a sequence of [`Command`]s on a remote computer.
 #[expect(clippy::too_many_lines)] // yeeeeah a bit ugly.
 pub async fn run_sequence<ValveName, SensorName>(
@@ -61,70 +53,23 @@ where
     let mut pressure_watcher = SensorWatcher::<SensorName, BarG>::new();
     let mut temperature_watcher = SensorWatcher::<SensorName, Celsius>::new();
 
-    let mut blocker = Option::<Blocker>::None;
     let mut settables = actuators.as_settables();
 
+    // Iterate through the commands, executing them step by step,
+    // ensuring that watchers are always checked if there could pass any time, or they change.
     for (i, command) in sequence.into_iter().enumerate() {
-        // Before we execute the next sequence command we first need to check whether
-        // there is still a blocker. Should that be the case, we execute the blocker
-        // until it's removed.
-        // Additionally, we also check whether any of the active watchers was violated
-        // in the meantime. If that's the case, we return an abort state.
-        loop {
-            match &mut blocker {
-                Some(Blocker::Detector(detector)) => {
-                    tokio::select! {
-                        result = detector.detect() => {
-                            result?;
-                            // The detector finished; we can thus remove the blocker.
-                            blocker = None;
-                        },
-                        result = pressure_watcher.check() => result?,
-                        result = temperature_watcher.check() => result?,
-                    };
-                }
-                Some(Blocker::Wait(deadline)) => {
-                    // Sleep until `deadline`. If `deadline` is no longer in the future we sleep
-                    // for zero milliseconds and then remove the blocker.
-                    let duration = deadline
-                        .checked_duration_since(Instant::now())
-                        .unwrap_or(Duration::ZERO);
-
-                    tokio::select! {
-                        biased;
-                        result = pressure_watcher.check() => result?,
-                        result = temperature_watcher.check() => result?,
-                        _ = tokio::time::sleep(duration) => {
-                            // The wait is finished; we can thus remove the blocker.
-                            blocker = None;
-                        },
-                    };
-                }
-                // We're not blocked on anything before being able to execute the next sequence
-                // command. Since there might have been a watcher event since the last command was
-                // executed, we need to check for such events before continuing the execution of
-                // the next sequence command.
-                None => tokio::select! {
-                        biased;
-                        result = pressure_watcher.check() => result?,
-                        result = temperature_watcher.check() => result?,
-                        // No watcher had an event; we can thus start executing the next
-                        // sequence command.
-                        _ = tokio::time::sleep(Duration::ZERO) => break,
-                },
-            }
-        }
-
-        // There is no blocker for the next sequence command. We can thus start executing the
-        // next sequence command.
-
         match command {
             Command::Msg(msg) => tracing::info!("Command {i}: [LOG] {msg}"),
             Command::Warning(msg) => tracing::warn!("Command {i}: [WRN] {msg}"),
             Command::Error(msg) => tracing::error!("Command {i}: [ERR] {msg}"),
             Command::Wait(duration) => {
                 tracing::info!("Command {i}: Sleeping for {:2}s", duration.as_secs_f32());
-                blocker = Some(Blocker::Wait(Instant::now() + *duration));
+                tokio::select! {
+                    biased;
+                    state = pressure_watcher.watch() => return ControlFlow::Break(state),
+                    state = temperature_watcher.watch() => return ControlFlow::Break(state),
+                    _ = tokio::time::sleep(*duration) => {},
+                };
             }
             Command::ToState(state) => return ControlFlow::Break(state.clone()),
             Command::ActuatorOpen(actuator) => {
@@ -203,6 +148,13 @@ where
                     *max,
                     abort_state.clone(),
                 );
+                // The new watch might currenly be violated, thus quickly check that before proceeding
+                tokio::select! {
+                        biased;
+                        state = pressure_watcher.watch() => return ControlFlow::Break(state),
+                        // No watcher had an event; we can thus start executing the next command.
+                        _ = tokio::time::sleep(Duration::ZERO) => {},
+                };
             }
             Command::SensorWatch {
                 name,
@@ -225,6 +177,13 @@ where
                     *max,
                     abort_state.clone(),
                 );
+                // The new watch might currenly be violated, thus quickly check that before proceeding
+                tokio::select! {
+                        biased;
+                        state = temperature_watcher.watch() => return ControlFlow::Break(state),
+                        // No watcher had an event; we can thus start executing the next command.
+                        _ = tokio::time::sleep(Duration::ZERO) => {},
+                };
             }
             Command::SensorIgnore { name, key } => {
                 temperature_watcher.remove_watcher(name, key.as_ref());
@@ -244,9 +203,18 @@ where
                     );
                     return ControlFlow::Continue(());
                 };
-                let detector =
+                let mut detector =
                     SensorDetector::new(sensor, *value, *rising, abort_state, *patience, *duration);
-                blocker = Some(Blocker::Detector(SensorDetectorKind::Pressure(detector)));
+                tokio::select! {
+                    biased;
+                    state = pressure_watcher.watch() => return ControlFlow::Break(state),
+                    state = temperature_watcher.watch() => return ControlFlow::Break(state),
+                    result = detector.detect() => {
+                        // We got a detection event, either an error, which then cancels the sequence,
+                        // or a continuation, such that we can proceed.
+                        result?;
+                    },
+                };
             }
             Command::SensorDetect {
                 name,
@@ -262,9 +230,18 @@ where
                     );
                     return ControlFlow::Continue(());
                 };
-                let detector =
+                let mut detector =
                     SensorDetector::new(sensor, *value, *rising, abort_state, *patience, *duration);
-                blocker = Some(Blocker::Detector(SensorDetectorKind::Temperature(detector)));
+                tokio::select! {
+                    biased;
+                    state = pressure_watcher.watch() => return ControlFlow::Break(state),
+                    state = temperature_watcher.watch() => return ControlFlow::Break(state),
+                    result = detector.detect() => {
+                        // We got a detection event, either an error, which then cancels the sequence,
+                        // or a continuation, such that we can proceed.
+                        result?;
+                    },
+                };
             }
             Command::SensorWatch { name, .. } | Command::SensorDetect { name, .. } => {
                 tracing::error!("got a sensor {name:?} that is neither temperature nor pressure");
@@ -274,20 +251,6 @@ where
     }
 
     ControlFlow::Continue(())
-}
-
-pub enum SensorDetectorKind<'a> {
-    Temperature(SensorDetector<'a, Celsius>),
-    Pressure(SensorDetector<'a, BarG>),
-}
-
-impl SensorDetectorKind<'_> {
-    pub async fn detect(&mut self) -> ControlFlow<StateName> {
-        match self {
-            SensorDetectorKind::Temperature(detector) => detector.detect().await,
-            SensorDetectorKind::Pressure(detector) => detector.detect().await,
-        }
-    }
 }
 
 #[cfg(test)]

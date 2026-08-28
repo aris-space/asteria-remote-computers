@@ -1,8 +1,4 @@
-use std::{
-    collections::HashMap,
-    hash::Hash,
-    ops::{ControlFlow, RangeInclusive},
-};
+use std::{collections::HashMap, hash::Hash, ops::RangeInclusive};
 
 use datatypes::units::ValueWithUnit;
 use futures::{FutureExt, StreamExt, stream::FuturesUnordered};
@@ -77,17 +73,15 @@ impl<S: Hash + Eq, T: Send + Sync + Clone + ValueWithUnit<f32>> SensorWatcher<S,
         watchers.retain(|watched| watched.key.as_ref().is_none_or(|k| k != key));
     }
 
-    /// Check whether any sensor contains a value which isn't in the range of allowed values.
+    /// What all configured sensors for a value which isn't in the range of allowed values.
     ///
-    /// If no sensor is registered at the [`SensorWatcher`] instance, [`ControlFlow::Continue`]
-    /// is returned. Otherwise, this method waits until one of the following things occur:
-    /// - At least one of the registered sensors contains a value outside of the allowed
-    ///   range.
-    ///   In this case [`ControlFlow::Break`] is returned with the [`StateName`] of the abort
-    ///   state into which the state machine should transition.
-    /// - The underlying [`Future`] is cancelled because some other [`Future`] inside the
+    /// If no sensor is registered at the [`SensorWatcher`] instance, this waits indefinitely.
+    /// Otherwise, this method waits until one of the following things occur:
+    /// - At least one of the registered sensors contains a value outside of the allowed range.
+    ///   In this case the [`StateName`] of the abort state into which the state machine should transition is returned.
+    /// - The underlying [`Future`] is cancelled because some other [`Future`] inside a
     ///   [`tokio::select!`] completes earlier.
-    pub async fn check(&mut self) -> ControlFlow<StateName> {
+    pub async fn watch(&mut self) -> StateName {
         // "Stream" of abort states which yields as soon as a registered watcher contains
         // a value outside its allowed range.
         let iter = self.0.values_mut().flat_map(|watchers| {
@@ -110,15 +104,16 @@ impl<S: Hash + Eq, T: Send + Sync + Clone + ValueWithUnit<f32>> SensorWatcher<S,
         // We wait for the first watcher to produce a value outside its allowed range.
         let aborted = iter.collect::<FuturesUnordered<_>>().next().await;
         match aborted {
-            Some(abort_state) => ControlFlow::Break(abort_state),
-            None => ControlFlow::Continue(()),
+            Some(abort_state) => abort_state,
+            // Nothing to watch for, so no violation will ever happen
+            None => std::future::pending().await,
         }
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use std::{ops::ControlFlow, time::Duration};
+    use std::time::Duration;
 
     use datatypes::units::Celsius;
     use lib_mission::state_machine::StateName;
@@ -132,11 +127,13 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_continue_when_empty() {
+    async fn test_pending_forever_when_empty() {
         let mut watcher = SensorWatcher::<DummySensorName, Celsius>::new();
         for _ in 0..5 {
-            tokio::time::sleep(Duration::from_millis(50)).await;
-            assert_eq!(watcher.check().await, ControlFlow::Continue(()));
+            tokio::select! {
+                _ = watcher.watch() => panic!("should never resolve without any watched sensor"),
+                () = tokio::time::sleep(Duration::from_millis(50)) => { /* fall-through to below */ },
+            }
         }
     }
 
@@ -159,18 +156,18 @@ mod tests {
         // A value of 12.0 should not violate the watcher.
         sensor.replace(Celsius(12.0));
         tokio::select! {
-            _ = watcher.check() => panic!("should not finish"),
+            _ = watcher.watch() => panic!("should not finish"),
             _ = tokio::time::sleep(Duration::from_millis(10)) => { /* fall-through to below */ },
         }
 
         tokio::spawn(async move {
             tokio::time::sleep(Duration::from_millis(100)).await;
-            // A value of 5.0 should violate the watcher and the `watcher.check()` on
-            // the main thread should return `ControlFlow::Break(abort)`.
+            // A value of 5.0 should violate the watcher and the `watcher.watch()` on
+            // the main thread should resolve with `abort_state`.
             sensor.replace(Celsius(5.0));
         });
 
-        let result = watcher.check().await;
-        assert!(matches!(result, ControlFlow::Break(state) if state == abort_state));
+        let result = watcher.watch().await;
+        assert_eq!(result, abort_state);
     }
 }
