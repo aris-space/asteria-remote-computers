@@ -143,7 +143,7 @@ pub fn spawn_gox_igniter_valve_state_driver(
 
 /// Sends `H2IgniterValveState` at 5Hz.
 pub fn spawn_h2_igniter_valve_state_driver(
-    rocket_conn_detect: Watchable<DigitalIn>,
+    rocket_connection_detect: Watchable<DigitalIn>,
     state: impl Watched<NormallyClosedValve> + Send + 'static,
     tx: std::sync::mpsc::Sender<messages::Message>,
 ) -> AbortHandle {
