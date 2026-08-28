@@ -2,10 +2,14 @@ use std::sync::mpsc;
 use std::{collections::BTreeMap, marker::PhantomData};
 
 use datatypes::actuator::{DigitalOut, NormallyClosedValve, OutOfRange, Settable};
+use lib_mission::actuator_control::ActuatorStore;
 use messages::datapoints::dp_rfs_computer;
 use serde::{Deserialize, Serialize};
 
-/// A channel that implements `as_settables` for the actuators of the RFS: [`ActuatorName`].
+/// A channel that implements [`ActuatorStore`] for the actuators of the RFS: [`ActuatorName`].
+///
+/// Setting any of them sends the matching `*Control` CAN message to the RFS,
+/// which applies it to the physical actuator.
 #[derive(Debug, Clone)]
 pub struct ActuatorChannel {
     tx: mpsc::Sender<messages::Message>,
@@ -14,7 +18,7 @@ pub struct ActuatorChannel {
 /// See the matching types in [`crate::input::Actuators`].
 ///
 /// ```
-/// use rfs_privers::output::ActuatorName;
+/// use rfs_drivers::output::ActuatorName;
 /// assert_eq!("gox_ign_vlv".parse::<ActuatorName>().unwrap(), ActuatorName::gox_ign_vlv)
 /// ```
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Deserialize, Serialize)]
@@ -44,18 +48,18 @@ impl std::str::FromStr for ActuatorName {
 
 impl ActuatorChannel {
     /// This method is needed for the OutputTree constructor.
-    /// We cannot derive Default for ActuatorChannel for the same 
+    /// We cannot derive Default for ActuatorChannel for the same
     /// reason as PSSValves
     pub fn new(tx: mpsc::Sender<messages::Message>) -> Self {
         Self { tx }
     }
 }
 
-impl ActuatorChannel {
+impl ActuatorStore<ActuatorName> for ActuatorChannel {
     /// Returns a map keyed by `ActuatorName`, with each entry being a boxed
     /// `Settable` that builds and sends the right CAN message when
     /// `set_value` is called.
-    pub fn as_settables(&self) -> BTreeMap<ActuatorName, Box<dyn Settable + Send>> {
+    fn as_settables(&self) -> BTreeMap<ActuatorName, Box<dyn Settable + Send>> {
         let mut map: BTreeMap<ActuatorName, Box<dyn Settable + Send>> = BTreeMap::new();
 
         map.insert(

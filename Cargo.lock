@@ -2842,6 +2842,7 @@ dependencies = [
  "io-utils",
  "lib-mission",
  "messages",
+ "sequences",
  "serde",
  "tokio",
  "tracing",

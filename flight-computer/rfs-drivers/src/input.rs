@@ -4,6 +4,7 @@ use io_utils::Broadcast;
 use io_utils::Collector;
 use messages::Message;
 use messages::datapoints::dp_rfs_computer::Message as RFSCMessage;
+use sequences::{SensorNameExt, SensorStore};
 use watchable::Watchable;
 
 /// The states of the actuators that are exposed.
@@ -48,7 +49,77 @@ pub struct Sensors {
     #[broadcast(min_freq_hz = 1., max_freq_hz = 10.)]
     pub igniter_pressure: Watchable<BarG>,
     /// The last received temperature of the igniter box.
+    ///
+    /// The matching datapoint currently has no CAN id, only mavlink, so this is
+    /// never updated on the flight computer. It needs a `#[can(id = ...)]` in
+    /// `dp-rfs-computer` before [`SensorName::ign_cc_t`] can be used in a sequence.
     #[datapoint(pattern = "Message::RfsComputer(RFSCMessage::IgniterTemperature(#value))")]
     #[broadcast(min_freq_hz = 1., max_freq_hz = 3.)]
     pub igniter_temperature: Watchable<Celsius>,
+}
+
+/// See the matching types in [`Sensors`].
+///
+/// Names follow the `#[pss(name = "...")]` instrumentation names in
+/// [`messages::datapoints::dp_rfs_computer::Message`].
+///
+/// ```
+/// use rfs_drivers::input::SensorName;
+/// assert_eq!("ign_cc_p".parse::<SensorName>().unwrap(), SensorName::ign_cc_p)
+/// ```
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, serde::Deserialize, serde::Serialize, Hash,
+)]
+#[allow(non_camel_case_types)]
+pub enum SensorName {
+    /// Name of the igniter combustion chamber pressure sensor.
+    ign_cc_p,
+    /// Name of the igniter combustion chamber temperature sensor.
+    ///
+    /// Note that the matching datapoint has no CAN id, so on the flight computer
+    /// this never receives a value. See [`Sensors::igniter_temperature`].
+    ign_cc_t,
+}
+
+impl SensorNameExt for SensorName {
+    fn is_pressure_sensor(&self) -> bool {
+        matches!(self, SensorName::ign_cc_p)
+    }
+
+    fn is_temperature_sensor(&self) -> bool {
+        matches!(self, SensorName::ign_cc_t)
+    }
+}
+
+impl std::str::FromStr for SensorName {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        use serde::Deserialize as _;
+        Self::deserialize(<&str as serde::de::IntoDeserializer>::into_deserializer(s))
+            .map_err(|e| e.to_string())
+    }
+}
+
+impl SensorStore<SensorName> for Sensors {
+    fn get_pressure_datapoint<'a>(&'a self, name: &SensorName) -> Option<&'a Watchable<BarG>> {
+        let watchable = match name {
+            SensorName::ign_cc_p => &self.igniter_pressure,
+            // `name` is not the name of a pressure sensor.
+            SensorName::ign_cc_t => return None,
+        };
+        Some(watchable)
+    }
+
+    fn get_temperature_datapoint<'a>(
+        &'a self,
+        name: &SensorName,
+    ) -> Option<&'a Watchable<Celsius>> {
+        let watchable = match name {
+            SensorName::ign_cc_t => &self.igniter_temperature,
+            // `name` is not the name of a temperature sensor.
+            SensorName::ign_cc_p => return None,
+        };
+        Some(watchable)
+    }
 }
