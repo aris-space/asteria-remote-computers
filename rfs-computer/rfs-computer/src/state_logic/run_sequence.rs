@@ -1,7 +1,12 @@
+use std::ops::ControlFlow;
+
 use lib_mission::state_machine::{AdditionalState, StateLogic, StateName};
 use lib_mission::transition::ManualTransitions;
+use sequences::Command;
 
-use crate::state_logic::helpers::{Action, ThresholdWatcher, run_sequence};
+use crate::io::input::SensorName;
+use crate::io::output::ActuatorName;
+use crate::state_logic::helpers::ThresholdWatcher;
 
 /// This state runs a sequence until completion, invalid condition, manual transition or reached threshold.
 #[derive(Debug)]
@@ -13,10 +18,10 @@ pub struct RunSequence {
     /// If any of them are violated, this will end the sequence and proceeds to `on_cancelled`.
     pub thresholds: ThresholdWatcher,
     /// The sequence to run.
-    pub sequence: Vec<Action>,
+    pub sequence: Vec<Command<ActuatorName, SensorName, StateName>>,
     /// The state to transition to when the sequence has been completed.
     pub on_completed: StateName,
-    /// The state to transition to when an action demands the sequence be cancelled.
+    /// The state to transition to when a watched threshold has been violated.
     pub on_cancelled: StateName,
 }
 
@@ -42,10 +47,12 @@ impl StateLogic for RunSequence {
                 tracing::warn!("Violation: {violation}");
                 self.on_cancelled.clone()
             }
-            outcome = run_sequence(&self.sequence, output, input) => if outcome.is_continue() {
-                self.on_completed.clone()
-            } else {
-                self.on_cancelled.clone()
+            outcome = sequences::run_sequence(&self.sequence, output, input) => match outcome {
+                ControlFlow::Continue(_) => self.on_completed.clone(),
+                ControlFlow::Break(abort_state) => {
+                    tracing::error!("Sequence aborted, transitioning into {abort_state}");
+                    abort_state
+                }
             },
         }
     }

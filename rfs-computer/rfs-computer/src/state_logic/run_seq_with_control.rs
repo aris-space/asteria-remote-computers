@@ -1,12 +1,16 @@
+use std::ops::ControlFlow;
 use std::time::Duration;
 
+use lib_mission::actuator_control::ActuatorStore;
 use lib_mission::actuator_control::command::{ActuatorControl, NeverReturns};
 use lib_mission::state_machine::{AdditionalState, StateLogic, StateName};
 use lib_mission::telemetry::await_telemetry_loss;
 use lib_mission::transition::ManualTransitions;
+use sequences::Command;
 
+use crate::io::input::SensorName;
 use crate::io::output::ActuatorName;
-use crate::state_logic::helpers::{Action, ThresholdWatcher, run_sequence};
+use crate::state_logic::helpers::ThresholdWatcher;
 
 /// This state runs a sequence, but at the same time also gives manual control for the configured actuators,
 /// and otherwise waits for a manual transition or a threshold violation.
@@ -27,9 +31,7 @@ pub struct RunSeqWithControl {
     /// The state to transition to when a threshold has been violated.
     pub on_violation: StateName,
     /// The sequence to run.
-    pub sequence: Vec<Action>,
-    /// The state to transition to when the sequence has a problem.
-    pub on_sequence_problem: StateName,
+    pub sequence: Vec<Command<ActuatorName, SensorName, StateName>>,
     /// The state to transition to when the sequence has been completed.
     pub on_completed: StateName,
 }
@@ -69,10 +71,12 @@ impl StateLogic for RunSeqWithControl {
                 tracing::warn!("telemetry loss detected");
                 self.on_violation.clone()
             }
-            outcome = run_sequence(&self.sequence, output, input) => if outcome.is_continue() {
-                self.on_completed.clone()
-            } else {
-                self.on_sequence_problem.clone()
+            outcome = sequences::run_sequence(&self.sequence, output, input) => match outcome {
+                ControlFlow::Continue(_) => self.on_completed.clone(),
+                ControlFlow::Break(abort_state) => {
+                    tracing::error!("Sequence aborted, transitioning into {abort_state}");
+                    abort_state
+                }
             },
             _ = actuator_future => unreachable!("act cannot return normally"),
         }

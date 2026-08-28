@@ -3,6 +3,7 @@ use datatypes::actuator::DigitalOut;
 use datatypes::actuator::NormallyOpenValve;
 use datatypes::sensor::DigitalIn;
 use datatypes::status::ArmingState;
+use lib_mission::actuator_control::ActuatorStore as _;
 use lib_mission::actuator_control::command::{ActuatorControl, NeverReturns};
 use lib_mission::reactive::{IntoWatched, WatchedExt as _};
 use lib_mission::state_machine::{AdditionalState, StateLogic, StateName};

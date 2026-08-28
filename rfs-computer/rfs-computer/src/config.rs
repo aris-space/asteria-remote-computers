@@ -7,8 +7,11 @@ use lib_mission::common_states;
 use lib_mission::config::{BoxableState, MakeState};
 use lib_mission::state_machine::{BoxedState, StateName};
 use lib_mission::transition::ManualTransitions;
+use sequences::{Command, deserialize_sequence, validate_sequence};
 use serde::{Deserialize, Serialize};
 
+use crate::io::input::SensorName;
+use crate::io::output::ActuatorName;
 use crate::state_logic;
 use crate::state_logic::helpers::ThresholdWatcher;
 use keller23sx::BaudRate;
@@ -153,12 +156,11 @@ pub enum StateLogicConfig {
         telemetry_loss_threshold_sec: f32,
         /// The state to transition to when a sensor or telemetry violation occured.
         on_violation: String,
-        /// The sequence to run.
-        sequence: Vec<state_logic::helpers::Action>,
+        /// The sequence to run, as a DSL string (see the `sequence-parser` crate).
+        #[serde(deserialize_with = "deserialize_sequence", skip_serializing)]
+        sequence: Vec<Command<ActuatorName, SensorName, String>>,
         /// The state to transition to when the sequence has been completed.
         on_completed: String,
-        /// The state to transition to when an action demands the sequence be cancelled.
-        on_sequence_problem: String,
     },
     /// Describes a [`state_logic::AwaitTimer`].
     AwaitTimer {
@@ -195,15 +197,16 @@ pub enum StateLogicConfig {
     },
     /// Describes a [`state_logic::RunSequence`].
     RunSequence {
-        /// The sequence to run.
-        sequence: Vec<state_logic::helpers::Action>,
+        /// The sequence to run, as a DSL string (see the `sequence-parser` crate).
+        #[serde(deserialize_with = "deserialize_sequence", skip_serializing)]
+        sequence: Vec<Command<ActuatorName, SensorName, String>>,
         /// Thresholds on sensors to watch during the whole of the sequence.
         /// If any of them are violated, this will end the sequence and proceeds to `on_cancelled`.
         #[serde(default)]
         thresholds: ThresholdWatcher,
         /// The state to transition to when the sequence has been completed.
         on_completed: String,
-        /// The state to transition to when an action demands the sequence be cancelled.
+        /// The state to transition to when a watched threshold has been violated.
         on_cancelled: String,
     },
     /// Describes a [`state_logic::DisarmIgniter`].
@@ -271,7 +274,6 @@ impl MakeState for StateLogicConfig {
                 on_violation,
                 sequence,
                 on_completed,
-                on_sequence_problem,
             } => state_logic::RunSeqWithControl {
                 manual_transitions: transitions,
                 actuator_control: ActuatorControl::from_strings(
@@ -283,8 +285,7 @@ impl MakeState for StateLogicConfig {
                 ),
                 thresholds,
                 on_violation: StateName::try_new(&on_violation, names)?,
-                sequence,
-                on_sequence_problem: StateName::try_new(&on_sequence_problem, names)?,
+                sequence: validate_sequence(sequence, names)?,
                 on_completed: StateName::try_new(&on_completed, names)?,
             }
             .into_box(),
@@ -330,7 +331,7 @@ impl MakeState for StateLogicConfig {
                 on_cancelled,
             } => state_logic::RunSequence {
                 manual_transitions: transitions,
-                sequence,
+                sequence: validate_sequence(sequence, names)?,
                 thresholds,
                 on_completed: StateName::try_new(&on_completed, names)?,
                 on_cancelled: StateName::try_new(&on_cancelled, names)?,

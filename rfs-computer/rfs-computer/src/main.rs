@@ -1,6 +1,7 @@
 //! The main entry point for the remote filling station computer
 
 use datatypes::status::ConfigHash;
+use lib_mission::actuator_control::ActuatorStore as _;
 use lib_mission::state_machine::StateMachine;
 use lib_mission::util::init::init_binary;
 use rfs_computer::build_info;

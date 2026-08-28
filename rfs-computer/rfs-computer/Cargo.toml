@@ -23,6 +23,7 @@ datatypes = { path = "../../data-definitions/datatypes", features = [
     "watchable_settable",
 ] }
 pss-drivers = { path = "../../lib-remote-computers/pss-drivers" }
+sequences = { path = "../../lib-remote-computers/sequences" }
 io-utils = { path = "../../lib-remote-computers/io-utils" }
 
 mavlink-core = { version = "0.13.1" }
