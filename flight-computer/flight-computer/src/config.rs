@@ -1,5 +1,5 @@
 use std::collections::HashSet;
-use std::sync::{Arc, Mutex};
+use std::sync::Mutex;
 use std::time::Duration;
 
 use crate::io::input::SensorName;
@@ -466,10 +466,10 @@ impl<Gnc: CompatGuidanceController> MakeState for StateLogicConfig<Gnc> {
             .into_box(),
             StateLogicConfig::ManualControl { allowed_actuators } => state_logic::ManualControl {
                 manual_transitions,
-                actuator_control: Arc::new(
-                    ActuatorControl::from_strings(allowed_actuators.iter().map(String::as_str))
-                        .map_err(lib_mission::Error::malformed_config)?,
-                ),
+                actuator_control: ActuatorControl::from_strings(
+                    allowed_actuators.iter().map(String::as_str),
+                )
+                .map_err(lib_mission::Error::malformed_config)?,
             }
             .into_box(),
             StateLogicConfig::SetNormalState { on_done } => state_logic::SetNormalState {
@@ -546,10 +546,10 @@ impl<Gnc: CompatGuidanceController> MakeState for StateLogicConfig<Gnc> {
                 on_violation,
             } => state_logic::MonitoredManualControl {
                 manual_transitions,
-                allowed_actuators: Arc::new(
-                    ActuatorControl::from_strings(allowed_actuators.iter().map(String::as_str))
-                        .map_err(lib_mission::Error::malformed_config)?,
-                ),
+                allowed_actuators: ActuatorControl::from_strings(
+                    allowed_actuators.iter().map(String::as_str),
+                )
+                .map_err(lib_mission::Error::malformed_config)?,
                 telemetry_loss_threshold: std::time::Duration::from_secs_f32(
                     telemetry_loss_threshold_sec,
                 ),

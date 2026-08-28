@@ -1,5 +1,3 @@
-use std::sync::Arc;
-
 use crate::io::output::ActuatorName;
 use lib_mission::actuator_control::command::{ActuatorControl, NeverReturns};
 use lib_mission::actuator_control::ActuatorStore as _;
@@ -13,7 +11,7 @@ use lib_mission::transition::ManualTransitions;
 #[derive(Debug)]
 pub struct ManualControl {
     pub(crate) manual_transitions: ManualTransitions,
-    pub(crate) actuator_control: Arc<ActuatorControl<ActuatorName>>,
+    pub(crate) actuator_control: ActuatorControl<ActuatorName>,
 }
 
 #[async_trait::async_trait]
