@@ -28,7 +28,7 @@ impl InputTree {
             flight_computer_status,
             uremote_sensors,
             uremote_actuators,
-            controllino_valves: _, // TODO (or find a better way)
+            controllino_valves,
             controllino_sensors,
             n2_pre_booster_pressure,
             h2_purge_pressure,
@@ -159,6 +159,7 @@ impl InputTree {
 
         handles.extend(uremote_actuators.start_logging(folder, time).await?);
         handles.extend(uremote_sensors.start_logging(folder, time).await?);
+        handles.extend(controllino_valves.start_logging(folder, time).await?);
         handles.extend(controllino_sensors.start_logging(folder, time).await?);
         handles.extend(
             start_pressure_sensors_logging(
