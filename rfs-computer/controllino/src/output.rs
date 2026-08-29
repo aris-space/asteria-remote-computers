@@ -1,9 +1,53 @@
 use std::collections::BTreeMap;
 
 use datatypes::actuator::Settable;
-use datatypes::actuator::{DigitalOut, InvertedDigitalOut, NormallyClosedValve};
+use datatypes::actuator::{
+    DigitalOut, Energizable, InvertedDigitalOut, NormallyClosedValve, OutOfRange,
+};
+use watchable::Watchable;
 
 use crate::driver::CoilSettable;
+
+/// A [`CoilSettable`] that also retains the value it was last set to.
+///
+/// [`CoilSettable`] only writes to the Modbus coil and keeps nothing, so there is
+/// nothing to observe. Wrapping it in a [`Watchable`] makes the commanded value
+/// watchable, which is what the target state logging needs.
+#[derive(Clone)]
+pub struct Tracked<T> {
+    /// The value this actuator was last commanded to.
+    pub target: Watchable<T>,
+    coil: CoilSettable<T>,
+}
+
+impl<T: Default> Tracked<T> {
+    pub(crate) fn new(coil: CoilSettable<T>) -> Self {
+        Self {
+            target: Watchable::default(),
+            coil,
+        }
+    }
+}
+
+impl<T: Energizable + Clone> Tracked<T> {
+    /// Records `value` as the new target and writes it to the coil.
+    ///
+    /// Mirrors [`CoilSettable::set`], and must be used in its place so that the
+    /// commanded value stays observable through [`Self::target`].
+    pub fn set(&self, value: T) {
+        self.target.replace(value.clone());
+        self.coil.set(value);
+    }
+}
+
+impl<T: Default + Settable + Energizable + Clone> Settable for Tracked<T> {
+    fn set_value(&mut self, value: f32) -> Result<(), OutOfRange> {
+        let mut typed = T::default();
+        typed.set_value(value)?;
+        self.set(typed);
+        Ok(())
+    }
+}
 
 /// The target states of the actuators connected to the controllino.
 ///
@@ -12,21 +56,21 @@ use crate::driver::CoilSettable;
 #[allow(clippy::struct_field_names)]
 pub struct Actuators {
     /// The target state of the ROCKET_POWER.
-    pub rocket_power: CoilSettable<InvertedDigitalOut>,
+    pub rocket_power: Tracked<InvertedDigitalOut>,
     /// The target state of the ROCKET_HEATING.
-    pub rocket_heating: CoilSettable<DigitalOut>,
+    pub rocket_heating: Tracked<DigitalOut>,
     /// The target state of the LOX decoupler extend valve.
-    pub lox_decoupler_extend_valve: CoilSettable<NormallyClosedValve>,
+    pub lox_decoupler_extend_valve: Tracked<NormallyClosedValve>,
     /// The target state of the LOX decoupler retract valve.
-    pub lox_decoupler_retract_valve: CoilSettable<NormallyClosedValve>,
+    pub lox_decoupler_retract_valve: Tracked<NormallyClosedValve>,
     /// The target state of the N2 decoupler extend valve.
-    pub n2_decoupler_extend_valve: CoilSettable<NormallyClosedValve>,
+    pub n2_decoupler_extend_valve: Tracked<NormallyClosedValve>,
     /// The target state of the N2 decoupler retract valve.
-    pub n2_decoupler_retract_valve: CoilSettable<NormallyClosedValve>,
+    pub n2_decoupler_retract_valve: Tracked<NormallyClosedValve>,
     /// The target state of the N2 shower valves.
-    pub n2_shower_valve: CoilSettable<NormallyClosedValve>,
+    pub n2_shower_valve: Tracked<NormallyClosedValve>,
     /// The target state of the N2 engine purge valve.
-    pub n2_engine_purge_valve: CoilSettable<NormallyClosedValve>,
+    pub n2_engine_purge_valve: Tracked<NormallyClosedValve>,
 }
 
 /// See the matching types in [`Actuators`].

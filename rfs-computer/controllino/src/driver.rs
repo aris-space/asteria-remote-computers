@@ -548,7 +548,7 @@ impl Client {
     pub fn into_output_tree(self, log: &Option<mpsc::Sender<Message>>) -> crate::output::Actuators {
         macro_rules! coil {
             ($addr:expr, $variant:path) => {
-                match log.as_ref() {
+                crate::output::Tracked::new(match log.as_ref() {
                     Some(tx) => CoilSettable::new_with_log(
                         self.clone(),
                         $addr,
@@ -556,7 +556,7 @@ impl Client {
                         (|v| Message::RfsComputer($variant(v))) as fn(_) -> Message,
                     ),
                     None => CoilSettable::new(self.clone(), $addr),
-                }
+                })
             };
         }
         crate::output::Actuators {
