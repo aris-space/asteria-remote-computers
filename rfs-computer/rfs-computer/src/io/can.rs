@@ -87,9 +87,27 @@ fn init_output_drivers(
     } = state_tree;
     // Register the emitters
     let handles = vec![
-        output_drivers::spawn_rfsc_status_driver(rfs_computer_status.clone(), tx.clone()),
-        output_drivers::spawn_rfsc_debug_driver(crate::build_info::THIS_BUILD, tx.clone()),
+        output_drivers::spawn_rfsc_status_driver(
+            input_tree
+                .controllino_sensors
+                .rocket_connection_detect
+                .clone(),
+            rfs_computer_status.clone(),
+            tx.clone(),
+        ),
+        output_drivers::spawn_rfsc_debug_driver(
+            input_tree
+                .controllino_sensors
+                .rocket_connection_detect
+                .clone(),
+            crate::build_info::THIS_BUILD,
+            tx.clone(),
+        ),
         output_drivers::spawn_fc_igniter_pressure_driver(
+            input_tree
+                .controllino_sensors
+                .rocket_connection_detect
+                .clone(),
             input_tree.controllino_sensors.igniter_pressure.watched(),
             tx.clone(),
         ),
