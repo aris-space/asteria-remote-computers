@@ -1,5 +1,3 @@
-use std::matches;
-
 use datatypes::actuator::{DPRValve, NormallyClosedValve, NormallyOpenValve};
 use datatypes::units::{BarG, Celsius};
 use messages::datapoints::dp_engine_control_board::Message as ECBMessage;

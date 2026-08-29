@@ -1,5 +1,3 @@
-use std::matches;
-
 use datatypes::actuator::{DigitalOut, NormallyClosedValve};
 use datatypes::units::{BarG, Celsius};
 use io_utils::Broadcast;
@@ -51,10 +49,6 @@ pub struct Sensors {
     #[broadcast(min_freq_hz = 1., max_freq_hz = 10.)]
     pub igniter_pressure: Watchable<BarG>,
     /// The last received temperature of the igniter box.
-    ///
-    /// The matching datapoint currently has no CAN id, only mavlink, so this is
-    /// never updated on the flight computer. It needs a `#[can(id = ...)]` in
-    /// `dp-rfs-computer` before [`SensorName::ign_cc_t`] can be used in a sequence.
     #[datapoint(pattern = "Message::RfsComputer(RFSCMessage::IgniterTemperature(#value))")]
     #[broadcast(min_freq_hz = 1., max_freq_hz = 3.)]
     pub igniter_temperature: Watchable<Celsius>,
