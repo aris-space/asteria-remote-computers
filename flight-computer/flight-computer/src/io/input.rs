@@ -265,9 +265,7 @@ pub struct BoardsBuildInfo {
     #[broadcast(min_freq_hz = 0.05, max_freq_hz = 0.2)]
     pub sensor_carrier: Watchable<BuildInformationCommon>,
 
-    // #[datapoint(pattern = "Message::PowerBoard(PWBMessage::BuildInfo(#value))")]
-    // #[broadcast(min_freq_hz = 0.05, max_freq_hz = 0.2)]
-    // pub power_board: Watchable<BuildInformationCommon>,
+    // 
     #[datapoint(pattern = "Message::RecoveryBoard(RECMessage::BuildInfo(#value))")]
     #[broadcast(min_freq_hz = 0.05, max_freq_hz = 0.2)]
     pub recovery_board: Watchable<BuildInformationCommon>,
