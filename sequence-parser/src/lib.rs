@@ -360,7 +360,7 @@ where
                 name: sensor?.inner.0,
                 abort_state: abort?.inner,
                 max: max.inner.unwrap_or(f32::INFINITY),
-                min: min.inner.unwrap_or(f32::INFINITY),
+                min: min.inner.unwrap_or(f32::NEG_INFINITY),
                 key: key.inner,
             })
         })
