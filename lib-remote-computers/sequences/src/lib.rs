@@ -74,7 +74,10 @@ where
                     _ = tokio::time::sleep(*duration) => {},
                 };
             }
-            Command::ToState(state) => return ControlFlow::Break(state.clone()),
+            Command::ToState(state) => {
+                tracing::info!("Command {i}: Transitioning to {state:?}");
+                return ControlFlow::Break(state.clone());
+            }
             Command::ActuatorOpen(actuator) => {
                 let Some(settable) = settables.get_mut(actuator) else {
                     // Ignore when the actuator doesn't exist.
@@ -143,6 +146,9 @@ where
                     );
                     return ControlFlow::Continue(());
                 };
+                tracing::info!(
+                    "Command {i}: Watching pressure sensor {name:?} in range [{min}, {max}]"
+                );
                 pressure_watcher.add_watcher(
                     name.clone(),
                     key.clone(),
@@ -172,6 +178,9 @@ where
                     );
                     return ControlFlow::Continue(());
                 };
+                tracing::info!(
+                    "Command {i}: Watching temperature sensor {name:?} in range [{min}, {max}]"
+                );
                 temperature_watcher.add_watcher(
                     name.clone(),
                     key.clone(),
@@ -189,6 +198,10 @@ where
                 };
             }
             Command::SensorIgnore { name, key } => {
+                tracing::info!(
+                    "Command {i}: Ignoring sensor watch {name:?}:{key}",
+                    key = key.as_deref().unwrap_or("all")
+                );
                 temperature_watcher.remove_watcher(name, key.as_ref());
                 pressure_watcher.remove_watcher(name, key.as_ref());
             }
@@ -206,6 +219,10 @@ where
                     );
                     return ControlFlow::Continue(());
                 };
+                tracing::info!(
+                    "Command {i}: Detecting pressure sensor {name:?} {} {value}",
+                    if *rising { "rising to" } else { "falling to" }
+                );
                 let mut detector =
                     SensorDetector::new(sensor, *value, *rising, abort_state, *patience, *duration);
                 tokio::select! {
@@ -233,6 +250,10 @@ where
                     );
                     return ControlFlow::Continue(());
                 };
+                tracing::info!(
+                    "Command {i}: Detecting temperature sensor {name:?} {} {value}",
+                    if *rising { "rising to" } else { "falling to" }
+                );
                 let mut detector =
                     SensorDetector::new(sensor, *value, *rising, abort_state, *patience, *duration);
                 tokio::select! {
