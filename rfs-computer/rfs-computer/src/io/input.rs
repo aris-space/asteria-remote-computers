@@ -7,8 +7,14 @@ use io_utils::{Broadcast, Collector};
 use lib_mission::util::time::MissionTime;
 use lib_mission::{actuator_control, transition};
 use messages::Message;
+use messages::datapoints::dp_engine_control_board::EngineControlBoardStatus;
+use messages::datapoints::dp_engine_control_board::Message as ECUMessage;
 use messages::datapoints::dp_flight_computer::FlightComputerStatus;
 use messages::datapoints::dp_flight_computer::Message as FCMessage;
+use messages::datapoints::dp_fuel_control_board::FuelControlBoardStatus;
+use messages::datapoints::dp_fuel_control_board::Message as FCBMessage;
+use messages::datapoints::dp_oxidizer_control_board::Message as OCBMessage;
+use messages::datapoints::dp_oxidizer_control_board::OxidizerControlBoardStatus;
 use messages::datapoints::dp_rfs_computer::Message as RFSMessage;
 use pss_drivers::input::{PSSSensors, PSSValves};
 use sequences::{SensorNameExt, SensorStore};
@@ -32,8 +38,9 @@ pub struct InputTree {
     /// The newest actuator command from the ground station.
     pub actuator_command: Watchable<Option<actuator_control::Command<ActuatorName>>>,
 
-    // FIXME: this is not wired up (see FC input probably)
     /// The processed health report for the rocket boards.
+    #[broadcast(flatten)]
+    #[collector(flatten)]
     pub rocket_health: BoardsHealthyAsOf,
     /// The last received status of the flight computer.
     #[datapoint(pattern = "Message::FlightComputer(FCMessage::Status(#value))")]
@@ -96,16 +103,50 @@ pub struct InputTree {
     pub pss_sensors: PSSSensors,
 }
 
-/// The processed health report for the rocket boards.
-///
-/// If `Some(t)` the board was last observed to be healthy, which happend at `t`.
-/// If `None` the board was last observed unhealthy or not yet observed.
-#[derive(Debug, Default, Clone)]
+/// The received status reports for the rocket boards, alongside their freshness.
+#[derive(Debug, Default, Clone, Broadcast, Collector)]
+#[broadcast(message_type = "Message", extract_expr = "#value.current_status")]
+#[collector(
+    message_type = "Message",
+    update_expr = "let _ = update_status_report(&#field, self.time.get(), #value);"
+)]
 pub struct BoardsHealthyAsOf {
-    pub flight_computer: Watchable<Option<MissionTime>>,
-    pub fuel_control_board: Watchable<Option<MissionTime>>,
-    pub oxidizer_control_board: Watchable<Option<MissionTime>>,
-    pub engine_control_board: Watchable<Option<MissionTime>>,
+    /// The current time, as as unix timestamp wrapper.
+    /// This is a clone from `InputTree` and used for updating the timestamps.
+    pub time: Watchable<MissionTime>,
+
+    #[datapoint(pattern = "Message::FlightComputer(FCMessage::Status(#value))")]
+    #[broadcast(min_freq_hz = 0.5, max_freq_hz = 2.)]
+    pub flight_computer: Watchable<StatusReport<FlightComputerStatus>>,
+    #[datapoint(pattern = "Message::FuelControlBoard(FCBMessage::BoardStatus(#value))")]
+    #[broadcast(min_freq_hz = 0.5, max_freq_hz = 2.)]
+    pub fuel_control_board: Watchable<StatusReport<FuelControlBoardStatus>>,
+    #[datapoint(pattern = "Message::OxidizerControlBoard(OCBMessage::BoardStatus(#value))")]
+    #[broadcast(min_freq_hz = 0.5, max_freq_hz = 2.)]
+    pub oxidizer_control_board: Watchable<StatusReport<OxidizerControlBoardStatus>>,
+    #[datapoint(pattern = "Message::EngineControlBoard(ECUMessage::BoardStatus(#value))")]
+    #[broadcast(min_freq_hz = 0.5, max_freq_hz = 2.)]
+    pub engine_control_board: Watchable<StatusReport<EngineControlBoardStatus>>,
+}
+
+/// A health report which also tracks the previous status, the time,
+/// and if it was default constructed.
+#[derive(Debug, Default, Clone)]
+pub struct StatusReport<T> {
+    pub fresh: bool,
+    pub timestamp: MissionTime,
+    pub current_status: T,
+    pub previous_status: T,
+}
+
+/// Pushes a new status update to the report.
+fn update_status_report<T>(report: &Watchable<StatusReport<T>>, time: MissionTime, new_status: T) {
+    let mut report = report.write();
+    let report = &mut *report; // deref such that we can split the borrow for `swap`.
+    report.fresh = true;
+    report.timestamp = time;
+    std::mem::swap(&mut report.previous_status, &mut report.current_status);
+    report.current_status = new_status;
 }
 
 /// A sensor readable by the state machine, be it read directly on the RFS or

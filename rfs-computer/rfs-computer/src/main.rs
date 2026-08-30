@@ -22,7 +22,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let (config_file, log_folder, run_info) =
         init_binary::<Config>(build_info::THIS_BUILD, config_path).await?;
 
-    let input_tree = InputTree::default();
+    let mut input_tree = InputTree::default();
+    input_tree.rocket_health.time = input_tree.time.clone(); // synchronize shared variable
     let mut state_tree = State::default();
     let config_hash = ConfigHash {
         hash: run_info.config_hash.as_bytes()[..5]
