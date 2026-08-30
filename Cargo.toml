@@ -41,6 +41,7 @@ must_use_candidate = "allow"         # Not all `new` calls are problematic to no
 implicit_hasher = "allow"            # We'll only ever use the default hasher
 doc_markdown = "allow"               # Too many false positives for acronymes I can't bother to whitelist
 duration-suboptimal-units = "allow"  # Don't want to bump MSRV yet
+unsafe_derive_deserialize = "allow"  # Appears when serde and facet are both derived
 [workspace.lints.rustdoc]
 private_intra_doc_links = "allow"    # We don't export our docs
 
