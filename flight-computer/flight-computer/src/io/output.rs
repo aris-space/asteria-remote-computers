@@ -59,7 +59,7 @@ pub struct OutputTree {
 /// The constructor for OutputTree. It must be provided
 /// given that Default cannot be derived for every field.
 impl OutputTree {
-    pub fn new(tx: std::sync::mpsc::Sender<Message>) -> Self {
+    pub fn new(tx: &std::sync::mpsc::Sender<Message>) -> Self {
         Self {
             separate_drogue: Watchable::default(),
             deploy_main_chute: Watchable::default(),
