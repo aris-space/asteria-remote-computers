@@ -1,13 +1,12 @@
-use std::sync::Arc;
 use std::time::Duration;
 
+use crate::io::output::ActuatorName;
 use crate::state_logic::helpers::ThresholdWatcher;
 use lib_mission::actuator_control::command::{ActuatorControl, NeverReturns};
 use lib_mission::actuator_control::ActuatorStore as _;
 use lib_mission::state_machine::{AdditionalState, StateLogic, StateName};
 use lib_mission::telemetry::await_telemetry_loss;
 use lib_mission::transition::ManualTransitions;
-use pss_drivers::output::ValveName;
 
 /// This state gives manual control for the configured actuators,
 /// and otherwise waits for a manual transition or a threshold violation
@@ -16,7 +15,7 @@ pub struct MonitoredManualControl {
     /// Where we can manually transition
     pub manual_transitions: ManualTransitions,
     /// The name of the actuators and their logic which can be activated.
-    pub allowed_actuators: Arc<ActuatorControl<ValveName>>,
+    pub allowed_actuators: ActuatorControl<ActuatorName>,
     /// If the last telemetry message is older than this, transition to `on_violation`.
     pub telemetry_loss_threshold: Duration,
     /// Thresholds on sensors to watch during the whole operations.
@@ -45,7 +44,7 @@ impl StateLogic for MonitoredManualControl {
         let actuator_future = self.allowed_actuators.act(
             input.state.current_state.get().0 as usize,
             &input.actuator_command,
-            output.valves.as_settables(),
+            output.as_settables(),
         );
         assert_future::<NeverReturns>(&actuator_future);
 

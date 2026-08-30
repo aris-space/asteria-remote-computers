@@ -1,9 +1,9 @@
 use std::ops::ControlFlow;
 
+use crate::io::input::SensorName;
+use crate::io::output::ActuatorName;
 use lib_mission::state_machine::{AdditionalState, StateLogic, StateName};
 use lib_mission::transition::ManualTransitions;
-use pss_drivers::input::SensorName;
-use pss_drivers::output::ValveName;
 use sequences::{run_sequence, Command};
 
 /// This state runs a sequence until completion, invalid condition, manual transition or reached threshold.
@@ -13,7 +13,7 @@ pub struct RunSequence {
     /// This will interrupt the sequence.
     pub manual_transitions: ManualTransitions,
     /// The sequence to run.
-    pub sequence: Vec<Command<ValveName, SensorName, StateName>>,
+    pub sequence: Vec<Command<ActuatorName, SensorName, StateName>>,
     /// The state to transition to when the sequence has been completed.
     pub on_completed: StateName,
 }
@@ -36,7 +36,7 @@ impl StateLogic for RunSequence {
         // Run the sequence or receive a manual transition.
         tokio::select! {
             next_state = self.manual_transitions.next(input, param) => next_state,
-            outcome = run_sequence(&self.sequence, &output.valves, &input.pss_sensors) => match outcome {
+            outcome = run_sequence(&self.sequence, output, input) => match outcome {
                 ControlFlow::Continue(_) => self.on_completed.clone(),
                 ControlFlow::Break(abort_state) => {
                     tracing::error!("Sequence aborted, transitioning into {abort_state}");

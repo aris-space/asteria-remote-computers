@@ -17,6 +17,7 @@ use datapoints::dp_sensor_carrier::{
 use datatypes::status::{ArmingState, DownlinkTelemetryStats, UplinkTelemetryHealth};
 use datatypes::units::HPa;
 use datatypes::units::RailStatus;
+use datatypes::units::{BarG, Celsius};
 use io_utils::{Broadcast, Collector};
 use lib_mission::state_machine::StateName;
 use lib_mission::util::time::MissionTime;
@@ -26,6 +27,7 @@ use messages::datapoints::dp_flight_computer::__message_meta_types::ManualStateT
 use messages::datapoints::dp_sensor_carrier::MagnetometerData;
 use messages::Message;
 use pss_drivers::input::{PSSSensors, PSSValves};
+use sequences::{SensorNameExt, SensorStore};
 use watchable::Watchable;
 
 #[derive(Debug, Default, Clone, Broadcast, Collector)]
@@ -68,7 +70,7 @@ pub struct InputTree {
     pub transition_command: Watchable<ManualStateTransition>,
     /// The newest actuator command from the ground station.
     pub actuator_command:
-        Watchable<Option<actuator_control::Command<pss_drivers::output::ValveName>>>,
+        Watchable<Option<actuator_control::Command<crate::io::output::ActuatorName>>>,
 
     /// Statistics about the health of the telemetry uplink.
     #[datapoint(pattern = "Message::FlightComputer(FCMessage::UplinkTelemetryHealth(#value))")]
@@ -133,6 +135,16 @@ pub struct InputTree {
     #[broadcast(flatten)]
     #[collector(flatten)]
     pub pss_sensors: PSSSensors,
+
+    /// The states of the RFS actuators the FC can command over CAN.
+    #[broadcast(flatten)]
+    #[collector(flatten)]
+    pub rfs_actuators: rfs_drivers::input::Actuators,
+
+    /// The sensor readings the RFS exposes to the FC over CAN.
+    #[broadcast(flatten)]
+    #[collector(flatten)]
+    pub rfs_sensors: rfs_drivers::input::Sensors,
 }
 
 /// The current state machine wrapped in a struct such that we can use `#[broadcast(extract_expr)]`,
@@ -236,4 +248,77 @@ impl transition::GetTransitionCommand for InputTree {
     {
         &self.transition_command
     }
+}
+
+/// A sensor readable by the state machine, be it on the PSS in the rocket or
+/// exposed by the RFS to the flight computer over CAN.
+///
+/// See the matching types in [`pss_drivers::input::SensorName`] and
+/// [`rfs_drivers::input::SensorName`].
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize, serde::Deserialize,
+)]
+#[serde(untagged)]
+pub enum SensorName {
+    PSSSensor(pss_drivers::input::SensorName),
+    RfsSensor(rfs_drivers::input::SensorName),
+}
+
+impl SensorNameExt for SensorName {
+    fn is_pressure_sensor(&self) -> bool {
+        match self {
+            SensorName::PSSSensor(name) => name.is_pressure_sensor(),
+            SensorName::RfsSensor(name) => name.is_pressure_sensor(),
+        }
+    }
+
+    fn is_temperature_sensor(&self) -> bool {
+        match self {
+            SensorName::PSSSensor(name) => name.is_temperature_sensor(),
+            SensorName::RfsSensor(name) => name.is_temperature_sensor(),
+        }
+    }
+}
+
+/// Implement parsing based on serde.
+impl std::str::FromStr for SensorName {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        use serde::Deserialize as _;
+        Self::deserialize(<&str as serde::de::IntoDeserializer>::into_deserializer(s))
+            .map_err(|e| e.to_string())
+    }
+}
+
+impl SensorStore<SensorName> for InputTree {
+    fn get_pressure_datapoint<'a>(&'a self, name: &SensorName) -> Option<&'a Watchable<BarG>> {
+        match name {
+            SensorName::PSSSensor(name) => self.pss_sensors.get_pressure_datapoint(name),
+            SensorName::RfsSensor(name) => self.rfs_sensors.get_pressure_datapoint(name),
+        }
+    }
+
+    fn get_temperature_datapoint<'a>(
+        &'a self,
+        name: &SensorName,
+    ) -> Option<&'a Watchable<Celsius>> {
+        match name {
+            SensorName::PSSSensor(name) => self.pss_sensors.get_temperature_datapoint(name),
+            SensorName::RfsSensor(name) => self.rfs_sensors.get_temperature_datapoint(name),
+        }
+    }
+}
+
+#[test]
+fn test_sensor_name_from_str() {
+    assert_eq!(
+        "eng_cc_p".parse::<SensorName>().expect("must parse"),
+        SensorName::PSSSensor(pss_drivers::input::SensorName::eng_cc_p)
+    );
+    assert_eq!(
+        "ign_cc_p".parse::<SensorName>().expect("must parse"),
+        SensorName::RfsSensor(rfs_drivers::input::SensorName::ign_cc_p)
+    );
+    assert!("not_a_sensor".parse::<SensorName>().is_err());
 }

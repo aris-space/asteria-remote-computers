@@ -10,6 +10,7 @@ use tokio::sync::mpsc;
 
 /// An abstraction for watching a changing value.
 #[async_trait::async_trait] // Otherwise the lifetimes don't work out
+#[allow(clippy::double_must_use)] // inside of the async trait
 pub trait Watched<T> {
     /// This needs to be implemented cancellation safe!!
     ///
@@ -30,6 +31,7 @@ pub trait Watched<T> {
 }
 
 /// Extension trait for [`Watched`] providing `next_satisfying`.
+#[allow(clippy::double_must_use)] // inside of the async trait
 #[async_trait::async_trait]
 pub trait WatchedExt<T>: Watched<T> {
     /// When the underlying data is changed such that the predicate is true,

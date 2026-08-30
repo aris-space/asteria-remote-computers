@@ -38,7 +38,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     input_tree.boards_status.time = input_tree.time.clone(); // synchronize shared variable
 
     let (can_tx, can_rx) = std::sync::mpsc::channel();
-    let output_tree = OutputTree::new(can_tx.clone());
+    let output_tree = OutputTree::new(&can_tx);
     let config_hash = ConfigHash {
         hash: run_info.config_hash.as_bytes()[..5]
             .try_into()

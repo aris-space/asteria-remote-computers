@@ -40,6 +40,8 @@ impl InputTree {
             raw_unprocessed_data,
             pss_valves,
             pss_sensors,
+            rfs_actuators: _,
+            rfs_sensors: _,
             magnetometer,
             pressure,
         } = self;
@@ -398,6 +400,7 @@ impl OutputTree {
             recovery_actuators_armed,
             camera_powered_on,
             valves: _,
+            rfs_actuators: _,
             hash_config: _,
             fc_status: _,
         } = self;

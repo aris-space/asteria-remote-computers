@@ -25,6 +25,7 @@ impl<I, O, P> StateMachine<I, O, P> {
 }
 
 /// The trait which the states of the state machine must implement.
+#[allow(clippy::double_must_use)] // inside of the async trait
 #[async_trait::async_trait]
 pub trait StateLogic {
     /// A struct with all the observable values. The "Input Tree".
