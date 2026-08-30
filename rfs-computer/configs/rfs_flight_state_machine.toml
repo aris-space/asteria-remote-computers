@@ -199,7 +199,11 @@ type = "SetNormalState"
 on_done = "Pre Filling Abort 2"
 [state_machine.states."Pre Filling Abort 2"]
 type = "Waiting"
-manual_transitions = ["Rocket Diagnostics", "PreF Abort Overrides"]
+manual_transitions = [
+    "Rocket Diagnostics",
+    "PreF Abort Overrides",
+    "Takeover",             # skipping diagnostics
+]
 
 # This state allows full actuators control during safing operations in an abort scenario
 [state_machine.states."PreF Abort Overrides"]
