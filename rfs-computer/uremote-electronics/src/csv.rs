@@ -267,7 +267,7 @@ impl input::Sensors {
         &self,
         folder: &std::path::Path,
         time: &Watchable<lib_mission::util::time::MissionTime>,
-    ) -> Result<[tokio::task::AbortHandle; 5], Box<dyn std::error::Error>> {
+    ) -> Result<[tokio::task::AbortHandle; 6], Box<dyn std::error::Error>> {
         use lib_mission::reactive::IntoWatched as _;
         macro_rules! spawn_serializable_logger {
             ($name:literal, $e:expr, $headers:expr,) => {
@@ -282,6 +282,7 @@ impl input::Sensors {
 
         let Self {
             lox_temperature,
+            custom_temperature,
             cabinet_temperature,
             ambient_temperature,
             valves_armed,
@@ -290,6 +291,11 @@ impl input::Sensors {
 
         Ok([
             spawn_serializable_logger!("sensor_rtl1", lox_temperature, ["lox_temperature [°C]"],),
+            spawn_serializable_logger!(
+                "sensor_custom_t1",
+                custom_temperature,
+                ["temperature [°C]"],
+            ),
             spawn_serializable_logger!(
                 "sensor_cabinet",
                 cabinet_temperature,

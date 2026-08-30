@@ -117,6 +117,10 @@ mod channels {
         module: 1,
         channel: 0,
     };
+    pub const CUSTOM_TEMPERATURE: ur20::Address = ur20::Address {
+        module: 1,
+        channel: 1,
+    };
     pub const CABINET_TEMPERATURE: ur20::Address = ur20::Address {
         module: 1,
         channel: 2,
@@ -199,6 +203,12 @@ impl Driver {
                 Some(ur20::ChannelValue::Decimal32(_)),
             ) {
                 tracing::error!("Cannot get LOX temperature value");
+            }
+            if !matches!(
+                inputs.get(&channels::CUSTOM_TEMPERATURE),
+                Some(ur20::ChannelValue::Decimal32(_)),
+            ) {
+                tracing::warn!("Cannot get Custom temperature value"); // potentially not connected
             }
             if !matches!(
                 inputs.get(&channels::LOX_DECOUPLER_PROXIMITY),
@@ -405,7 +415,10 @@ impl input::Sensors {
         // Helper function to read a single analog channel and write it to the target watchable.
         let read_temp = move |target: &Watchable<Celsius>, channel: ur20::Address| {
             let Some(ur20::ChannelValue::Decimal32(t_celsius)) = values.get(&channel) else {
-                tracing::warn!(?channel, value = ?values.get(&channel), "Temperature reading failed, invalid channel type");
+                if channel != channels::CUSTOM_TEMPERATURE {
+                    // not always installed
+                    tracing::warn!(?channel, value = ?values.get(&channel), "Temperature reading failed, invalid channel type");
+                }
                 let _ = target.update(Celsius(f32::NAN));
                 return;
             };
@@ -422,6 +435,7 @@ impl input::Sensors {
 
         let Self {
             lox_temperature,
+            custom_temperature,
             cabinet_temperature,
             ambient_temperature,
             valves_armed,
@@ -429,6 +443,7 @@ impl input::Sensors {
         } = self;
 
         read_temp(lox_temperature, channels::LOX_TEMPERATURE);
+        read_temp(custom_temperature, channels::CUSTOM_TEMPERATURE);
         read_temp(cabinet_temperature, channels::CABINET_TEMPERATURE);
         read_temp(ambient_temperature, channels::AMBIENT_TEMPERATURE);
         read_coil(valves_armed, channels::VALVE_ARMING_CIRCUIT);

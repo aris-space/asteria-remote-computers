@@ -13,6 +13,10 @@ pub struct Sensors {
     #[datapoint(pattern = "Message::RfsComputer(RFSCMessage::LoxTemperature(#value))")]
     #[broadcast(min_freq_hz = 1., max_freq_hz = 3.)]
     pub lox_temperature: Watchable<Celsius>,
+    /// The last received temperature of the custom thermocouple.
+    #[datapoint(pattern = "Message::RfsComputer(RFSCMessage::CustomT1(#value))")]
+    #[broadcast(min_freq_hz = 1., max_freq_hz = 3.)]
+    pub custom_temperature: Watchable<Celsius>,
     /// The last received temperature of the cabinet thermocouple.
     #[datapoint(pattern = "Message::RfsComputer(RFSCMessage::CabinetTemperature(#value))")]
     #[broadcast(min_freq_hz = 0.5, max_freq_hz = 2.)]
