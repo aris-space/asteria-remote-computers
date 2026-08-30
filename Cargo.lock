@@ -424,6 +424,7 @@ version = "0.1.0"
 dependencies = [
  "datatypes",
  "io-utils",
+ "lib-mission",
  "messages",
  "sequences",
  "serde",
