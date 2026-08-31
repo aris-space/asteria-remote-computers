@@ -4,7 +4,7 @@ use lib_mission::state_machine::{AdditionalState, StateLogic, StateName};
 
 /// This state sets the software arming state to disarmed and shuts off the igniter valves.
 ///
-/// This is used to disallow the ECU to control to the igniter and stop it should it already has started ignition.
+/// This is used to disallow the FC to control the igniter and stop it should it already have started ignition.
 #[derive(Debug)]
 pub struct DisarmIgniter {
     pub on_done: StateName,

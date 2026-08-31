@@ -44,14 +44,14 @@ diagram_path = "state-machines/rfs-flight-state-machine.drawio.svg"
 [state_machine.states."Idle"]
 type = "Waiting"
 manual_transitions = [
-    { target = "Diagnostics", display = "Startup" },
-    { target = "System Normal", display = "Skip Diagnostics" }, # Should only be used carefully
+    "Diagnostics",
+    "System Normal", # Should only be used carefully
 ]
 
 # This state exists for acknowledging diagnostic failures
 [state_machine.states."Soft Failure"]
 type = "Waiting"
-manual_transitions = [{ target = "Idle", display = "Restart" }]
+manual_transitions = ["Idle"]
 
 # This state only lets the SM pass on if all sensors are reading good values
 [state_machine.states."Diagnostics"]
@@ -65,7 +65,7 @@ type = "DepressurizeRFS"
 on_done = "Safe Abort 2"
 [state_machine.states."Safe Abort 2"]
 type = "Waiting"
-manual_transitions = [{ target = "System Normal", display = "Reset" }]
+manual_transitions = ["System Normal"]
 
 # This state is compose of substates and sets the system in a known state before waiting
 [state_machine.states."System Normal"]
@@ -74,18 +74,18 @@ on_done = "System Normal 3"
 [state_machine.states."System Normal 3"]
 type = "Waiting"
 manual_transitions = [
-    { target = "System Idle", display = "Idle" },
-    { target = "Ready for Takeover", display = "Ready for Takeover" },
-    { target = "Safe Abort", display = "Depressurize", abort = true },
+    "System Idle",
+    "Rocket Diagnostics",
+    { target = "Safe Abort", abort = true },
 ]
 
 # This state allows no valve control during human interactions.
 [state_machine.states."System Idle"]
 type = "Waiting"
 manual_transitions = [
-    { target = "System Normal", display = "Normal" },
-    { target = "System Controllable", display = "Unlock" },
-    { target = "Safe Abort", display = "Depressurize", abort = true },
+    "System Normal",
+    "System Controllable",
+    { target = "Safe Abort", abort = true },
 ]
 
 # This state allows full valve control of all RFS actuators for testing procedures.
@@ -114,103 +114,82 @@ allowed_actuators = [
     "ign_spk_plg", # Igniter spark
 ]
 manual_transitions = [
-    { target = "System Idle", display = "Lock" },
-    { target = "Igniter Test", display = "Start Igniter Test" },
-    { target = "Safe Abort", display = "Depressurize", abort = true },
+    "System Idle",
+    "Igniter Test",
+    { target = "Safe Abort", abort = true },
 ]
 
 # This state runs the igniter test sequence to test ignition.
 [state_machine.states."Igniter Test"]
 type = "RunSequence"
 on_completed = "System Controllable"
-on_cancelled = "Abort Ign Test"
-manual_transitions = [
-    { target = "Abort Ign Test", display = "Abort", abort = true },
-]
-[state_machine.states."Igniter Test".thresholds.upper_thresholds_barg]
-gox = 15
-h2 = 15
-igniter = 10
-[state_machine.states."Igniter Test".thresholds.upper_thresholds_celsius]
-igniter = 200
+manual_transitions = [{ target = "Abort Ign Test", abort = true }]
+sequence = """
+# Watch thresholds for the whole duration of the sequence.
+gox_line_p.watch(max=15, abort='Abort Ign Test');
+h2_line_p.watch(max=15, abort='Abort Ign Test');
+ign_cc_p.watch(max=10, abort='Abort Ign Test');
+ign_cc_t.watch(max=200, abort='Abort Ign Test');
+
 # Start purging
-[[state_machine.states."Igniter Test".sequence]]
-action = "SetActuators"
-targets = { "gox_prg_vlv" = "Open", "h2_prg_vlv" = "Open" }
-# Purge
-[[state_machine.states."Igniter Test".sequence]]
-action = "Wait"
-duration_sec = 5
+gox_prg_vlv.open();
+h2_prg_vlv.open();
+sys.wait(time=5s);
+
 # Stop purging and start spark plug
-[[state_machine.states."Igniter Test".sequence]]
-action = "SetActuators"
-targets = { "gox_prg_vlv" = "Close", "h2_prg_vlv" = "Close", "ign_spk_plg" = "On" }
-[[state_machine.states."Igniter Test".sequence]]
-action = "Wait"
-duration_sec = 0.5
+gox_prg_vlv.close();
+h2_prg_vlv.close();
+ign_spk_plg.open();
+sys.wait(time=0.5s);
+
 # First open GOX then H2 valve
-[[state_machine.states."Igniter Test".sequence]]
-action = "SetActuators"
-targets = { "gox_ign_vlv" = "Open" }
-[[state_machine.states."Igniter Test".sequence]]
-action = "Wait"
-duration_sec = 0.5
-[[state_machine.states."Igniter Test".sequence]]
-action = "SetActuators"
-targets = { "h2_ign_vlv" = "Open" }
-# Detect firing, analogous to `igniter_pres.detect(value=6, rising=true, abort=ign_abort, patience=1s);`
-[[state_machine.states."Igniter Test".sequence]]
-action = "IgnitionDetection"
-pressure_lower_thresh_barg = 6.0
-patience_sec = 1.0
+gox_ign_vlv.open();
+sys.wait(time=0.5s);
+h2_ign_vlv.open();
+
+# Detect firing
+ign_cc_p.detect(value=6, rising=true, abort='Abort Ign Test', patience=1s);
+
 # Sustain firing, abort if pressure becomes too low
-[[state_machine.states."Igniter Test".sequence]]
-action = "SustainedIgnition"
-min_pressure_barg = 5.0
-duration_sec = 4.0
+ign_cc_p.watch(min=5, abort='Abort Ign Test', key=sustain);
+sys.wait(time=4s);
+ign_cc_p.ignore(key=sustain);
+
 # After ignition purge sequence:
-[[state_machine.states."Igniter Test".sequence]]
-action = "SetActuators"
-targets = { "gox_ign_vlv" = "Close", "h2_ign_vlv" = "Close", "gox_prg_vlv" = "Open", "h2_prg_vlv" = "Open" }
-[[state_machine.states."Igniter Test".sequence]]
-action = "Wait"
-duration_sec = 0.5
-[[state_machine.states."Igniter Test".sequence]]
-action = "SetActuators"
-targets = { "ign_spk_plg" = "Off" }
-[[state_machine.states."Igniter Test".sequence]]
-action = "Wait"
-duration_sec = 5
-[[state_machine.states."Igniter Test".sequence]]
-action = "SetActuators"
-targets = { "gox_prg_vlv" = "Close", "h2_prg_vlv" = "Close" }
+gox_ign_vlv.close();
+h2_ign_vlv.close();
+gox_prg_vlv.open();
+h2_prg_vlv.open();
+sys.wait(time=0.5s);
+
+ign_spk_plg.close();
+sys.wait(time=5s);
+
+gox_prg_vlv.close();
+h2_prg_vlv.close();
+"""
 
 # This runs the ignition abort sequence in case a manual or automatic abort was triggered
 [state_machine.states."Abort Ign Test"]
 type = "RunSequence"
 on_completed = "Safe Abort"
-on_cancelled = "Safe Abort"
-manual_transitions = [
-    { target = "Safe Abort", display = "Abort Abort Seq", abort = true },
-]
+manual_transitions = [{ target = "Safe Abort", abort = true }]
+sequence = """
 # Open purge valves and close fuel valve
-[[state_machine.states."Abort Ign Test".sequence]]
-action = "SetActuators"
-targets = { "h2_ign_vlv" = "Close", "gox_ign_vlv" = "Close", "gox_prg_vlv" = "Open", "h2_prg_vlv" = "Open" }
-[[state_machine.states."Abort Ign Test".sequence]]
-action = "Wait"
-duration_sec = 0.5
+h2_ign_vlv.close();
+gox_ign_vlv.close();
+gox_prg_vlv.open();
+h2_prg_vlv.open();
+sys.wait(time=0.5s);
+
 # 0.5s later turn off spark plug
-[[state_machine.states."Abort Ign Test".sequence]]
-action = "SetActuators"
-targets = { "ign_spk_plg" = "Off" }
+ign_spk_plg.close();
+
 # Now purge for 5 sec and then closed the purge valves again
-[[state_machine.states."Abort Ign Test".sequence]]
-action = "Wait"
-duration_sec = 5
-[[state_machine.states."Abort Ign Test".sequence]]
-action = "SetActuators"
-targets = { "gox_prg_vlv" = "Close", "h2_prg_vlv" = "Close" }
+sys.wait(time=5s);
+gox_prg_vlv.close();
+h2_prg_vlv.close();
+"""
 
 # ======================================= Takeover =======================================
 
@@ -220,10 +199,7 @@ type = "SetNormalState"
 on_done = "Pre Filling Abort 2"
 [state_machine.states."Pre Filling Abort 2"]
 type = "Waiting"
-manual_transitions = [
-    { target = "Ready for Takeover", display = "Force Reset" },
-    { target = "PreF Abort Overrides", display = "Override" },
-]
+manual_transitions = ["Rocket Diagnostics", "PreF Abort Overrides"]
 
 # This state allows full actuators control during safing operations in an abort scenario
 [state_machine.states."PreF Abort Overrides"]
@@ -256,39 +232,27 @@ allowed_actuators = [
     "fss_ml_vlv",
     "oss_ml_vlv",
 ]
-manual_transitions = [{ target = "Pre Filling Abort", display = "Done" }]
-
-# A state that waits for the FC to become passive
-[state_machine.states."Ready for Takeover"]
-type = "Waiting"
-manual_transitions = [
-    { target = "System Normal", display = "Cancel" },
-    { target = "Pre Filling Abort", display = "Abort", abort = true },
-    { target = "PSS Diagnostics" },
-]
+manual_transitions = ["Pre Filling Abort"]
 
 # This state only lets the SM pass on if all boards in the rocket are healthy
-[state_machine.states."PSS Diagnostics"]
+[state_machine.states."Rocket Diagnostics"]
 type = "PSSDiagnosticsGate"
 outdated_threshold_sec = 5
 on_tests_pass = "Takeover"
-on_tests_fail = "PSS Unhealthy"
+on_tests_fail = "Rocket Unhealthy"
 
 # This state lets the operator acknowledge that the connection to the rocket is unhealthy
-[state_machine.states."PSS Unhealthy"]
+[state_machine.states."Rocket Unhealthy"]
 type = "Waiting"
 manual_transitions = [
-    { target = "System Normal", display = "Retry" },
-    { target = "Pre Filling Abort", display = "Abort", abort = true },
+    "System Normal",
+    { target = "Pre Filling Abort", abort = true },
 ]
 
 # This state takes control of the PSS system for the RFS and then waits
 [state_machine.states."Takeover"]
 type = "Waiting"
-manual_transitions = [
-    { target = "Couple", display = "Couple" },
-    { target = "Pre Filling Abort", display = "Abort", abort = true },
-]
+manual_transitions = ["Couple", { target = "Pre Filling Abort", abort = true }]
 
 # ======================================= Filling =======================================
 
@@ -306,27 +270,20 @@ allowed_actuators = [
     "eng_prg_vlv", # Engine Purge valve
 ]
 manual_transitions = [
-    { target = "Pre Filling Abort", display = "Abort", abort = true },
-    { target = "Waiting for Filling", display = "Coupled" },
+    { target = "Pre Filling Abort", abort = true },
+    "Waiting for Filling",
 ]
 
 # This waiting state leaves the RFS to be while the rocket is erected and until we are GO for filling.
 [state_machine.states."Waiting for Filling"]
 type = "SetNormalState"
-on_done = "Waiting for Filling 2"
-[state_machine.states."Waiting for Filling 2"]
-type = "RunSequence"
-on_completed = "Waiting for Filling 3"
-on_cancelled = "Waiting for Filling 3"
-[[state_machine.states."Waiting for Filling 2".sequence]]
-action = "SetActuators"
-targets = { "n2_shw_vlv" = "Open" } # enforces that n2 shower valves is always open
+on_done = "Waiting for Filling 3"
 [state_machine.states."Waiting for Filling 3"]
 type = "Waiting"
 manual_transitions = [
-    { target = "Purge", display = "Purge" },
-    { target = "Ethanol Filling", display = "Start Ethanol Filling" },
-    { target = "Pre Filling Abort", display = "Abort", abort = true },
+    "Purge",
+    "Ethanol Filling",
+    { target = "Pre Filling Abort", abort = true },
 ]
 
 
@@ -334,42 +291,35 @@ manual_transitions = [
 [state_machine.states."Purge"]
 type = "RunSequence"
 on_completed = "Purge 2"
-on_cancelled = "Purge 2" # Sequence contains no cancellable actions
-manual_transitions = [
-    { target = "Pre Filling Abort", display = "Abort", abort = true },
-]
+manual_transitions = [{ target = "Pre Filling Abort", abort = true }]
+sequence = """
 # Close n2 bleed, open n2 purge. Prz Vent and Fuel prz are already open/closed respectively.
-[[state_machine.states."Purge".sequence]]
-action = "SetActuators"
-targets = { "n2_bld_vlv" = "Close", "n2_prg_vlv" = "Open", "prz_copv_vnt" = "Open", "prz_fss_dpr" = "DPRDisabled" }
+n2_bld_vlv.close();
+n2_prg_vlv.open();
+prz_copv_vnt.open();
+prz_fss_dpr.deactivate();
 # Purge pressure tank for 5 sec
-[[state_machine.states."Purge".sequence]]
-action = "Wait"
-duration_sec = 5
+sys.wait(time=5s);
+
 # Open fuel prz valve and close prz Vent.
-[[state_machine.states."Purge".sequence]]
-action = "SetActuators"
-targets = { "prz_copv_vnt" = "Close", "fss_tnk_vnt" = "Open", "prz_fss_dpr" = { "SetpointBarG" = 10.0 } }
+prz_copv_vnt.close();
+fss_tnk_vnt.open();
+prz_fss_dpr.activate(setpoint=10.0);
 # Purge fuel tank for 10 sec
-[[state_machine.states."Purge".sequence]]
-action = "Wait"
-duration_sec = 10
+sys.wait(time=10s);
+
 # Close fuel vent and open main valve fully
-[[state_machine.states."Purge".sequence]]
-action = "SetActuators"
-targets = { "fss_tnk_vnt" = "Close", "fss_ml_vlv" = "Open" }
+fss_tnk_vnt.close();
+fss_ml_vlv.open();
 # Purge fuel line for 5 sec
-[[state_machine.states."Purge".sequence]]
-action = "Wait"
-duration_sec = 5
+sys.wait(time=5s);
+
 # Close FSS prz valve, but open OSS one.
-[[state_machine.states."Purge".sequence]]
-action = "SetActuators"
-targets = { "prz_fss_dpr" = "DPRDisabled", "prz_oss_dpr" = { "SetpointBarG" = 10.0 } }
+prz_fss_dpr.deactivate();
+prz_oss_dpr.activate(setpoint=10.0);
 # Purge oxidizer tank for 10 sec
-[[state_machine.states."Purge".sequence]]
-action = "Wait"
-duration_sec = 10
+sys.wait(time=10s);
+"""
 # Close n2 purge and reset rest to normal.
 [state_machine.states."Purge 2"]
 type = "SetNormalState"
@@ -377,44 +327,38 @@ on_done = "Purge 3"
 [state_machine.states."Purge 3"]
 type = "RunSequence"
 on_completed = "Purge 4"
-on_cancelled = "Purge 4" # Sequence contains no cancellable actions
-manual_transitions = [
-    { target = "Pre Filling Abort", display = "Abort", abort = true },
-]
-[[state_machine.states."Purge 3".sequence]]
-action = "SetActuators"
-targets = { "n2_prg_vlv" = "Close", "prz_oss_dpr" = "DPRDisabled", "prz_copv_vnt" = "Open", "fss_tnk_vnt" = "Open", "n2_bld_vlv" = "Open", "fss_ml_vlv" = "Close" }
-[[state_machine.states."Purge 3".sequence]]
-action = "Wait"
-duration_sec = 0.4
+manual_transitions = [{ target = "Pre Filling Abort", abort = true }]
+sequence = """
+n2_prg_vlv.close();
+prz_oss_dpr.deactivate();
+prz_copv_vnt.open();
+fss_tnk_vnt.open();
+n2_bld_vlv.open();
+fss_ml_vlv.close();
+sys.wait(time=0.4s);
+
 # Now open lox purge
-[[state_machine.states."Purge 3".sequence]]
-action = "SetActuators"
-targets = { "lox_prg_vlv" = "Open" }
+lox_prg_vlv.open();
 # Purge lox decoupler line (?) for 5 sec
-[[state_machine.states."Purge 3".sequence]]
-action = "Wait"
-duration_sec = 5
+sys.wait(time=5s);
+
 # Now open lox main, but close oss vent
-[[state_machine.states."Purge 3".sequence]]
-action = "SetActuators"
-targets = { "oss_ml_vlv" = "Open", "oss_tnk_vnt" = "Close" }
+oss_ml_vlv.open();
+oss_tnk_vnt.close();
 # Purge lox main line  for 5 sec
-[[state_machine.states."Purge 3".sequence]]
-action = "Wait"
-duration_sec = 5
+sys.wait(time=5s);
+
 # Open OSS vent, close OSS main, open lox fill valve to 100%
-[[state_machine.states."Purge 3".sequence]]
-action = "SetActuators"
-targets = { "oss_tnk_vnt" = "Open", "oss_ml_vlv" = "Close", "lox_fll_vlv" = "Open" }
+oss_tnk_vnt.open();
+oss_ml_vlv.close();
+lox_fll_vlv.open();
 # Purge dewar flex pipe for 5 sec
-[[state_machine.states."Purge 3".sequence]]
-action = "Wait"
-duration_sec = 5
+sys.wait(time=5s);
+
 # Reset back to normal
-[[state_machine.states."Purge 3".sequence]]
-action = "SetActuators"
-targets = { "lox_prg_vlv" = "Close", "lox_fll_vlv" = "Close" }
+lox_prg_vlv.close();
+lox_fll_vlv.close();
+"""
 [state_machine.states."Purge 4"]
 type = "SetNormalState"
 on_done = "Waiting for Filling"
@@ -423,8 +367,8 @@ on_done = "Waiting for Filling"
 [state_machine.states."Ethanol Filling"]
 type = "Waiting"
 manual_transitions = [
-    { target = "Pre Chill", display = "Start Pre Chill" },
-    { target = "Pre Filling Abort", display = "Abort", abort = true },
+    "Dewar Connection",
+    { target = "Pre Filling Abort", abort = true },
 ]
 
 ############ Transition into the Filling part ##############
@@ -434,10 +378,7 @@ type = "SetNormalState"
 on_done = "Filling Abort 2"
 [state_machine.states."Filling Abort 2"]
 type = "Waiting"
-manual_transitions = [
-    { target = "Abort Overrides", display = "Override" },
-    { target = "Pre Chill", display = "Reset" },
-]
+manual_transitions = ["Abort Overrides", "Dewar Connection"]
 
 # This state allows full actuators control during safing operations in an abort scenario
 [state_machine.states."Abort Overrides"]
@@ -470,23 +411,21 @@ allowed_actuators = [
     "fss_ml_vlv",
     "oss_ml_vlv",
 ]
-manual_transitions = [{ target = "Filling Abort", display = "Done" }]
+manual_transitions = ["Filling Abort"]
 
-# A state where the lox line can be pre chilled
-[state_machine.states."Pre Chill"]
+# A state where the LOX filling dewar can be connected
+[state_machine.states."Dewar Connection"]
 type = "MonitoredManualControl"
 allowed_actuators = [
     "lox_fll_vlv", # LOX fill valve
     "lox_bld_vlv", # LOX bleed valve
+    "lox_prg_vlv", # LOX purge valve
     "n2_shw_vlv",  # N2 shower valves
     "eng_prg_vlv", # Engine Purge valve
 ]
 telemetry_loss_threshold_sec = 300 # 5min
 on_violation = "Filling Abort"
-manual_transitions = [
-    { target = "Pre Filling", display = "Start Filling" },
-    { target = "Filling Abort", display = "Abort Filling", abort = true },
-]
+manual_transitions = ["Pre Filling", { target = "Filling Abort", abort = true }]
 
 # This instantaeous state resets the lox fill and bleed valve to normal before proceeding.
 [state_machine.states."Pre Filling"]
@@ -509,9 +448,9 @@ allowed_actuators = [
 telemetry_loss_threshold_sec = 900 # 15min
 on_violation = "Filling Abort"
 manual_transitions = [
-    { target = "Parallel Filling", display = "Start Seq" },
-    { target = "LOX Filling", display = "Skip Seq" },
-    { target = "Filling Abort", display = "Abort Filling", abort = true },
+    "Parallel Filling",
+    "LOX Filling",
+    { target = "Filling Abort", abort = true },
 ]
 
 # A state where lox filling can continue, and the n2 sequence is being run.
@@ -527,41 +466,29 @@ allowed_actuators = [
 telemetry_loss_threshold_sec = 900 # 15min
 on_violation = "Filling Abort"
 on_completed = "LOX Filling"
-on_sequence_problem = "Filling"
-manual_transitions = [
-    { target = "Filling", display = "Cancel Seq" },
-    { target = "Filling Abort", display = "Abort Filling", abort = true },
-]
-
+manual_transitions = ["Filling", { target = "Filling Abort", abort = true }]
+sequence = """
 # Close vent valves
-[[state_machine.states."Parallel Filling".sequence]]
-action = "SetActuators"
-targets = { "n2_bld_vlv" = "Close", "prz_copv_vnt" = "Close" }
-[[state_machine.states."Parallel Filling".sequence]]
-action = "Wait"
-duration_sec = 0.4
+n2_bld_vlv.close();
+prz_copv_vnt.close();
+sys.wait(time=0.4s);
+
 # Then open N2 fill valve
-[[state_machine.states."Parallel Filling".sequence]]
-action = "SetActuators"
-targets = { "n2_fll_vlv" = "Open" }
-# Detect proper opening, analogous to `n2_tank_pressure.detect(value=30, rising=true, abort=ign_abort, patience=5s);`
-[[state_machine.states."Parallel Filling".sequence]]
-action = "N2FillDetection"
-pressure_lower_thresh_barg = 30.0
-patience_sec = 5.0
+n2_fll_vlv.open();
+
+# Detect proper opening of the pre-booster line
+n2_pre_bst_p.detect(value=30, rising=true, abort='Filling', patience=5s);
+
 # Then open booster valve
-[[state_machine.states."Parallel Filling".sequence]]
-action = "SetActuators"
-targets = { "n2_bst_vlv" = "Open" }
-# And wait for filling to 300 bar
-[[state_machine.states."Parallel Filling".sequence]]
-action = "N2FillDetection"
-pressure_lower_thresh_barg = 320.0
-patience_sec = 3600                # 1h
+n2_bst_vlv.open();
+
+# And wait for filling to 320 bar post-booster
+n2_post_bst_p.detect(value=320, rising=true, abort='Filling', patience=3600s);
+
 # Finnally close the booster and fill valve again
-[[state_machine.states."Parallel Filling".sequence]]
-action = "SetActuators"
-targets = { "n2_bst_vlv" = "Close", "n2_fll_vlv" = "Close" }
+n2_bst_vlv.close();
+n2_fll_vlv.close();
+"""
 
 # A state where lox filling can continue, and n2 is locked.
 [state_machine.states."LOX Filling"]
@@ -569,6 +496,7 @@ type = "MonitoredManualControl"
 allowed_actuators = [
     "lox_fll_vlv", # LOX fill valve
     "lox_bld_vlv", # LOX bleed valve
+    "lox_dec_ext", # LOX decoupler extend valve
     "oss_ml_vlv",  # rocket LOX(OSS) main valve
     "n2_shw_vlv",  # N2 shower valves
     "eng_prg_vlv", # Engine Purge valve
@@ -577,30 +505,28 @@ allowed_actuators = [
 telemetry_loss_threshold_sec = 900 # 15min
 on_violation = "Filling Abort"
 manual_transitions = [
-    { target = "Filling", display = "Reset Seq" },
-    { target = "Set Known State", display = "Decouple" },
-    { target = "Filling Abort", display = "Abort Filling", abort = true },
+    "Filling",
+    "Set Known State",
+    { target = "Filling Abort", abort = true },
 ]
 
 # An instantaneous state to set a decouple ready state
 [state_machine.states."Set Known State"]
 type = "RunSequence"
 on_completed = "Decouple"
-on_cancelled = "Decouple"
-[[state_machine.states."Set Known State".sequence]]
-action = "SetActuators"
-[state_machine.states."Set Known State".sequence.targets]
+sequence = """
 # Off normal: oss & prz vent closed, lox bleed closed
-prz_copv_vnt = "Close"
-oss_tnk_vnt = "Close"
-lox_bld_vlv = "Close"
-n2_shw_vlv = "Open"
+prz_copv_vnt.close();
+oss_tnk_vnt.close();
+lox_bld_vlv.close();
+n2_shw_vlv.open();
 # Normal
-lox_fll_vlv = "Close"
-oss_ml_vlv = "Close"
-n2_fll_vlv = "Close"
-n2_bld_vlv = "Open"
-n2_bst_vlv = "Close"
+lox_fll_vlv.close();
+oss_ml_vlv.close();
+n2_fll_vlv.close();
+n2_bld_vlv.open();
+n2_bst_vlv.close();
+"""
 
 # State to try to decouple the hoses
 [state_machine.states."Decouple"]
@@ -615,10 +541,7 @@ allowed_actuators = [
     "n2_shw_vlv",  # N2 shower valves
     "eng_prg_vlv", # Engine Purge valve
 ]
-manual_transitions = [
-    { target = "Handsoff", display = "Decoupled" },
-    { target = "Filling Abort", display = "Abort Filling", abort = true },
-]
+manual_transitions = ["Handsoff", { target = "Filling Abort", abort = true }]
 
 
 # ======================================= Ignition =======================================
@@ -630,17 +553,26 @@ on_done = "Abort Firing 2"
 [state_machine.states."Abort Firing 2"]
 type = "SetNormalState"
 on_done = "Abort Firing 3"
+# Opens the purge valves
 [state_machine.states."Abort Firing 3"]
+type = "RunSequence"
+on_completed = "Abort Firing 4"
+sequence = """
+eng_prg_vlv.open();
+gox_prg_vlv.open();
+h2_prg_vlv.open();
+"""
+[state_machine.states."Abort Firing 4"]
 type = "Waiting"
-manual_transitions = [{ target = "Safeing Normal", display = "Start Safing" }]
+manual_transitions = ["Safeing Normal"]
 
 # Waiting state which waits for rocket pressurization and arming
 [state_machine.states."Handsoff"]
 type = "Waiting"
 manual_transitions = [
-    { target = "Armed", display = "Arm" },
-    { target = "Decouple", display = "Revert" },
-    { target = "Abort Firing", display = "Force Abort", abort = true },
+    "Armed",
+    "Decouple",
+    { target = "Abort Firing", abort = true },
 ]
 
 # State to acknowledge that the RFS wasn't ready for ignition
@@ -649,10 +581,10 @@ type = "DisarmIgniter"
 on_done = "Auto-Disarmed 2"
 [state_machine.states."Auto-Disarmed 2"]
 type = "Waiting"
-manual_transitions = [{ target = "Handsoff", display = "Acknowledge" }]
+manual_transitions = ["Handsoff"]
 
 
-# State which allows the ECU to ignite.
+# State which allows the FC to ignite.
 [state_machine.states."Armed"]
 type = "WaitForIgnition"
 on_ignition = "Ignition"
@@ -661,30 +593,19 @@ allowed_actuators = [
     "gox_prg_vlv", # GOx purge valve
     "h2_prg_vlv",  # H2 purge valve
 ]
-manual_transitions = [
-    { target = "Abort Firing", display = "Force Abort", abort = true },
-]
+manual_transitions = ["Handsoff", { target = "Abort Firing", abort = true }]
 
 # State waits until the igniter can be shut off
 [state_machine.states."Ignition"]
 type = "AwaitTimer"
 duration_sec = 6.0
 on_timer = "Shutoff"
-manual_transitions = [
-    { target = "Abort Firing", display = "Force Abort", abort = true },
-]
+manual_transitions = [{ target = "Abort Firing", abort = true }]
 
 # Shutting off the igniter, after the rocket hopefully lifted off
 [state_machine.states."Shutoff"]
 type = "DisarmIgniter"
-on_done = "Shutoff 2"
-[state_machine.states."Shutoff 2"]
-type = "RunSequence"
-on_completed = "Safeing Normal"
-on_cancelled = "Safeing Normal"
-[[state_machine.states."Shutoff 2".sequence]]
-action = "SetActuators"
-targets = { "lox_prg_vlv" = "Open", "h2_bld_vlv" = "Open" }
+on_done = "Safeing Normal"
 
 # This state is compose of 3 substates and sets the system in a known state before manual safeing
 [state_machine.states."Safeing Normal"]
@@ -692,15 +613,12 @@ type = "SetNormalState"
 on_done = "Safeing Normal 2"
 [state_machine.states."Safeing Normal 2"]
 type = "Waiting"
-manual_transitions = [{ target = "Safeing Idle", display = "Idle" }]
+manual_transitions = ["Safeing Idle"]
 
 # This state allows no valve control during human interactions.
 [state_machine.states."Safeing Idle"]
 type = "Waiting"
-manual_transitions = [
-    { target = "Safeing Normal", display = "Normal" },
-    { target = "Safeing Controllable", display = "Unlock" },
-]
+manual_transitions = ["Safeing Normal", "Safeing Controllable"]
 
 # This state allows full valve control of all RFS actuators for safeing purposes.
 [state_machine.states."Safeing Controllable"]
@@ -728,6 +646,6 @@ allowed_actuators = [
     "ign_spk_plg", # Igniter spark
 ]
 manual_transitions = [
-    { target = "Safeing Idle", display = "Lock" },
-    { target = "Safeing Normal", display = "Normal", abort = true },
+    "Safeing Idle",
+    { target = "Safeing Normal", abort = true },
 ]

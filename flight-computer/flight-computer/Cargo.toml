@@ -32,7 +32,6 @@ thiserror = "1.0.64"
 async-trait = "0.1.83"
 tracing = "0.1.41"
 mavio = { version = "0.5.10", features = ["std", "tokio"] }
-ariadne = "0.6.0"
 
 [target.'cfg(target_os = "linux")'.dependencies]
 socketcan = "3.5.0"

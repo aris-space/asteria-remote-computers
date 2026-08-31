@@ -30,7 +30,7 @@ echo -e "\n${YELLOW}Check path to rfs-computer executable and state machine conf
 read -s -n 1
 
 echo "Starting CAN BUS..."
-# set gpio6 low (not quite sure anymore why this is needed, maybe a HAT thing?)
+# set gpio6 low (to enable CAN termination on HAT)
 pinctrl set 6 op dl
 sudo ip link set can0 down
 # `restart-ms 50` is a hotfix because CAN often dies (SPI problem??). `ip -details -statistics link show can0` shows the number of restarts.

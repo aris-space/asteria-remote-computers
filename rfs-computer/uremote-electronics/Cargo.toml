@@ -10,6 +10,7 @@ workspace = true
 ur20 = "0.6.0"                                                 # Patched with git dependency
 ur20-modbus = "0.5.0"
 lib-mission = { path = "../../lib-remote-computers/lib-mission" }
+sequences = { path = "../../lib-remote-computers/sequences" }
 datatypes = { path = "../../data-definitions/datatypes" }
 watchable = "1.1.2"
 tracing = "0.1.41"

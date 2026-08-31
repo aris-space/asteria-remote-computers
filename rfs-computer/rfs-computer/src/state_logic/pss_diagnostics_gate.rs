@@ -1,9 +1,37 @@
+use datatypes::status::SensorStatus;
 use lib_mission::state_machine::{AdditionalState, StateLogic, StateName};
 use lib_mission::util::time::MissionTime;
+use messages::datapoints::dp_engine_control_board::EngineControlBoardStatus;
+use messages::datapoints::dp_flight_computer::FlightComputerStatus;
+use messages::datapoints::dp_fuel_control_board::FuelControlBoardStatus;
+use messages::datapoints::dp_oxidizer_control_board::OxidizerControlBoardStatus;
 use std::time::Duration;
 use watchable::Watchable;
 
-use crate::io::input::BoardsHealthyAsOf;
+use crate::io::input::{BoardsHealthyAsOf, StatusReport};
+
+/// Checks whether a board's status report is fresh, recent enough, and healthy.
+fn check_board<T: Clone + Default + BoardHealthy>(
+    report: &Watchable<StatusReport<T>>,
+    name: &str,
+    now: MissionTime,
+    outdated_threshold: Duration,
+) -> bool {
+    let report = report.read();
+    if !report.fresh {
+        tracing::warn!("Failing Diagnostics: no response yet from {name}");
+        return false;
+    }
+    if now > report.timestamp + outdated_threshold {
+        tracing::warn!("Failing Diagnostics: {name} hasn't responded lately");
+        return false;
+    }
+    if !report.current_status.is_healthy() {
+        tracing::warn!("Failing Diagnostics: Last response from {name} was unhealthy");
+        return false;
+    }
+    true
+}
 
 /// This state checks the health of the pss boards in the rocket and distinguishes between three possibilities:
 /// 1. One of the boards unhealthy => Log the problem and go to the `on_tests_fail` state.
@@ -30,39 +58,85 @@ impl StateLogic for PSSDiagnosticsGate {
         _: &Self::Output,
         _p: &AdditionalState<Self::Parameter>,
     ) -> StateName {
-        let check = |health: &Watchable<Option<MissionTime>>, name: &str| {
-            if let Some(t) = health.get() {
-                if input.time.get() > t + self.outdated_threshold {
-                    tracing::warn!("Failing Diagnostics: {name} hasn't responded lately");
-                    false
-                } else {
-                    true
-                }
-            } else {
-                tracing::warn!("Failing Diagnostics: Last response from {name} was unhealthy");
-                false
-            }
-        };
-
         tracing::info!("Entered the PSS Diagnostics gate...");
 
         let BoardsHealthyAsOf {
+            time: _,
             flight_computer,
             fuel_control_board,
             oxidizer_control_board,
             engine_control_board,
         } = &input.rocket_health;
 
+        let now = input.time.get();
         let healths = [
-            check(flight_computer, "flight computer"),
-            check(fuel_control_board, "fuel control board"),
-            check(oxidizer_control_board, "oxidizer control board"),
-            check(engine_control_board, "engine control board"),
+            check_board(
+                flight_computer,
+                "flight computer",
+                now,
+                self.outdated_threshold,
+            ),
+            check_board(
+                fuel_control_board,
+                "fuel control board",
+                now,
+                self.outdated_threshold,
+            ),
+            check_board(
+                oxidizer_control_board,
+                "oxidizer control board",
+                now,
+                self.outdated_threshold,
+            ),
+            check_board(
+                engine_control_board,
+                "engine control board",
+                now,
+                self.outdated_threshold,
+            ),
         ];
         if healths.iter().all(|&x| x) {
             self.on_tests_pass.clone()
         } else {
             self.on_tests_fail.clone()
         }
+    }
+}
+
+/// Whether a board's status report indicates the board is currently healthy.
+pub trait BoardHealthy {
+    fn is_healthy(&self) -> bool;
+}
+
+/// The time at which a board was last observed to be healthy, if ever.
+pub fn healthy_as_of<T: BoardHealthy>(report: &StatusReport<T>) -> Option<MissionTime> {
+    (report.fresh && report.current_status.is_healthy()).then_some(report.timestamp)
+}
+
+impl BoardHealthy for FlightComputerStatus {
+    fn is_healthy(&self) -> bool {
+        self.common.errors == 0
+    }
+}
+
+impl BoardHealthy for FuelControlBoardStatus {
+    fn is_healthy(&self) -> bool {
+        self.common.errors == 0
+            && self.thermocouple_status == SensorStatus::Online
+            && self.pressure_bus == SensorStatus::Online
+    }
+}
+
+impl BoardHealthy for OxidizerControlBoardStatus {
+    fn is_healthy(&self) -> bool {
+        self.common.errors == 0
+            && self.thermocouple_status == SensorStatus::Online
+            && self.pressure_bus == SensorStatus::Online
+    }
+}
+
+impl BoardHealthy for EngineControlBoardStatus {
+    fn is_healthy(&self) -> bool {
+        self.common.errors == 0 && self.thermocouple_status == SensorStatus::Online
     }
 }

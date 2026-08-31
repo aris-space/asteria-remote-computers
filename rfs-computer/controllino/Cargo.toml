@@ -8,6 +8,7 @@ workspace = true
 
 [dependencies]
 datatypes = { path = "../../data-definitions/datatypes" }
+sequences = { path = "../../lib-remote-computers/sequences" }
 io-utils = { path = "../../lib-remote-computers/io-utils" }
 messages = { path = "../../data-definitions/messages", features = [
     "derive_debug",

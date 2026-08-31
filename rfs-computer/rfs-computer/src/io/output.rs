@@ -34,9 +34,9 @@ pub struct OutputTree {
     pub lox_fill_valve: Watchable<ThrottleableValve>,
 }
 
-impl OutputTree {
+impl ActuatorStore<ActuatorName> for OutputTree {
     /// Combines all the settables
-    pub fn as_settables(&self) -> BTreeMap<ActuatorName, Box<dyn Settable + Send>> {
+    fn as_settables(&self) -> BTreeMap<ActuatorName, Box<dyn Settable + Send>> {
         let mut settables = BTreeMap::new();
         settables.extend(
             self.rfs_actuators

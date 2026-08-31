@@ -44,14 +44,14 @@ diagram_path = "state-machines/rfs-flight-state-machine.drawio.svg"
 [state_machine.states."Idle"]
 type = "Waiting"
 manual_transitions = [
-    { target = "Diagnostics", display = "Startup" },
-    { target = "System Normal", display = "Skip Diagnostics" },
+    "Diagnostics",
+    "System Normal",
 ]
 
 # This state exists for acknowledging diagnostic failures
 [state_machine.states."Soft Failure"]
 type = "Waiting"
-manual_transitions = [{ target = "Idle", display = "Restart" }]
+manual_transitions = ["Idle"]
 
 # This state only lets the SM pass on if all sensors are reading good values
 [state_machine.states."Diagnostics"]
@@ -65,7 +65,7 @@ type = "DepressurizeRFS"
 on_done = "Safe Abort 2"
 [state_machine.states."Safe Abort 2"]
 type = "Waiting"
-manual_transitions = [{ target = "System Normal", display = "Reset" }]
+manual_transitions = ["System Normal"]
 
 # This state is compose of 3 substates and sets the system in a known state before waiting
 [state_machine.states."System Normal"]
@@ -74,17 +74,17 @@ on_done = "System Normal 3"
 [state_machine.states."System Normal 3"]
 type = "Waiting"
 manual_transitions = [
-    { target = "System Idle", display = "Idle" },
-    { target = "Safe Abort", display = "Depressurize", abort = true },
+    "System Idle",
+    { target = "Safe Abort", abort = true },
 ]
 
 # This state allows no valve control during human interactions.
 [state_machine.states."System Idle"]
 type = "Waiting"
 manual_transitions = [
-    { target = "System Normal", display = "Normal" },
-    { target = "System Controllable", display = "Unlock" },
-    { target = "Safe Abort", display = "Depressurize", abort = true },
+    "System Normal",
+    "System Controllable",
+    { target = "Safe Abort", abort = true },
 ]
 
 # This state allows full valve control of all RFS actuators for testing procedures.
@@ -112,100 +112,83 @@ allowed_actuators = [
     "ign_spk_plg", # Igniter spark
 ]
 manual_transitions = [
-    { target = "System Idle", display = "Lock" },
-    { target = "Igniter Test", display = "Start Igniter Test" },
-    { target = "Safe Abort", display = "Depressurize", abort = true },
+    "System Idle",
+    "Igniter Test",
+    { target = "Safe Abort", abort = true },
 ]
 
 # This state runs the igniter test sequence to test ignition.
 [state_machine.states."Igniter Test"]
 type = "RunSequence"
 on_completed = "System Controllable"
-on_cancelled = "Abort Ign Test"
 manual_transitions = [
-    { target = "Abort Ign Test", display = "Abort", abort = true },
+    { target = "Abort Ign Test", abort = true },
 ]
-[state_machine.states."Igniter Test".thresholds.upper_thresholds_barg]
-gox = 15
-h2 = 15
-igniter = 10
-[state_machine.states."Igniter Test".thresholds.upper_thresholds_celsius]
-igniter = 200
+sequence = """
+# Watch thresholds for the whole duration of the sequence.
+gox_line_p.watch(max=15, abort='Abort Ign Test');
+h2_line_p.watch(max=15, abort='Abort Ign Test');
+ign_cc_p.watch(max=10, abort='Abort Ign Test');
+ign_cc_t.watch(max=200, abort='Abort Ign Test');
+
 # Start purging
-[[state_machine.states."Igniter Test".sequence]]
-action = "SetActuators"
-targets = { "gox_prg_vlv" = "Open", "h2_prg_vlv" = "Open" }
-# Purge
-[[state_machine.states."Igniter Test".sequence]]
-action = "Wait"
-duration_sec = 5
+gox_prg_vlv.open();
+h2_prg_vlv.open();
+sys.wait(time=5s);
+
 # Stop purging and start spark plug
-[[state_machine.states."Igniter Test".sequence]]
-action = "SetActuators"
-targets = { "gox_prg_vlv" = "Close", "h2_prg_vlv" = "Close", "ign_spk_plg" = "On" }
-[[state_machine.states."Igniter Test".sequence]]
-action = "Wait"
-duration_sec = 0.5
+gox_prg_vlv.close();
+h2_prg_vlv.close();
+ign_spk_plg.open();
+sys.wait(time=0.5s);
+
 # First open GOX then H2 valve
-[[state_machine.states."Igniter Test".sequence]]
-action = "SetActuators"
-targets = { "gox_ign_vlv" = "Open" }
-[[state_machine.states."Igniter Test".sequence]]
-action = "Wait"
-duration_sec = 0.5
-[[state_machine.states."Igniter Test".sequence]]
-action = "SetActuators"
-targets = { "h2_ign_vlv" = "Open" }
-# Detect firing, analogous to `igniter_pres.detect(value=6, rising=true, abort=ign_abort, patience=1s);`
-[[state_machine.states."Igniter Test".sequence]]
-action = "IgnitionDetection"
-pressure_lower_thresh_barg = 6.0
-patience_sec = 1.0
+gox_ign_vlv.open();
+sys.wait(time=0.5s);
+h2_ign_vlv.open();
+
+# Detect firing
+ign_cc_p.detect(value=6, rising=true, abort='Abort Ign Test', patience=1s);
+
 # Sustain firing, abort if pressure becomes too low
-[[state_machine.states."Igniter Test".sequence]]
-action = "SustainedIgnition"
-min_pressure_barg = 5.0
-duration_sec = 4.0
+ign_cc_p.watch(min=5, abort='Abort Ign Test', key=sustain);
+sys.wait(time=4s);
+ign_cc_p.ignore(key=sustain);
+
 # After ignition purge sequence:
-[[state_machine.states."Igniter Test".sequence]]
-action = "SetActuators"
-targets = { "gox_ign_vlv" = "Close", "h2_ign_vlv" = "Close", "gox_prg_vlv" = "Open", "h2_prg_vlv" = "Open" }
-[[state_machine.states."Igniter Test".sequence]]
-action = "Wait"
-duration_sec = 0.5
-[[state_machine.states."Igniter Test".sequence]]
-action = "SetActuators"
-targets = { "ign_spk_plg" = "Off" }
-[[state_machine.states."Igniter Test".sequence]]
-action = "Wait"
-duration_sec = 5
-[[state_machine.states."Igniter Test".sequence]]
-action = "SetActuators"
-targets = { "gox_prg_vlv" = "Close", "h2_prg_vlv" = "Close" }
+gox_ign_vlv.close();
+h2_ign_vlv.close();
+gox_prg_vlv.open();
+h2_prg_vlv.open();
+sys.wait(time=0.5s);
+
+ign_spk_plg.close();
+sys.wait(time=5s);
+
+gox_prg_vlv.close();
+h2_prg_vlv.close();
+"""
 
 # This runs the ignition abort sequence in case a manual or automatic abort was triggered
 [state_machine.states."Abort Ign Test"]
 type = "RunSequence"
 on_completed = "Safe Abort"
-on_cancelled = "Safe Abort"
 manual_transitions = [
-    { target = "Safe Abort", display = "Abort Abort Seq", abort = true },
+    { target = "Safe Abort", abort = true },
 ]
+sequence = """
 # Open purge valves and close fuel valve
-[[state_machine.states."Abort Ign Test".sequence]]
-action = "SetActuators"
-targets = { "h2_ign_vlv" = "Close", "gox_ign_vlv" = "Close", "gox_prg_vlv" = "Open", "h2_prg_vlv" = "Open" }
-[[state_machine.states."Abort Ign Test".sequence]]
-action = "Wait"
-duration_sec = 0.5
+h2_ign_vlv.close();
+gox_ign_vlv.close();
+gox_prg_vlv.open();
+h2_prg_vlv.open();
+sys.wait(time=0.5s);
+
 # 0.5s later turn off spark plug
-[[state_machine.states."Abort Ign Test".sequence]]
-action = "SetActuators"
-targets = { "ign_spk_plg" = "Off" }
+ign_spk_plg.close();
+
 # Now purge for 5 sec and then closed the purge valves again
-[[state_machine.states."Abort Ign Test".sequence]]
-action = "Wait"
-duration_sec = 5
-[[state_machine.states."Abort Ign Test".sequence]]
-action = "SetActuators"
-targets = { "gox_prg_vlv" = "Close", "h2_prg_vlv" = "Close" }
+sys.wait(time=5s);
+gox_prg_vlv.close();
+h2_prg_vlv.close();
+"""

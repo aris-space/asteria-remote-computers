@@ -71,7 +71,13 @@ impl std::fmt::Display for StateName {
 
 impl StateName {
     /// Convert a string to a name if it exists.
+    ///
+    /// State names are assumed to never contain a `'`, since the sequence DSL
+    /// quotes state names as `'<name>'`; this is enforced here too, defensively.
     pub fn try_new(name: &str, names: &HashSet<StateName>) -> Result<Self> {
+        if name.contains('\'') {
+            return Err(Error::StateNameWithQuote(name.into()));
+        }
         names
             .get(name)
             .cloned()
@@ -86,6 +92,8 @@ impl StateName {
             Err(Error::TooLongStateName(name))
         } else if name.contains('\0') {
             Err(Error::StateNameWithNullByte(name))
+        } else if name.contains('\'') {
+            Err(Error::StateNameWithQuote(name))
         } else {
             Ok(Self(name))
         }

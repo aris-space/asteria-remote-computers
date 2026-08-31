@@ -14,6 +14,7 @@ use watchable::Watchable;
 /// Sends `RfsComputerStatus` at 1Hz.
 #[allow(clippy::cast_possible_truncation)] // u64 micros since start
 pub fn spawn_rfsc_status_driver(
+    rocket_connection_detect: Watchable<DigitalIn>,
     rfsc_status: Watchable<dp_rfs_computer::RfsComputerStatus>,
     tx: std::sync::mpsc::Sender<messages::Message>,
 ) -> AbortHandle {
@@ -25,6 +26,10 @@ pub fn spawn_rfsc_status_driver(
                 interval.tick().await;
                 let status = rfsc_status.get();
                 let msg = messages::Message::RfsComputer(dp_rfs_computer::Message::Status(status));
+
+                if matches!(rocket_connection_detect.get(), DigitalIn::Off) {
+                    continue;
+                }
 
                 if tx.send(msg).is_err() {
                     tracing::warn!("CAN channel was closed. Shutting down!");
@@ -40,6 +45,7 @@ pub fn spawn_rfsc_status_driver(
 /// Sends `FlightComputerBuildInfo` at 0.2Hz.
 #[allow(clippy::needless_pass_by_value)] // needed to move `build_info` to future. Is a const anyway.
 pub fn spawn_rfsc_debug_driver(
+    rocket_connection_detect: Watchable<DigitalIn>,
     build_info: BuildInfo,
     tx: std::sync::mpsc::Sender<messages::Message>,
 ) -> AbortHandle {
@@ -68,6 +74,10 @@ pub fn spawn_rfsc_debug_driver(
                     },
                 ));
 
+                if matches!(rocket_connection_detect.get(), DigitalIn::Off) {
+                    continue;
+                }
+
                 if tx.send(msg).is_err() {
                     tracing::warn!("CAN channel was closed. Shutting down!");
                     break;
@@ -82,6 +92,7 @@ pub fn spawn_rfsc_debug_driver(
 /// Sends `IgniterPressure` at 30Hz (not 40Hz as not that much data is available) to the FC.
 #[allow(clippy::cast_possible_truncation)] // u64 micros since start
 pub fn spawn_fc_igniter_pressure_driver(
+    rocket_connection_detect: Watchable<DigitalIn>,
     igniter_pressure: impl Watched<BarG> + Send + 'static,
     tx: std::sync::mpsc::Sender<messages::Message>,
 ) -> AbortHandle {
@@ -96,6 +107,10 @@ pub fn spawn_fc_igniter_pressure_driver(
                 let msg = messages::Message::RfsComputer(
                     dp_rfs_computer::Message::IgniterPressure(BarG(igniter_pressure.current().0)),
                 );
+
+                if matches!(rocket_connection_detect.get(), DigitalIn::Off) {
+                    continue;
+                }
 
                 if tx.send(msg).is_err() {
                     tracing::warn!("CAN channel was closed. Shutting down!");

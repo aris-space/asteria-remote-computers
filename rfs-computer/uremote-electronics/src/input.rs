@@ -1,9 +1,10 @@
 use datatypes::actuator::{DigitalOut, InvertedDigitalOut, NormallyClosedValve, NormallyOpenValve};
 use datatypes::sensor::DigitalIn;
-use datatypes::units::Celsius;
+use datatypes::units::{BarG, Celsius};
 use io_utils::Broadcast;
 use messages::Message;
 use messages::datapoints::dp_rfs_computer::Message as RFSCMessage;
+use sequences::{SensorNameExt, SensorStore};
 use watchable::Watchable;
 
 #[derive(Debug, Default, Clone, Broadcast)]
@@ -33,6 +34,62 @@ pub struct Sensors {
     #[datapoint(pattern = "Message::RfsComputer(RFSCMessage::IgniterArmed(#value))")]
     #[broadcast(min_freq_hz = 0.5, max_freq_hz = 5.)]
     pub igniter_armed: Watchable<DigitalIn>,
+}
+
+/// See the matching fields in [`Sensors`].
+///
+/// Names follow the `#[pss(name = "...")]` instrumentation names in
+/// [`messages::datapoints::dp_rfs_computer::Message`].
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, serde::Deserialize, serde::Serialize, Hash,
+)]
+#[allow(non_camel_case_types)]
+pub enum SensorName {
+    /// Name of the LOx line temperature sensor.
+    lox_line_t,
+    /// Name of the DACS cabinet temperature sensor.
+    rfs_cabinent_t,
+    /// Name of the ambient temperature sensor.
+    rfs_ambient_t,
+}
+
+impl SensorNameExt for SensorName {
+    fn is_pressure_sensor(&self) -> bool {
+        false
+    }
+
+    fn is_temperature_sensor(&self) -> bool {
+        true
+    }
+}
+
+impl std::str::FromStr for SensorName {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        use serde::Deserialize as _;
+        Self::deserialize(<&str as serde::de::IntoDeserializer>::into_deserializer(s))
+            .map_err(|e| e.to_string())
+    }
+}
+
+impl SensorStore<SensorName> for Sensors {
+    fn get_pressure_datapoint<'a>(&'a self, _name: &SensorName) -> Option<&'a Watchable<BarG>> {
+        // None of the u-remote's sensors are pressure sensors.
+        None
+    }
+
+    fn get_temperature_datapoint<'a>(
+        &'a self,
+        name: &SensorName,
+    ) -> Option<&'a Watchable<Celsius>> {
+        let watchable = match name {
+            SensorName::lox_line_t => &self.lox_temperature,
+            SensorName::rfs_cabinent_t => &self.cabinet_temperature,
+            SensorName::rfs_ambient_t => &self.ambient_temperature,
+        };
+        Some(watchable)
+    }
 }
 
 /// The states of the actuators connected to the u-remote.

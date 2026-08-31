@@ -38,8 +38,8 @@ sys.wait(time=0.5s);
 IGN_FUE_VLV.open();
 
 # detecting ignition and starting a watcher on the pressure
-IGN_CC_P.detect(value=4.5, rising=true, abort=firing_abort, patience=1s);
-IGN_CC_P.watch(key=ign_detect, min=4, abort=firing_abort);
+IGN_CC_P.detect(value=4.5, rising=true, abort='firing_abort', patience=1s);
+IGN_CC_P.watch(key=ign_detect, min=4, abort='firing_abort');
 
 # Ignition confirmed
 FSS_PRG_VLV.close();
@@ -54,7 +54,7 @@ sys.wait(time=0.5s);
 FSS_MNL_VLV.open();
 
 # Combustion initiated, confirming
-ENG_CC_P1.detect(value=6.75, rising=true, abort=firing_abort, patience=1.5s);
+ENG_CC_P1.detect(value=6.75, rising=true, abort='firing_abort', patience=1.5s);
 
 # turning off ign pressure watcher
 IGN_CC_P.ignore(key=ign_detect);

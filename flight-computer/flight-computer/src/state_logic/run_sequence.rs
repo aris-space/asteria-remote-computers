@@ -31,7 +31,7 @@ impl StateLogic for RunSequence {
         output: &Self::Output,
         param: &AdditionalState<Self::Parameter>,
     ) -> StateName {
-        tracing::info!(?self, "Running a sequence");
+        tracing::info!("Starting sequence of {} steps", self.sequence.len());
 
         // Run the sequence or receive a manual transition.
         tokio::select! {

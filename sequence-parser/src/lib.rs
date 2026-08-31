@@ -189,7 +189,7 @@ where
         })
 }
 
-/// Parser for the `sys.to_state(state = <state_name>)` command.
+/// Parser for the `sys.to_state(state = '<state_name>')` command.
 fn to_state<'a, Actuator, Sensor, State>()
 -> impl Parser<'a, &'a str, Option<Command<Actuator, Sensor, State>>, E<'a>>
 where
@@ -202,7 +202,7 @@ where
         .or(func("SYS.to_state"))
         .validate(|args, e, emitter| {
             let state = extract_args! {
-                args, emitter, e => { state: Ident as State }
+                args, emitter, e => { state: String as State }
             };
 
             Some(Command::ToState(state?.inner))
@@ -333,7 +333,7 @@ where
         })
 }
 
-/// Parser for the `<sensor_name>.watch(abort = <state_name>, max = <optional float>, min = <optional float>, key = <optional identifier>)` command.
+/// Parser for the `<sensor_name>.watch(abort = '<state_name>', max = <optional float>, min = <optional float>, key = <optional identifier>)` command.
 fn sensor_watch<'a, Actuator, Sensor, State>()
 -> impl Parser<'a, &'a str, Option<Command<Actuator, Sensor, State>>, E<'a>>
 where
@@ -349,7 +349,7 @@ where
         .validate(|(sensor, args), e, emitter| {
             let (abort, max, min, key) = extract_args! {
                 args, emitter, e => {
-                    abort: Ident as State
+                    abort: String as State
                     max?: Float
                     min?: Float
                     key?: Ident
@@ -360,7 +360,7 @@ where
                 name: sensor?.inner.0,
                 abort_state: abort?.inner,
                 max: max.inner.unwrap_or(f32::INFINITY),
-                min: min.inner.unwrap_or(f32::INFINITY),
+                min: min.inner.unwrap_or(f32::NEG_INFINITY),
                 key: key.inner,
             })
         })
@@ -390,7 +390,7 @@ where
         })
 }
 
-/// Parser for the `<sensor_name>.detect(value = <float>, rising = <optional bool>, abort = <state_name>, patience = <time>, duration = <optional time>)` command.
+/// Parser for the `<sensor_name>.detect(value = <float>, rising = <optional bool>, abort = '<state_name>', patience = <time>, duration = <optional time>)` command.
 fn sensor_detect<'a, Actuator, Sensor, State>()
 -> impl Parser<'a, &'a str, Option<Command<Actuator, Sensor, State>>, E<'a>>
 where
@@ -408,7 +408,7 @@ where
                 args, emitter, e => {
                     value: Float
                     rising?: Bool
-                    abort: Ident as State
+                    abort: String as State
                     patience: Time
                     duration?: Time
                 }

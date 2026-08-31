@@ -50,7 +50,7 @@ impl InputTree {
                 lib_mission::util::log::spawn_watchable_logger(
                     lib_mission::util::log::make_timeseries_writer(folder, $name, &[$header])
                         .await?,
-                    $e.watched().map(|h| h.map(|t| t.as_ms_timestamp())),
+                    $e.watched().map(|h| h.current_status),
                     time.watched(),
                 )
             };
@@ -111,22 +111,22 @@ impl InputTree {
             spawn_board_health_logger!(
                 "rocket_health_flight_computer",
                 rocket_health.flight_computer,
-                "fuel control board last healthy [unix ms?]",
+                "health (FIXME: not proper header)",
             ),
             spawn_board_health_logger!(
                 "rocket_health_fuel_control_board",
                 rocket_health.fuel_control_board,
-                "fuel control board last healthy [unix ms?]",
+                "health (FIXME: not proper header)",
             ),
             spawn_board_health_logger!(
                 "rocket_health_oxidizer_control_board",
                 rocket_health.oxidizer_control_board,
-                "oxidizer control board last healthy [unix ms?]",
+                "health (FIXME: not proper header)",
             ),
             spawn_board_health_logger!(
                 "rocket_health_engine_control_board",
                 rocket_health.engine_control_board,
-                "engine control board last healthy [unix ms?]",
+                "health (FIXME: not proper header)",
             ),
             // Log flight computer status (as the CAN message is defined)
             spawn_watchable_logger(

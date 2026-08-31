@@ -7,10 +7,12 @@ use lib_mission::common_states;
 use lib_mission::config::{BoxableState, MakeState};
 use lib_mission::state_machine::{BoxedState, StateName};
 use lib_mission::transition::ManualTransitions;
+use sequences::{Command, deserialize_sequence, validate_sequence};
 use serde::{Deserialize, Serialize};
 
+use crate::io::input::SensorName;
+use crate::io::output::ActuatorName;
 use crate::state_logic;
-use crate::state_logic::helpers::ThresholdWatcher;
 use keller23sx::BaudRate;
 
 /// The full configuration file for the system.
@@ -130,35 +132,26 @@ pub enum StateLogicConfig {
     MonitoredManualControl {
         /// The [names][crate::io::output::ActuatorName] of the actuators that are allowed to be activated in this state.
         allowed_actuators: Vec<String>,
-        /// Thresholds on sensors to watch during the whole of the sequence.
-        /// If any of them are violated, this will end the sequence and proceeds to `on_cancelled`.
-        #[serde(default)]
-        thresholds: ThresholdWatcher,
         /// If the last telemetry message was received more than `telemetry_loss_threshold_sec` seconds ago,
         /// exit this state.
         telemetry_loss_threshold_sec: f32,
-        /// The state to transition to when a sensor or telemetry violation occured.
+        /// The state to transition to when telemetry has been lost.
         on_violation: String,
     },
     /// Describes a [`state_logic::RunSeqWithControl`].
     RunSeqWithControl {
         /// The [names][crate::io::output::ActuatorName] of the actuators that are allowed to be activated in this state.
         allowed_actuators: Vec<String>,
-        /// Thresholds on sensors to watch during the whole of the sequence.
-        /// If any of them are violated, this will end the sequence and proceeds to `on_cancelled`.
-        #[serde(default)]
-        thresholds: ThresholdWatcher,
         /// If the last telemetry message was received more than `telemetry_loss_threshold_sec` seconds ago,
         /// exit this state.
         telemetry_loss_threshold_sec: f32,
-        /// The state to transition to when a sensor or telemetry violation occured.
+        /// The state to transition to when telemetry has been lost.
         on_violation: String,
-        /// The sequence to run.
-        sequence: Vec<state_logic::helpers::Action>,
+        /// The sequence to run, as a DSL string (see the `sequence-parser` crate).
+        #[serde(deserialize_with = "deserialize_sequence", skip_serializing)]
+        sequence: Vec<Command<ActuatorName, SensorName, String>>,
         /// The state to transition to when the sequence has been completed.
         on_completed: String,
-        /// The state to transition to when an action demands the sequence be cancelled.
-        on_sequence_problem: String,
     },
     /// Describes a [`state_logic::AwaitTimer`].
     AwaitTimer {
@@ -195,16 +188,11 @@ pub enum StateLogicConfig {
     },
     /// Describes a [`state_logic::RunSequence`].
     RunSequence {
-        /// The sequence to run.
-        sequence: Vec<state_logic::helpers::Action>,
-        /// Thresholds on sensors to watch during the whole of the sequence.
-        /// If any of them are violated, this will end the sequence and proceeds to `on_cancelled`.
-        #[serde(default)]
-        thresholds: ThresholdWatcher,
+        /// The sequence to run, as a DSL string (see the `sequence-parser` crate).
+        #[serde(deserialize_with = "deserialize_sequence", skip_serializing)]
+        sequence: Vec<Command<ActuatorName, SensorName, String>>,
         /// The state to transition to when the sequence has been completed.
         on_completed: String,
-        /// The state to transition to when an action demands the sequence be cancelled.
-        on_cancelled: String,
     },
     /// Describes a [`state_logic::DisarmIgniter`].
     DisarmIgniter {
@@ -248,7 +236,6 @@ impl MakeState for StateLogicConfig {
             .into_box(),
             StateLogicConfig::MonitoredManualControl {
                 allowed_actuators,
-                thresholds,
                 telemetry_loss_threshold_sec,
                 on_violation,
             } => state_logic::MonitoredManualControl {
@@ -260,18 +247,15 @@ impl MakeState for StateLogicConfig {
                 telemetry_loss_threshold: std::time::Duration::from_secs_f32(
                     telemetry_loss_threshold_sec,
                 ),
-                thresholds,
                 on_violation: StateName::try_new(&on_violation, names)?,
             }
             .into_box(),
             StateLogicConfig::RunSeqWithControl {
                 allowed_actuators,
-                thresholds,
                 telemetry_loss_threshold_sec,
                 on_violation,
                 sequence,
                 on_completed,
-                on_sequence_problem,
             } => state_logic::RunSeqWithControl {
                 manual_transitions: transitions,
                 actuator_control: ActuatorControl::from_strings(
@@ -281,10 +265,8 @@ impl MakeState for StateLogicConfig {
                 telemetry_loss_threshold: std::time::Duration::from_secs_f32(
                     telemetry_loss_threshold_sec,
                 ),
-                thresholds,
                 on_violation: StateName::try_new(&on_violation, names)?,
-                sequence,
-                on_sequence_problem: StateName::try_new(&on_sequence_problem, names)?,
+                sequence: validate_sequence(sequence, names)?,
                 on_completed: StateName::try_new(&on_completed, names)?,
             }
             .into_box(),
@@ -325,15 +307,11 @@ impl MakeState for StateLogicConfig {
             .into_box(),
             StateLogicConfig::RunSequence {
                 sequence,
-                thresholds,
                 on_completed,
-                on_cancelled,
             } => state_logic::RunSequence {
                 manual_transitions: transitions,
-                sequence,
-                thresholds,
+                sequence: validate_sequence(sequence, names)?,
                 on_completed: StateName::try_new(&on_completed, names)?,
-                on_cancelled: StateName::try_new(&on_cancelled, names)?,
             }
             .into_box(),
             StateLogicConfig::DisarmIgniter { on_done } => state_logic::DisarmIgniter {

@@ -1,15 +1,15 @@
 use std::time::Duration;
 
+use lib_mission::actuator_control::ActuatorStore as _;
 use lib_mission::actuator_control::command::{ActuatorControl, NeverReturns};
 use lib_mission::state_machine::{AdditionalState, StateLogic, StateName};
 use lib_mission::telemetry::await_telemetry_loss;
 use lib_mission::transition::ManualTransitions;
 
 use crate::io::output::ActuatorName;
-use crate::state_logic::helpers::ThresholdWatcher;
 
 /// This state gives manual control for the configured actuators,
-/// and otherwise waits for a manual transition or a threshold violation
+/// and otherwise waits for a manual transition or telemetry loss.
 #[derive(Debug)]
 pub struct MonitoredManualControl {
     /// Where we can manually transition
@@ -18,10 +18,7 @@ pub struct MonitoredManualControl {
     pub actuator_control: ActuatorControl<ActuatorName>,
     /// If the last telemetry message is older than this, transition to `on_violation`.
     pub telemetry_loss_threshold: Duration,
-    /// Thresholds on sensors to watch during the whole operations.
-    /// If any of them are violated, this will end the sequence and proceeds to `on_violation`.
-    pub thresholds: ThresholdWatcher,
-    /// The state to transition to when a threshold has been violated.
+    /// The state to transition to when telemetry has been lost.
     pub on_violation: StateName,
 }
 
@@ -51,10 +48,6 @@ impl StateLogic for MonitoredManualControl {
         // Then waits for a manual transition or violation.
         tokio::select! {
             next_state = self.manual_transitions.next(input, param) => next_state,
-            violation = self.thresholds.watch(input) => {
-                tracing::warn!("threshold violation: {violation}");
-                self.on_violation.clone()
-            }
             _ = await_telemetry_loss(&param.parameters.uplink_telemetry_health, &input.time, self.telemetry_loss_threshold) => {
                 tracing::warn!("telemetry loss detected");
                 self.on_violation.clone()
