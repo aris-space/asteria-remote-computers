@@ -124,26 +124,41 @@ fn read_uplink_once(
     expected_seq: &mut Wrapping<u8>,
     processor: impl FnOnce(Message) -> bool,
 ) {
+    /// Only track uplink data from the mission control (with ID 222).
+    const MISSION_CONTROL_SYS_ID: u8 = 222;
+
     // blockingly receive a frame
     let received = mavlink_hal::transport::recv_message::<Message>(reader);
 
     let time = clock.current().as_instant_us();
     let (msg, lost) = match received {
-        Ok((msg, sequence)) => {
+        Ok(mavlink_hal::transport::Message {
+            payload: msg,
+            sequence,
+            sending_system_id,
+        }) => {
+            if sending_system_id != MISSION_CONTROL_SYS_ID {
+                return;
+            }
             let lost = u32::from((sequence - *expected_seq).0);
             *expected_seq = sequence + Wrapping(1);
             (msg, lost)
         }
-        Err(mavlink_hal::transport::RecvError::Decode { error, sequence }) => {
+        Err(mavlink_hal::transport::RecvError::Decode {
+            error,
+            sequence,
+            sending_system_id,
+        }) => {
             tracing::warn!(%error, "skipping bad frame");
-            {
+            if sending_system_id == MISSION_CONTROL_SYS_ID {
                 // Critical Section
                 let mut health = telemetry_health.write();
                 health.time_of_last_msg = time;
                 health.num_msg_lost += u32::from((sequence - *expected_seq).0);
                 health.num_msg_received += 1;
+                drop(health);
+                *expected_seq = sequence + Wrapping(1);
             }
-            *expected_seq = sequence + Wrapping(1);
             return;
         }
         Err(e) => {
@@ -461,7 +476,7 @@ mod tests {
             Some(msg) => {
                 let sender = UdpSocket::bind("127.0.0.1:0").expect("bind sender");
                 sender.connect(receiver_addr).expect("connect sender");
-                let endpoint = Endpoint::v2(MavLinkId::new(200, 1));
+                let endpoint = Endpoint::v2(MavLinkId::new(222, 1));
                 mavlink_hal::transport::send_message(msg, &endpoint, &sender)
                     .expect("send message");
             }
@@ -735,6 +750,61 @@ mod tests {
         assert_eq!(health.time_of_last_processed_msg, InstantUs(0));
     }
 
+    /// Test that messages from a system ID other than 222 are completely ignored —
+    /// no health counters are updated and no command is set.
+    #[test]
+    fn test_read_uplink_once_ignores_non_gcs_system_id() {
+        use std::net::UdpSocket;
+
+        let receiver = UdpSocket::bind("127.0.0.1:0").expect("bind receiver");
+        let receiver_addr = receiver.local_addr().expect("get receiver addr");
+        let sender = UdpSocket::bind("127.0.0.1:0").expect("bind sender");
+        sender.connect(receiver_addr).expect("connect sender");
+
+        // Send from system ID 1 (flight computer itself) — should be ignored.
+        let endpoint = Endpoint::v2(MavLinkId::new(1, 1));
+        let msg =
+            Message::FlightComputer(FCMessage::ManualStateTransition(ManualStateTransition {
+                transition_index: 0,
+                state: *b"Idle\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0",
+            }));
+        mavlink_hal::transport::send_message(&msg, &endpoint, &sender).expect("send message");
+
+        let transition_command = Watchable::new(ManualStateTransition::default());
+        let actuator_command: Watchable<Option<actuator_control::Command<ActuatorName>>> =
+            Watchable::new(None);
+        let telemetry_health = Watchable::new(UplinkTelemetryHealth::default());
+        let clock = Watchable::new(Duration::from_millis(100).into());
+        let states = create_state_names();
+        let this_system = RemoteSystem::FlightComputer;
+        let mut seq = Wrapping(0u8);
+
+        read_uplink_once(
+            &receiver,
+            &telemetry_health,
+            &clock.watched(),
+            &mut seq,
+            |msg| {
+                msg_processor(
+                    &msg,
+                    &transition_command,
+                    &actuator_command,
+                    &states,
+                    this_system,
+                )
+            },
+        );
+
+        let health = telemetry_health.get();
+        // The message must not have been counted at all.
+        assert_eq!(health.num_msg_received, 0);
+        assert_eq!(health.num_msg_processed, 0);
+        assert_eq!(health.num_msg_lost, 0);
+        assert_eq!(transition_command.get(), ManualStateTransition::default());
+        // seq must not have advanced.
+        assert_eq!(seq, Wrapping(0u8));
+    }
+
     /// Test that the lost-message counter handles sequence-number wrap-around correctly.
     ///
     /// Scenario: we last saw sequence 249 (so `expected_seq = 250`).
@@ -750,7 +820,7 @@ mod tests {
         let sender = UdpSocket::bind("127.0.0.1:0").expect("bind sender");
         sender.connect(receiver_addr).expect("connect sender");
 
-        let endpoint = Endpoint::v2(MavLinkId::new(200, 1));
+        let endpoint = Endpoint::v2(MavLinkId::new(222, 1));
         let msg =
             Message::FlightComputer(FCMessage::ManualStateTransition(ManualStateTransition {
                 transition_index: 0,
