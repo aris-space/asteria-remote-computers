@@ -267,7 +267,6 @@ where
 
 /// A simple implementor of [`io_utils::BroadcastLoop`] that periodically send the current value.
 /// The period used is the average of min and max.
-// TODO: make a responsive loop
 pub struct PeriodicLoop;
 
 impl io_utils::BroadcastLoop<Message> for PeriodicLoop {
@@ -288,6 +287,54 @@ impl io_utils::BroadcastLoop<Message> for PeriodicLoop {
                 tracing::warn!("Telemetry channel was closed. Slowing down!");
                 tokio::time::sleep(Duration::from_millis(5001)).await;
                 // 5001 such that new clipyy doesn't complain yet
+            }
+        }
+    }
+}
+
+/// A [`io_utils::BroadcastLoop`] implementation that sends new values as they arrive,
+/// while respecting the minimum and maximum frequencies.
+///
+/// The way this works is by waiting for new data or a timeout based on the minimum frequency.
+/// If the duration since the last sent message is long enough to respect the maximum frequency,
+/// it is sent, otherwise ignored.
+pub struct ResponsiveLoop;
+
+impl<M: Send + 'static> io_utils::BroadcastLoop<M> for ResponsiveLoop {
+    async fn broadcast_loop<T: Send + Sync + 'static + Clone>(
+        field: watchable::Watchable<T>,
+        mut map: impl FnMut(T) -> M + Send + 'static,
+        channel: std::sync::mpsc::Sender<M>,
+        min_freq_hz: f32,
+        max_freq_hz: f32,
+    ) -> io_utils::NeverReturns {
+        use crate::reactive::{IntoWatched, Watched};
+
+        let throttle_period = Duration::from_secs_f32(1. / max_freq_hz);
+        let resend_period = Duration::from_secs_f32(1. / min_freq_hz);
+
+        let mut watched = (&field).watched();
+        let mut last_sent = tokio::time::Instant::now();
+
+        loop {
+            let data = match tokio::time::timeout(resend_period, watched.next()).await {
+                Ok(data) => data,
+                Err(_) => field.get(),
+            };
+
+            let now = tokio::time::Instant::now();
+            if now.duration_since(last_sent) >= throttle_period {
+                let msg = map(data);
+                tracing::trace!("Sending data");
+                if channel.send(msg).is_err() {
+                    tracing::warn!("Telemetry channel was closed. Slowing down!");
+                    tokio::time::sleep(Duration::from_millis(5001)).await;
+                    // 5001 such that new clipyy doesn't complain yet
+                } else {
+                    last_sent = now;
+                }
+            } else {
+                tracing::trace!("Discarding data, sent too recently");
             }
         }
     }
