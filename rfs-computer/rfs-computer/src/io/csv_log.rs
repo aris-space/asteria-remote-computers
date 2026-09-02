@@ -25,7 +25,6 @@ impl InputTree {
             transition_command,
             actuator_command,
             rocket_health,
-            flight_computer_status,
             uremote_sensors,
             uremote_actuators,
             controllino_valves,
@@ -109,11 +108,6 @@ impl InputTree {
             ),
             // Log board last healths to a single column csv files
             spawn_board_health_logger!(
-                "rocket_health_flight_computer",
-                rocket_health.flight_computer,
-                "health (FIXME: not proper header)",
-            ),
-            spawn_board_health_logger!(
                 "rocket_health_fuel_control_board",
                 rocket_health.fuel_control_board,
                 "health (FIXME: not proper header)",
@@ -141,7 +135,10 @@ impl InputTree {
                     ],
                 )
                 .await?,
-                flight_computer_status.watched(),
+                rocket_health
+                    .flight_computer
+                    .watched()
+                    .map(|h| h.current_status),
                 time.watched(),
             ),
             // Log observed lox fill valve state

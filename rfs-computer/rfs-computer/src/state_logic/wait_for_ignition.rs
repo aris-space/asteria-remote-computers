@@ -36,10 +36,13 @@ impl StateLogic for WaitForIgnition {
         output: &Self::Output,
         param: &AdditionalState<Self::Parameter>,
     ) -> StateName {
-        if matches!(
-            input.flight_computer_status.get().is_software_armed,
-            ArmingState::Safe
-        ) {
+        let fc_status = input.rocket_health.flight_computer.get();
+        if fc_status.fresh
+            && matches!(
+                fc_status.current_status.is_software_armed,
+                ArmingState::Safe
+            )
+        {
             tracing::warn!("FC isn't armed, preventing arming state");
             return self.on_not_ready.clone();
         }
@@ -73,7 +76,7 @@ impl StateLogic for WaitForIgnition {
         assert_future::<NeverReturns>(&actuator_future);
 
         let mut spark_plug_watcher = input.uremote_actuators.igniter_spark.watched();
-        let mut fc_watcher = input.flight_computer_status.watched();
+        let mut fc_watcher = input.rocket_health.flight_computer.watched();
         let mut ign_watcher = input.uremote_sensors.igniter_armed.watched();
 
         tokio::select! {
@@ -81,7 +84,7 @@ impl StateLogic for WaitForIgnition {
                 tracing::info!("Spark plug turned on, continueing");
                 self.on_ignition.clone()
             },
-            _ = fc_watcher.next_satisfying(|s| matches!(s.is_software_armed, ArmingState::Safe)) => {
+            _ = fc_watcher.next_satisfying(|s| matches!(s.current_status.is_software_armed, ArmingState::Safe)) => {
                 tracing::info!("FC got disarmed, disarming");
                 self.on_not_ready.clone()
             },
