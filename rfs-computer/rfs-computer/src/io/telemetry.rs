@@ -12,7 +12,7 @@ use io_utils::{Broadcast, NeverReturns};
 use lib_mission::reactive::IntoWatched as _;
 use lib_mission::state_machine::StateMachine;
 use lib_mission::telemetry::{
-    PeriodicLoop, RemoteSystem, start_downlink_actor, start_uplink_actor,
+    RemoteSystem, ResponsiveLoop, start_downlink_actor, start_uplink_actor,
 };
 use tokio::task::AbortHandle;
 
@@ -60,8 +60,8 @@ pub fn init_telemetry(
     );
 
     // spawns tokio tasks which send mavlink messages periodically to the channel.
-    let input_streamers = input_tree.start_broadcasting::<PeriodicLoop>(tx.clone());
-    let state_streamers = state_tree.start_broadcasting::<PeriodicLoop>(tx.clone());
+    let input_streamers = input_tree.start_broadcasting::<ResponsiveLoop>(tx.clone());
+    let state_streamers = state_tree.start_broadcasting::<ResponsiveLoop>(tx.clone());
 
     Ok(Handles {
         uplink,

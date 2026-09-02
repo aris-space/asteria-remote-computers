@@ -265,33 +265,6 @@ where
     }
 }
 
-/// A simple implementor of [`io_utils::BroadcastLoop`] that periodically send the current value.
-/// The period used is the average of min and max.
-pub struct PeriodicLoop;
-
-impl io_utils::BroadcastLoop<Message> for PeriodicLoop {
-    async fn broadcast_loop<T: Send + Sync + 'static + Clone>(
-        field: watchable::Watchable<T>,
-        mut map: impl FnMut(T) -> Message + Send + 'static,
-        channel: std::sync::mpsc::Sender<Message>,
-        min_freq_hz: f32,
-        max_freq_hz: f32,
-    ) -> io_utils::NeverReturns {
-        let period = Duration::from_secs_f32(f32::midpoint(1. / min_freq_hz, 1. / max_freq_hz));
-        let mut interval = tokio::time::interval(period);
-        interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
-        loop {
-            interval.tick().await;
-            let val = map(field.get());
-            if channel.send(val).is_err() {
-                tracing::warn!("Telemetry channel was closed. Slowing down!");
-                tokio::time::sleep(Duration::from_millis(5001)).await;
-                // 5001 such that new clipyy doesn't complain yet
-            }
-        }
-    }
-}
-
 /// A [`io_utils::BroadcastLoop`] implementation that sends new values as they arrive,
 /// while respecting the minimum and maximum frequencies.
 ///
