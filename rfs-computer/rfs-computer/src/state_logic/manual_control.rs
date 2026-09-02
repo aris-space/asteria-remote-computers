@@ -19,14 +19,17 @@ impl StateLogic for ManualControl {
     type Output = super::Output;
     type Parameter = super::Parameter;
 
-    #[tracing::instrument(name = "states::ManualControl::run", skip_all, fields(?self, state = %param.current_state().0))]
+    #[tracing::instrument(name = "states::ManualControl::run", skip_all, fields(state = %param.current_state().0))]
     async fn run(
         &self,
         input: &Self::Input,
         output: &Self::Output,
         param: &AdditionalState<Self::Parameter>,
     ) -> StateName {
-        tracing::info!("Entering a manual control state");
+        tracing::info!(
+            "Entering a manual control state, controllable: {:?}",
+            self.actuator_control
+        );
 
         // Prepares a background task to listen for (and act upon) manual actuator inputs.
         let actuator_future = self.actuator_control.act(

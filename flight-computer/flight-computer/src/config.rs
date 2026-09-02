@@ -544,7 +544,7 @@ impl<Gnc: CompatGuidanceController> MakeState for StateLogicConfig<Gnc> {
                 on_violation,
             } => state_logic::MonitoredManualControl {
                 manual_transitions,
-                allowed_actuators: ActuatorControl::from_strings(
+                actuator_control: ActuatorControl::from_strings(
                     allowed_actuators.iter().map(String::as_str),
                 )
                 .map_err(lib_mission::Error::malformed_config)?,
