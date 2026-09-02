@@ -35,7 +35,10 @@ impl StateLogic for MonitoredManualControl {
         output: &Self::Output,
         param: &AdditionalState<Self::Parameter>,
     ) -> StateName {
-        tracing::info!(?self, "Entering a monitored manual control state");
+        tracing::info!(
+            "Entering a manual control state, controllable: {:?}",
+            self.actuator_control
+        );
 
         // Prepares a background task to listen for (and act upon) manual actuator inputs.
         let actuator_future = self.actuator_control.act(
