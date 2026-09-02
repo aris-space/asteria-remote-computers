@@ -148,16 +148,17 @@ sys.wait(time=0.5s);
 h2_ign_vlv.open();
 
 # Detect firing
-ign_cc_p.detect(value=6, rising=true, abort='Abort Ign Test', patience=1s);
+ign_cc_p.detect(value=4.5, rising=true, abort='Abort Ign Test', patience=1s);
 
 # Sustain firing, abort if pressure becomes too low
-ign_cc_p.watch(min=5, abort='Abort Ign Test', key=sustain);
+ign_cc_p.watch(min=4, abort='Abort Ign Test', key=sustain);
 sys.wait(time=4s);
 ign_cc_p.ignore(key=sustain);
 
 # After ignition purge sequence:
-gox_ign_vlv.close();
 h2_ign_vlv.close();
+sys.wait(time=0.5s);
+gox_ign_vlv.close();
 gox_prg_vlv.open();
 h2_prg_vlv.open();
 sys.wait(time=0.5s);
