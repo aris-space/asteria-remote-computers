@@ -70,7 +70,7 @@ where
         cmd: impl IntoWatched<Option<Command<ActuatorName>>> + Send,
         actuators: BTreeMap<ActuatorName, Box<dyn Settable + Send>>,
     ) -> NeverReturns {
-        self.act_optional(Some(currect_state_index), cmd, actuators)
+        self.act_optional(Some(currect_state_index), true, cmd, actuators)
             .await
     }
 
@@ -82,6 +82,7 @@ where
     pub async fn act_optional(
         &self,
         currect_state_index: Option<usize>,
+        warn_unknown: bool,
         cmd: impl IntoWatched<Option<Command<ActuatorName>>> + Send,
         mut actuators: BTreeMap<ActuatorName, Box<dyn Settable + Send>>,
     ) -> NeverReturns {
@@ -90,7 +91,7 @@ where
         loop {
             let cmd = watcher.next().await;
             if let Some(cmd) = cmd {
-                self.act_on(cmd, currect_state_index, &mut actuators);
+                self.act_on(cmd, currect_state_index, warn_unknown, &mut actuators);
             }
         }
     }
@@ -102,6 +103,7 @@ where
         &self,
         cmd: Command<ActuatorName>,
         currect_state_index: Option<usize>,
+        warn_unknown: bool,
         actuators: &mut BTreeMap<ActuatorName, Box<dyn Settable + Send>>,
     ) {
         let Command {
@@ -114,7 +116,9 @@ where
             return;
         }
         if !self.allowed_actuators.contains(&actuator) {
-            tracing::warn!("received command for unconfigured actuator");
+            if warn_unknown {
+                tracing::warn!("received command for unconfigured actuator");
+            }
             return;
         }
         let Some(settable) = actuators.get_mut(&actuator) else {
