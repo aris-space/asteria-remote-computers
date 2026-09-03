@@ -85,9 +85,13 @@ pub enum StateLogicConfig<Gnc: CompatGuidanceController> {
         /// Else, only the AV stack boards and recovery board are checked.
         check_pss_boards: bool,
         /// If `true`, include checks for the separation, as is usual during a flight.
-        /// Else, only the only the deployment and steering are checked in the recovery board
+        /// If neither this nor `check_main_chute` is set, the recovery board is not checked at all.
         #[serde(default = "yes")]
         check_separation: bool,
+        /// If `true`, include checks for recovery deployment and steering.
+        /// If neither this nor `check_separation` is set, the recovery board is not checked at all.
+        #[serde(default = "yes")]
+        check_main_chute: bool,
         /// If the diagnostics succeed, we will transition to the state with the name of `on_tests_pass`.
         on_tests_pass: String,
         /// If the diagnostics fail, we will transition to the state with the name of `on_tests_fail`.
@@ -310,12 +314,14 @@ impl<Gnc: CompatGuidanceController> MakeState for StateLogicConfig<Gnc> {
                 outdated_threshold_sec,
                 check_pss_boards,
                 check_separation,
+                check_main_chute,
                 on_tests_pass,
                 on_tests_fail,
             } => state_logic::Diagnostics {
                 outdated_threshold: Duration::from_secs_f64(outdated_threshold_sec),
                 check_pss_boards,
                 check_separation,
+                check_main_chute,
                 on_tests_pass: StateName::try_new(&on_tests_pass, names)?,
                 on_tests_fail: StateName::try_new(&on_tests_fail, names)?,
             }
