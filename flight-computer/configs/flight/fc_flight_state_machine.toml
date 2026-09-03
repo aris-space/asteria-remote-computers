@@ -121,6 +121,8 @@ on_tests_pass = "Takeover"
 on_tests_fail = "Boards Unhealthy"
 outdated_threshold_sec = 5
 check_pss_boards = true
+check_separation = true
+check_main_chute = true
 
 # This abort state requires the operator to acknowledge that some boards are unhealthy.
 [state_machine.states."Boards Unhealthy"]
