@@ -76,6 +76,7 @@ type = "Waiting"
 manual_transitions = [
     "System Idle",
     "Rocket Diagnostics",
+    "Takeover",                              # Skip diagnostics
     { target = "Safe Abort", abort = true },
 ]
 
