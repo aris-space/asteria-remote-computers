@@ -206,11 +206,11 @@ void updateDiscreteInputs() {
     }
 }
 
-// Pressure: 4–20 mA via 453 Ω resistor → 1.812–9.060 V → 0–100 barg
+// Pressure: 4–20 mA via 453 Ω resistor → 1.812–9.060 V → 0–40 barg
 // Controllino analog inputs: 0–10 V maps to ADC 0–1023
 const float PRESSURE_V_ZERO  = 1.812f;  // 4 mA × 453 Ω
 const float PRESSURE_V_SPAN  = 7.248f;  // 16 mA × 453 Ω
-const float PRESSURE_MAX_BAR = 100.0f;
+const float PRESSURE_MAX_BAR = 40.0f;
 
 // Encode a float as two holding registers: high word at baseAddr, low word at baseAddr+1.
 // Matches the big-endian decoding in driver.rs: f32::from_bits((hi << 16) | lo)
