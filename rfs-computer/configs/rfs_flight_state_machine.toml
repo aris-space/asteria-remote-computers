@@ -402,6 +402,7 @@ allowed_actuators = [
     "n2_dec_ext",
     "n2_dec_ret",
     "n2_shw_vlv",
+    "eng_prg_vlv",
     "h2_ign_vlv",
     "gox_ign_vlv",
     "ign_spk_plg",
