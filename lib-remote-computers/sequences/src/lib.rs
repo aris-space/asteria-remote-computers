@@ -147,7 +147,9 @@ where
                     return ControlFlow::Continue(());
                 };
                 tracing::info!(
-                    "Command {i}: Watching pressure sensor {name:?} in range [{min}, {max}]"
+                    "Command {i}: Watching pressure sensor {name:?} in range [{}, {}]",
+                    BarG(*min),
+                    BarG(*max)
                 );
                 pressure_watcher.add_watcher(
                     name.clone(),
@@ -179,7 +181,9 @@ where
                     return ControlFlow::Continue(());
                 };
                 tracing::info!(
-                    "Command {i}: Watching temperature sensor {name:?} in range [{min}, {max}]"
+                    "Command {i}: Watching temperature sensor {name:?} in range [{}, {}]",
+                    Celsius(*min),
+                    Celsius(*max)
                 );
                 temperature_watcher.add_watcher(
                     name.clone(),
@@ -220,11 +224,19 @@ where
                     return ControlFlow::Continue(());
                 };
                 tracing::info!(
-                    "Command {i}: Detecting pressure sensor {name:?} {} {value}",
-                    if *rising { "rising to" } else { "falling to" }
+                    "Command {i}: Detecting pressure sensor {name:?} {} {}",
+                    if *rising { "rising to" } else { "falling to" },
+                    BarG(*value)
                 );
-                let mut detector =
-                    SensorDetector::new(sensor, *value, *rising, abort_state, *patience, *duration);
+                let mut detector = SensorDetector::new(
+                    name,
+                    sensor,
+                    *value,
+                    *rising,
+                    abort_state,
+                    *patience,
+                    *duration,
+                );
                 tokio::select! {
                     biased;
                     state = pressure_watcher.watch() => return ControlFlow::Break(state),
@@ -251,11 +263,19 @@ where
                     return ControlFlow::Continue(());
                 };
                 tracing::info!(
-                    "Command {i}: Detecting temperature sensor {name:?} {} {value}",
-                    if *rising { "rising to" } else { "falling to" }
+                    "Command {i}: Detecting temperature sensor {name:?} {} {}",
+                    if *rising { "rising to" } else { "falling to" },
+                    Celsius(*value)
                 );
-                let mut detector =
-                    SensorDetector::new(sensor, *value, *rising, abort_state, *patience, *duration);
+                let mut detector = SensorDetector::new(
+                    name,
+                    sensor,
+                    *value,
+                    *rising,
+                    abort_state,
+                    *patience,
+                    *duration,
+                );
                 tokio::select! {
                     biased;
                     state = pressure_watcher.watch() => return ControlFlow::Break(state),

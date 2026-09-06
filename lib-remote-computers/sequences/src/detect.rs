@@ -5,6 +5,7 @@ use lib_mission::{
     state_machine::StateName,
 };
 use std::{
+    fmt::Debug,
     ops::ControlFlow,
     time::{Duration, Instant},
 };
@@ -23,7 +24,9 @@ enum DetectorState {
     Finished,
 }
 
-pub struct SensorDetector<'a, T: ValueWithUnit<f32>> {
+pub struct SensorDetector<'a, S: Debug, T: ValueWithUnit<f32>> {
+    /// Name of the sensor.
+    name: &'a S,
     /// Watcher of the underlying sensor.
     watcher: WatchedWatchable<T>,
     /// Threshold above/below we trigger detection.
@@ -40,8 +43,9 @@ pub struct SensorDetector<'a, T: ValueWithUnit<f32>> {
     state: DetectorState,
 }
 
-impl<'a, T: Send + Sync + Clone + ValueWithUnit<f32>> SensorDetector<'a, T> {
+impl<'a, S: Debug, T: Send + Sync + Clone + ValueWithUnit<f32>> SensorDetector<'a, S, T> {
     pub fn new(
+        name: &'a S,
         watchable: &Watchable<T>,
         value: f32,
         rising: bool,
@@ -50,6 +54,7 @@ impl<'a, T: Send + Sync + Clone + ValueWithUnit<f32>> SensorDetector<'a, T> {
         duration: Option<Duration>,
     ) -> Self {
         Self {
+            name,
             watcher: watchable.watched(),
             threshold: value,
             rising,
@@ -87,7 +92,21 @@ impl<'a, T: Send + Sync + Clone + ValueWithUnit<f32>> SensorDetector<'a, T> {
                     .checked_duration_since(Instant::now())
                     .unwrap_or(Duration::ZERO),
                 // The detector previously aborted; we simply abort "again".
-                DetectorState::Aborted(state) => return ControlFlow::Break(state.clone()),
+                DetectorState::Aborted(state) => {
+                    tracing::error!(
+                        "detector for sensor {:?} aborted; the detection condition of {} {}{} was not {}; transitioning into {state}",
+                        self.name,
+                        self.threshold,
+                        T::UNIT,
+                        if self.rising { "above" } else { "below" },
+                        if self.duration.is_some() {
+                            "fulfilled long enough"
+                        } else {
+                            "fulfilled"
+                        }
+                    );
+                    return ControlFlow::Break(state.clone());
+                }
                 // The detector previously finished; we simply finish "again".
                 DetectorState::Finished => return ControlFlow::Continue(()),
             };
@@ -155,7 +174,8 @@ mod tests {
     async fn test_abort() {
         let sensor = Watchable::<Celsius>::default();
         let abort_state = StateName::new_unchecked("asdf").expect("state name should be valid");
-        let mut detector = SensorDetector::<Celsius>::new(
+        let mut detector = SensorDetector::<&'static str, Celsius>::new(
+            &"sensor",
             &sensor,
             10.0,
             true,
@@ -172,7 +192,8 @@ mod tests {
     async fn test_finished_immediately() {
         let sensor = Watchable::<Celsius>::default();
         let abort_state = StateName::new_unchecked("asdf").expect("state name should be valid");
-        let mut detector = SensorDetector::<Celsius>::new(
+        let mut detector = SensorDetector::<&'static str, Celsius>::new(
+            &"sensor",
             &sensor,
             10.0,
             true,
@@ -202,7 +223,8 @@ mod tests {
     async fn test_finished_with_duration() {
         let sensor = Watchable::<Celsius>::default();
         let abort_state = StateName::new_unchecked("asdf").expect("state name should be valid");
-        let mut detector = SensorDetector::<Celsius>::new(
+        let mut detector = SensorDetector::<&'static str, Celsius>::new(
+            &"sensor",
             &sensor,
             10.0,
             true,
@@ -235,7 +257,8 @@ mod tests {
     async fn test_abort_during_hold() {
         let sensor = Watchable::<Celsius>::default();
         let abort_state = StateName::new_unchecked("asdf").expect("state name should be valid");
-        let mut detector = SensorDetector::<Celsius>::new(
+        let mut detector = SensorDetector::<&'static str, Celsius>::new(
+            &"sensor",
             &sensor,
             10.0,
             true,
@@ -259,7 +282,8 @@ mod tests {
     async fn test_abort_after_hold_violation() {
         let sensor = Watchable::<Celsius>::default();
         let abort_state = StateName::new_unchecked("asdf").expect("state name should be valid");
-        let mut detector = SensorDetector::<Celsius>::new(
+        let mut detector = SensorDetector::<&'static str, Celsius>::new(
+            &"sensor",
             &sensor,
             10.0,
             true,
