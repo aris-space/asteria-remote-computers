@@ -357,14 +357,20 @@ oss_tnk_vnt.close();
 # Purge lox main line for 5 sec
 sys.wait(time=5s);
 
-# Open OSS vent, close OSS main, open lox fill valve to 100%
-oss_tnk_vnt.open();
+# Close main again, open bleed
 oss_ml_vlv.close();
+lox_bld_vlv.open();
+# Purge through bleed for 5 sec
+sys.wait(time=5s);
+
+# Close lox bleed, open lox fill valve to 100%
+lox_bld_vlv.close();
 lox_fll_vlv.open();
 # Purge dewar flex pipe for 5 sec
 sys.wait(time=5s);
 
 # Reset back to normal
+oss_tnk_vnt.open();
 lox_prg_vlv.close();
 lox_fll_vlv.close();
 """
