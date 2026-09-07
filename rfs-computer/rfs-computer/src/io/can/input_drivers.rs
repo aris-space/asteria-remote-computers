@@ -1,5 +1,6 @@
 //! CAN consumers that react to received messages.
 
+use controllino::driver::CoilSettable;
 use datatypes::actuator::{DigitalOut, NormallyClosedValve};
 use datatypes::status::ArmingState;
 use lib_mission::can::ConsumerRegistry;
@@ -74,6 +75,41 @@ pub fn spawn_and_register_igniter_control(
             tracing::warn!("Shutting down");
         }
         .instrument(tracing::info_span!("drivers::IgniterControl")),
+    )
+    .abort_handle()
+}
+
+/// Always allow engine purge control from the FC, even after the igniter might be off
+pub fn spawn_and_register_purge_control(
+    registry: &mut ConsumerRegistry<InputTree>,
+    engine_purge: CoilSettable<NormallyClosedValve>,
+) -> AbortHandle {
+    use dp_rfs_computer::__message_meta_can_ids as ids;
+
+    let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
+    if registry
+        .register(ids::N2RocketPurgeValveControl, tx.clone())
+        .is_err()
+    {
+        tracing::error!("kicking out other consumer for engine purge control");
+    }
+
+    tokio::spawn(
+        async move {
+            while let Some(msg) = rx.recv().await {
+                if let messages::Message::RfsComputer(RfsMessage::N2RocketPurgeValveControl(
+                    target,
+                )) = msg
+                {
+                    tracing::debug!("setting eng_prg_vlv to {target:?}");
+                    engine_purge.set(target);
+                } else {
+                    tracing::warn!(?msg, "received unsubscribed message");
+                }
+            }
+            tracing::warn!("Shutting down");
+        }
+        .instrument(tracing::info_span!("drivers::EnginePurge")),
     )
     .abort_handle()
 }

@@ -59,6 +59,13 @@ pub fn init_can_drivers(
         actuators.h2_purge_valve.clone(),
         actuators.igniter_spark.clone(),
     ));
+    output_handles.push(input_drivers::spawn_and_register_purge_control(
+        &mut consumers,
+        output_tree
+            .controllino_actuators
+            .n2_engine_purge_valve
+            .clone(),
+    ));
 
     // Spawn the receiving thread
     std::thread::spawn(move || {
@@ -141,6 +148,17 @@ fn init_output_drivers(
                 .rocket_connection_detect
                 .clone(),
             input_tree.uremote_actuators.h2_purge_valve.watched(),
+            tx.clone(),
+        ),
+        output_drivers::spawn_engine_purge_valve_state_driver(
+            input_tree
+                .controllino_sensors
+                .rocket_connection_detect
+                .clone(),
+            input_tree
+                .controllino_valves
+                .n2_engine_purge_valve
+                .watched(),
             tx.clone(),
         ),
         output_drivers::spawn_igniter_spark_plug_state_driver(
