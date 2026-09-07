@@ -76,6 +76,8 @@ pub enum StateLogicConfig<Gnc: CompatGuidanceController> {
         telemetry_loss_threshold_sec: f32,
         /// The state to transition to when a sensor violation occured.
         on_violation: String,
+        /// The state to transition to when telemetry has been lost.
+        on_telemetry_loss: String,
     },
     /// Describes a [`state_logic::Diagnostics`].
     Diagnostics {
@@ -264,6 +266,8 @@ pub enum StateLogicConfig<Gnc: CompatGuidanceController> {
         telemetry_loss_threshold_sec: f32,
         /// The state to transition to when a sensor or telemetry violation occured.
         on_violation: String,
+        /// The state to transition to when telemetry has been lost.
+        on_telemetry_loss: String,
     },
     RunSequence {
         /// The sequence to run.
@@ -301,6 +305,7 @@ impl<Gnc: CompatGuidanceController> MakeState for StateLogicConfig<Gnc> {
                 thresholds,
                 telemetry_loss_threshold_sec,
                 on_violation,
+                on_telemetry_loss,
             } => state_logic::MonitoredWaiting {
                 manual_transitions,
                 thresholds,
@@ -308,6 +313,7 @@ impl<Gnc: CompatGuidanceController> MakeState for StateLogicConfig<Gnc> {
                     telemetry_loss_threshold_sec,
                 ),
                 on_violation: StateName::try_new(&on_violation, names)?,
+                on_telemetry_loss: StateName::try_new(&on_telemetry_loss, names)?,
             }
             .into_box(),
             StateLogicConfig::Diagnostics {
@@ -548,6 +554,7 @@ impl<Gnc: CompatGuidanceController> MakeState for StateLogicConfig<Gnc> {
                 thresholds,
                 telemetry_loss_threshold_sec,
                 on_violation,
+                on_telemetry_loss,
             } => state_logic::MonitoredManualControl {
                 manual_transitions,
                 actuator_control: ActuatorControl::from_strings(
@@ -559,6 +566,7 @@ impl<Gnc: CompatGuidanceController> MakeState for StateLogicConfig<Gnc> {
                 ),
                 thresholds,
                 on_violation: StateName::try_new(&on_violation, names)?,
+                on_telemetry_loss: StateName::try_new(&on_telemetry_loss, names)?,
             }
             .into_box(),
             Self::RunSequence {

@@ -23,6 +23,8 @@ pub struct MonitoredManualControl {
     pub thresholds: ThresholdWatcher,
     /// The state to transition to when a threshold has been violated.
     pub on_violation: StateName,
+    /// The state to transition to when telemetry has been lost.
+    pub on_telemetry_loss: StateName,
 }
 
 #[async_trait::async_trait]
@@ -60,7 +62,7 @@ impl StateLogic for MonitoredManualControl {
             }
             _ = await_telemetry_loss(&input.telemetry_health, &input.time, self.telemetry_loss_threshold) => {
                 tracing::warn!("telemetry loss detected");
-                self.on_violation.clone()
+                self.on_telemetry_loss.clone()
             }
             _ = actuator_future => unreachable!("act cannot return normally"),
         }
