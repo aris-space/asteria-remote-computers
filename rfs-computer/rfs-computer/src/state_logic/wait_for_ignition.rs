@@ -1,26 +1,20 @@
-use crate::io::output::ActuatorName;
 use datatypes::actuator::DigitalOut;
-use datatypes::actuator::NormallyOpenValve;
 use datatypes::sensor::DigitalIn;
 use datatypes::status::ArmingState;
-use lib_mission::actuator_control::ActuatorStore as _;
-use lib_mission::actuator_control::command::{ActuatorControl, NeverReturns};
 use lib_mission::reactive::{IntoWatched, WatchedExt as _};
 use lib_mission::state_machine::{AdditionalState, StateLogic, StateName};
 use lib_mission::transition::ManualTransitions;
 
 /// This state enables the FC to start ignition if the FC and RFS are ready.
 /// Once it happens, it transitions to `on_ignition`. Otherwise to `on_not_ready` or any manual transition.
-/// Note that after this a [`super::DisarmIgniter`] state should occur soon, to reset the software arming state.
 ///
-/// This is used to disallow the FC to control the igniter and stop it should it already have started ignition.
-/// While waiting for ignition this state also allows manual control. This is used to start purging manually before ignition.
+/// Note that after this a [`super::DisarmIgniter`] state should occur soon, to reset the software arming state.
+/// That is used to disallow the FC to control the igniter and stop it should it already have started ignition.
 #[derive(Debug)]
 pub struct WaitForIgnition {
     pub on_ignition: StateName,
     pub on_not_ready: StateName,
     pub manual_transitions: ManualTransitions,
-    pub actuator_control: ActuatorControl<ActuatorName>,
 }
 
 #[async_trait::async_trait]
@@ -33,7 +27,7 @@ impl StateLogic for WaitForIgnition {
     async fn run(
         &self,
         input: &Self::Input,
-        output: &Self::Output,
+        _output: &Self::Output,
         param: &AdditionalState<Self::Parameter>,
     ) -> StateName {
         let fc_status = input.rocket_health.flight_computer.get();
@@ -57,23 +51,6 @@ impl StateLogic for WaitForIgnition {
             .rfs_computer_status
             .write()
             .is_ignition_armed = ArmingState::Armed;
-        output
-            .rfs_actuators
-            .h2_bleed_valve
-            .replace(NormallyOpenValve::Closed);
-        output
-            .rfs_actuators
-            .gox_bleed_valve
-            .replace(NormallyOpenValve::Closed);
-
-        // Prepares a background task to listen for (and act upon) manual actuator inputs.
-        let actuator_future = self.actuator_control.act(
-            // really ugly, also u32 does not make sense if we can use usize (imo)
-            param.current_state().1 as usize,
-            &input.actuator_command,
-            output.as_settables(),
-        );
-        assert_future::<NeverReturns>(&actuator_future);
 
         let mut spark_plug_watcher = input.uremote_actuators.igniter_spark.watched();
         let mut fc_watcher = input.rocket_health.flight_computer.watched();
@@ -93,10 +70,6 @@ impl StateLogic for WaitForIgnition {
                 self.on_not_ready.clone()
             },
             next_state = self.manual_transitions.next(input, param) => next_state,
-            _ = actuator_future => unreachable!("act cannot return normally"),
         }
     }
 }
-
-/// Just a helper function to ensure the futures we're using have the right type
-fn assert_future<T>(_future: &impl Future<Output = T>) {}
