@@ -1,16 +1,16 @@
 use lib_mission::state_machine::{AdditionalState, StateLogic, StateName};
 
-/// This state sets all RFS and PSS valves to normal(*) position.
+/// This state sets all RFS (and PSS if enabled) valves to normal(*) position.
 /// Then proceeds to the `on_done` state.
 ///
 /// (*) Normal state affects only valves, the decouplers are decouplers deliberatly skipped.
-/// Additionally, the throttable valves are closed (which they wouldn't do on power loss, but it is their initial state)
-/// and the rockets OSS vent valve is opened despite its normally closed state.
+/// Additionally, the throttable valves are closed (which they wouldn't do on power loss, but it is their initial state).
 ///
 /// This is used in various places to restore a known state.
 #[derive(Debug)]
 pub struct SetNormalState {
     pub on_done: StateName,
+    pub include_pss: bool,
 }
 
 #[async_trait::async_trait]
@@ -79,19 +79,21 @@ impl StateLogic for SetNormalState {
         n2_engine_purge_valve.set(Default::default());
 
         // PSS
-        output.pss_valves.set_oxidizer_vent(Default::default());
-        output
-            .pss_valves
-            .set_pressurization_vent(Default::default());
-        output
-            .pss_valves
-            .set_fuel_pressurization(Default::default());
-        output.pss_valves.set_fuel_vent(Default::default());
-        output
-            .pss_valves
-            .set_oxidizer_pressurization(Default::default());
-        output.pss_valves.set_fuel_main(Default::default());
-        output.pss_valves.set_oxidizer_main(Default::default());
+        if self.include_pss {
+            output.pss_valves.set_oxidizer_vent(Default::default());
+            output
+                .pss_valves
+                .set_pressurization_vent(Default::default());
+            output
+                .pss_valves
+                .set_fuel_pressurization(Default::default());
+            output.pss_valves.set_fuel_vent(Default::default());
+            output
+                .pss_valves
+                .set_oxidizer_pressurization(Default::default());
+            output.pss_valves.set_fuel_main(Default::default());
+            output.pss_valves.set_oxidizer_main(Default::default());
+        }
         self.on_done.clone()
     }
 }

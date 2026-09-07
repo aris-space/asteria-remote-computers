@@ -185,6 +185,8 @@ pub enum StateLogicConfig {
     SetNormalState {
         /// The name of the state which to proceed to after completing setting all valves.
         on_done: String,
+        /// If true, also attempt to set rocket valves to normal. Else they won't be touched.
+        include_pss: bool,
     },
     /// Describes a [`state_logic::RunSequence`].
     RunSequence {
@@ -301,8 +303,12 @@ impl MakeState for StateLogicConfig {
                 on_done: StateName::try_new(&on_done, names)?,
             }
             .into_box(),
-            StateLogicConfig::SetNormalState { on_done } => state_logic::SetNormalState {
+            StateLogicConfig::SetNormalState {
+                on_done,
+                include_pss,
+            } => state_logic::SetNormalState {
                 on_done: StateName::try_new(&on_done, names)?,
+                include_pss,
             }
             .into_box(),
             StateLogicConfig::RunSequence {
