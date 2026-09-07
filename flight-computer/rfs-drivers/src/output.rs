@@ -34,6 +34,8 @@ pub enum ActuatorName {
     gox_prg_vlv,
     /// The name for [`crate::input::Actuators::h2_purge_valve`].
     h2_prg_vlv,
+    /// The name for [`crate::input::Actuators::n2_engine_purge_valve`].
+    eng_prg_vlv,
 }
 
 impl std::str::FromStr for ActuatorName {
@@ -90,6 +92,14 @@ impl ActuatorStore<ActuatorName> for ActuatorChannel {
             ActuatorName::gox_prg_vlv,
             make_setter(self.tx.clone(), move |s: NormallyClosedValve| {
                 messages::Message::RfsComputer(dp_rfs_computer::Message::GoxIgniterPurgeControl(s))
+            }),
+        );
+        map.insert(
+            ActuatorName::eng_prg_vlv,
+            make_setter(self.tx.clone(), move |s: NormallyClosedValve| {
+                messages::Message::RfsComputer(dp_rfs_computer::Message::N2RocketPurgeValveControl(
+                    s,
+                ))
             }),
         );
 
