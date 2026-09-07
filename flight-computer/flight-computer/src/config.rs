@@ -217,16 +217,6 @@ pub enum StateLogicConfig<Gnc: CompatGuidanceController> {
         /// The name of the state which to proceed to after a timeout.
         on_timeout: String,
     },
-    /// Describes a [`state_logic::Ignition`].
-    Ignition {
-        /// The name of the state which to proceed to after sending the ignition signal.
-        on_done: String,
-    },
-    /// Describes a [`state_logic::AbortIgnition`].
-    AbortIgnition {
-        /// The name of the state which to proceed to after sending the abort signal.
-        on_done: String,
-    },
     LiftoffDetection {
         /// If the acceleration limit in -z direction is reached, we detect liftoff and proceed to the `on_liftoff_detected` state
         acceleration_limit_ms2: f32,
@@ -506,14 +496,6 @@ impl<Gnc: CompatGuidanceController> MakeState for StateLogicConfig<Gnc> {
                 manual_transitions,
                 rfs_can_timeout: Duration::from_secs_f32(rfs_can_timeout_sec),
                 on_timeout: StateName::try_new(&on_timeout, names)?,
-            }
-            .into_box(),
-            StateLogicConfig::Ignition { on_done } => state_logic::Ignition {
-                on_done: StateName::try_new(&on_done, names)?,
-            }
-            .into_box(),
-            StateLogicConfig::AbortIgnition { on_done } => state_logic::AbortIgnition {
-                on_done: StateName::try_new(&on_done, names)?,
             }
             .into_box(),
             StateLogicConfig::LiftoffDetection {

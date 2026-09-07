@@ -289,17 +289,21 @@ manual_transitions = [
 
 # ======================================= Ignition =======================================
 
-# This state shows that the firing has been aborted. Either by the ECU or manually.
-[state_machine.states."Firing Aborted"]
+# This state runs if the firing sequence or a manual input aborted
+[state_machine.states."Firing Abort"]
+type = "RunSequence"
+on_completed = "Firing Abort 2"
+sequence = """
+# TODO!
+"""
+manual_transitions = [
+    { target = "Manual Safeing" },
+]
+[state_machine.states."Firing Abort 2"]
 type = "Waiting"
 manual_transitions = [
-    { target = "Manual Safeing", abort = true },
+    { target = "Manual Safeing" },
 ]
-
-# This state tells the ECU to abort the firing sequence before liftoff
-[state_machine.states."Abort Firing"]
-type = "AbortIgnition"
-on_done = "Firing Aborted"
 
 # This instantaneous state ensures that the RFS is armed for ignition
 [state_machine.states."Ignition Initiation"]
@@ -309,16 +313,19 @@ on_not_armed = "Auto-Disarmed"
 
 # The state sends the engine start signal and waits for liftoff
 [state_machine.states."Ignition"]
-type = "Ignition"
-on_done = "Ignition 2"
+type = "RunSequence"
+on_completed = "Ignition 2"
+sequence = """
+# TODO!
+"""
 [state_machine.states."Ignition 2"]
 type = "LiftoffDetection"
 acceleration_limit_ms2 = 20 # m/s^2
 required_duration_s = 0.2 # seconds
 on_liftoff_detected = "Thrusting"
-on_aborted = "Firing Aborted"
+on_aborted = "Firing Abort"
 manual_transitions = [
-    { target = "Abort Firing", abort = true },
+    { target = "Firing Abort", abort = true },
     { target = "Thrusting" },
 ]
 
@@ -326,8 +333,11 @@ manual_transitions = [
 
 # This state tells the ECU to abort the firing sequence while in the air
 [state_machine.states."Flight Abort"]
-type = "AbortIgnition"
-on_done = "Coasting"
+type = "RunSequence"
+sequence = """
+# TODO
+"""
+on_completed = "Coasting"
 
 # During this state the engine is running, launching us upwards
 [state_machine.states."Thrusting"]
