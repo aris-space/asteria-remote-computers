@@ -277,14 +277,25 @@ manual_transitions = [{ target = "Pressurized" }]
 # ======================================= Ignition =======================================
 
 # This state runs if the firing sequence or a manual input aborted
+# Sets PSS normal state and igniter off, with purging on.
 [state_machine.states."Firing Abort"]
+type = "SetNormalState"
+on_done = "Firing Abort 2"
+[state_machine.states."Firing Abort 2"]
 type = "RunSequence"
-on_completed = "Firing Abort 2"
+on_completed = "Firing Abort 3"
 sequence = """
-# TODO!
+# Igniter off
+h2_ign_vlv.close();
+gox_ign_vlv.close();
+ign_spk_plg.close();
+# Purge on
+gox_prg_vlv.open();
+h2_prg_vlv.open();
+eng_prg_vlv.open();
 """
 manual_transitions = [{ target = "Manual Safeing" }]
-[state_machine.states."Firing Abort 2"]
+[state_machine.states."Firing Abort 3"]
 type = "Waiting"
 manual_transitions = [{ target = "Manual Safeing" }]
 
