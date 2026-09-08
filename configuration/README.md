@@ -24,7 +24,7 @@ There are two steps:
 
 2. build the pdf.
     ```sh
-    docker run -v .:/workspace --rm ghcr.io/typst/typst:latest compile --input metadata-file=out/data.json /workspace/configuration/validation_file_template.typ /workspace/configuration/out/validation_file.pdf
+    docker run -v .:/workspace --rm ghcr.io/typst/typst:latest compile --root /workspace --input metadata-file=out/data.json /workspace/configuration/validation_file_template.typ /workspace/configuration/out/validation_file.pdf
     ```
 
 Outputs go to `configuration/out/` which is gitignored.
