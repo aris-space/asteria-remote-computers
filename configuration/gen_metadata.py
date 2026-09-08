@@ -10,6 +10,7 @@ import sys
 import difflib
 import subprocess
 import json
+import tomllib
 from pathlib import Path
 
 
@@ -111,6 +112,13 @@ def annotate_diff(config_lines: list[str], base_lines: list[str]) -> list[str]:
     return result
 
 
+def diagram_path(config_path: Path) -> str | None:
+    """Read state_machine.diagram_path from the config (relative to repo root, as-is)."""
+    with config_path.open("rb") as f:
+        config = tomllib.load(f)
+    return config.get("state_machine", {}).get("diagram_path")
+
+
 def main():
     if len(sys.argv) != 4:
         print(f"Usage: {sys.argv[0]} <config_path> <base_config_path> <binary_commit>")
@@ -137,6 +145,7 @@ def main():
 
     repo_root = git_repo_root(cwd)
     gnc_info = git_submodule_info(repo_root / "flight-computer" / "asteria-gnc")
+    diagram = diagram_path(config_path)
 
     data = {
         "binary": {
@@ -150,6 +159,7 @@ def main():
             "hash": object_hash(config_path),
             "branch": config_info["branch"],
             "last_change": config_info["last_change"],
+            "diagram_path": diagram,
         },
         "gnc": {
             "commit": gnc_info["commit"],
