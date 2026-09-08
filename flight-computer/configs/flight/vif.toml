@@ -310,7 +310,73 @@ on_not_armed = "Auto-Disarmed"
 type = "RunSequence"
 on_completed = "Purging"
 sequence = """
-# TODO!
+# Pre-Conditions:
+# Vent Valves Closed, Tanks Pressurized to IGN Setpoint
+# Rocket Purge Open, Igniter Purge Open
+
+# Abort Thresholds
+# FIXME!!: eng_cc_p.watch(max=35);
+
+# Make sure DPRs are set correctly
+prz_fss_dpr.activate(17.01);
+prz_oss_dpr.activate(19.27);
+
+# Stop Igniter Purge
+h2_prg_vlv.close();
+gox_prg_vlv.close();
+
+# Start Igniter
+ign_spk_plg.open();
+sys.wait(time=1.5s);
+
+gox_ign_vlv.open();
+sys.wait(time=0.5s);
+
+h2_ign_vlv.open();
+
+# Verify Igniter Running
+# FIXME!!: ign_cc_p.detect(4.5, rising=true, abort='Firing Abort', patience=3s);
+
+# Make sure igniter fires stable
+# FIXME!!: ign_cc_p.watch(min=4.0, abort='Firing Abort', key=ign_sustain);
+
+# Stop Rocket Purge
+eng_prg_vlv.close();
+
+# Initiate Main Flow
+oss_ml_vlv.open();
+sys.wait(time=0.3s);
+fss_ml_vlv.open();
+
+# Initiate Early ramp up to NOM Setpoint
+prz_fss_dpr.activate(31.41);
+prz_oss_dpr.activate(34.64);
+
+# Wait for stable combustion
+# FIXME!!: eng_cc_p.detect(6.5, rising=true, abort='Firing Abort', patience=1s);
+
+# Ignore Igniter
+# FIXME!!: ign_cc_p.ignore(key=ign_sustain);
+
+# NOM thrust firing duration
+sys.wait(time=3s);
+
+# Shutdown fuel rich
+oss_ml_vlv.close();
+
+sys.wait(time=0.3s);
+fss_ml_vlv.close();
+
+prz_oss_dpr.deactivate();
+prz_fss_dpr.deactivate();
+
+fss_tnk_vnt.open();
+oss_tnk_vnt.open();
+
+# Post Conditions:
+# Tanks depressurized, DPRs closed
+# Rocket Purge will be initiated from next state (purging)
+# Igniter Purge is initiated from igniter shutdown from rfs
 """
 manual_transitions = [{ target = "Firing Abort", abort = true }]
 

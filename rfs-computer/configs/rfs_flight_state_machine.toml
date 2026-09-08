@@ -150,7 +150,7 @@ sys.wait(time=0.5s);
 h2_ign_vlv.open();
 
 # Detect firing
-ign_cc_p.detect(value=4.5, rising=true, abort='Abort Ign Test', patience=1s);
+ign_cc_p.detect(value=4.5, rising=true, abort='Abort Ign Test', patience=3s);
 
 # Sustain firing, abort if pressure becomes too low
 ign_cc_p.watch(min=4, abort='Abort Ign Test', key=sustain);
@@ -503,7 +503,7 @@ sys.wait(time=0.4s);
 n2_fll_vlv.open();
 
 # Detect proper opening of the post-booster line
-n2_post_bst_p.detect(value=100, rising=true, abort='Filling', patience=5s);
+n2_post_bst_p.detect(value=100, rising=true, abort='Filling', patience=10s);
 
 # Then open booster valve
 n2_bst_vlv.open();
