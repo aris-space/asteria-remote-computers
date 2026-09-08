@@ -23,6 +23,7 @@ use lib_mission::state_machine::StateName;
 use lib_mission::util::time::MissionTime;
 use lib_mission::{actuator_control, transition};
 use messages::datapoints;
+use messages::datapoints::dp_backplane::__message_meta_types::ActivePowerSource;
 use messages::datapoints::dp_flight_computer::__message_meta_types::ManualStateTransition;
 use messages::datapoints::dp_sensor_carrier::MagnetometerData;
 use messages::Message;
@@ -49,6 +50,10 @@ pub struct RawUnprocessedData {
     #[datapoint(pattern = "Message::Backplane(BPMessage::RailStatus5V(#value))")]
     #[broadcast(min_freq_hz = 0.5, max_freq_hz = 2.)]
     pub rail_status_5v: Watchable<RailStatus>,
+    /// The power source which is currently active.
+    #[datapoint(pattern = "Message::Backplane(BPMessage::ActivePowerSource(#value))")]
+    #[broadcast(min_freq_hz = 0.5, max_freq_hz = 2.0)]
+    pub active_power_source: Watchable<ActivePowerSource>,
 }
 
 /// Holds all information we gather from the rest of the rocket and environment.

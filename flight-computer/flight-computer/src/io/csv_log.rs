@@ -49,6 +49,7 @@ impl InputTree {
             environmental_data,
             rail_status_24v,
             rail_status_5v,
+            active_power_source,
         } = raw_unprocessed_data;
 
         // Log real time to "timeseries-realtime.csv" with headers "timestamp [unix ms]", "real time [unix ms]".
@@ -372,6 +373,11 @@ impl InputTree {
             environmental_data
                 .watched()
                 .map(|v| (v.temperature, v.humidity, v.pressure)),
+            time.watched(),
+        );
+        spawn_watchable_logger(
+            make_timeseries_writer(folder, "active_power_source", &["active power source"]).await?,
+            active_power_source.watched(),
             time.watched(),
         );
         pss_valves.start_logging(folder, time).await?;
