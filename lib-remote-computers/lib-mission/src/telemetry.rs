@@ -124,26 +124,41 @@ fn read_uplink_once(
     expected_seq: &mut Wrapping<u8>,
     processor: impl FnOnce(Message) -> bool,
 ) {
+    /// Only track uplink data from the mission control (with ID 222).
+    const MISSION_CONTROL_SYS_ID: u8 = 222;
+
     // blockingly receive a frame
     let received = mavlink_hal::transport::recv_message::<Message>(reader);
 
     let time = clock.current().as_instant_us();
     let (msg, lost) = match received {
-        Ok((msg, sequence)) => {
+        Ok(mavlink_hal::transport::Message {
+            payload: msg,
+            sequence,
+            sending_system_id,
+        }) => {
+            if sending_system_id != MISSION_CONTROL_SYS_ID {
+                return;
+            }
             let lost = u32::from((sequence - *expected_seq).0);
             *expected_seq = sequence + Wrapping(1);
             (msg, lost)
         }
-        Err(mavlink_hal::transport::RecvError::Decode { error, sequence }) => {
+        Err(mavlink_hal::transport::RecvError::Decode {
+            error,
+            sequence,
+            sending_system_id,
+        }) => {
             tracing::warn!(%error, "skipping bad frame");
-            {
+            if sending_system_id == MISSION_CONTROL_SYS_ID {
                 // Critical Section
                 let mut health = telemetry_health.write();
                 health.time_of_last_msg = time;
                 health.num_msg_lost += u32::from((sequence - *expected_seq).0);
                 health.num_msg_received += 1;
+                drop(health);
+                *expected_seq = sequence + Wrapping(1);
             }
-            *expected_seq = sequence + Wrapping(1);
             return;
         }
         Err(e) => {
@@ -250,29 +265,49 @@ where
     }
 }
 
-/// A simple implementor of [`io_utils::BroadcastLoop`] that periodically send the current value.
-/// The period used is the average of min and max.
-// TODO: make a responsive loop
-pub struct PeriodicLoop;
+/// A [`io_utils::BroadcastLoop`] implementation that sends new values as they arrive,
+/// while respecting the minimum and maximum frequencies.
+///
+/// The way this works is by waiting for new data or a timeout based on the minimum frequency.
+/// If the duration since the last sent message is long enough to respect the maximum frequency,
+/// it is sent, otherwise ignored.
+pub struct ResponsiveLoop;
 
-impl io_utils::BroadcastLoop<Message> for PeriodicLoop {
+impl<M: Send + 'static> io_utils::BroadcastLoop<M> for ResponsiveLoop {
     async fn broadcast_loop<T: Send + Sync + 'static + Clone>(
         field: watchable::Watchable<T>,
-        mut map: impl FnMut(T) -> Message + Send + 'static,
-        channel: std::sync::mpsc::Sender<Message>,
+        mut map: impl FnMut(T) -> M + Send + 'static,
+        channel: std::sync::mpsc::Sender<M>,
         min_freq_hz: f32,
         max_freq_hz: f32,
     ) -> io_utils::NeverReturns {
-        let period = Duration::from_secs_f32(f32::midpoint(1. / min_freq_hz, 1. / max_freq_hz));
-        let mut interval = tokio::time::interval(period);
-        interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+        use crate::reactive::{IntoWatched, Watched};
+
+        let throttle_period = Duration::from_secs_f32(1. / max_freq_hz);
+        let resend_period = Duration::from_secs_f32(1. / min_freq_hz);
+
+        let mut watched = (&field).watched();
+        let mut last_sent = tokio::time::Instant::now();
+
         loop {
-            interval.tick().await;
-            let val = map(field.get());
-            if channel.send(val).is_err() {
-                tracing::warn!("Telemetry channel was closed. Slowing down!");
-                tokio::time::sleep(Duration::from_millis(5001)).await;
-                // 5001 such that new clipyy doesn't complain yet
+            let data = match tokio::time::timeout(resend_period, watched.next()).await {
+                Ok(data) => data,
+                Err(_) => field.get(),
+            };
+
+            let now = tokio::time::Instant::now();
+            if now.duration_since(last_sent) >= throttle_period {
+                let msg = map(data);
+                tracing::trace!("Sending data");
+                if channel.send(msg).is_err() {
+                    tracing::warn!("Telemetry channel was closed. Slowing down!");
+                    tokio::time::sleep(Duration::from_millis(5001)).await;
+                    // 5001 such that new clipyy doesn't complain yet
+                } else {
+                    last_sent = now;
+                }
+            } else {
+                tracing::trace!("Discarding data, sent too recently");
             }
         }
     }
@@ -461,7 +496,7 @@ mod tests {
             Some(msg) => {
                 let sender = UdpSocket::bind("127.0.0.1:0").expect("bind sender");
                 sender.connect(receiver_addr).expect("connect sender");
-                let endpoint = Endpoint::v2(MavLinkId::new(200, 1));
+                let endpoint = Endpoint::v2(MavLinkId::new(222, 1));
                 mavlink_hal::transport::send_message(msg, &endpoint, &sender)
                     .expect("send message");
             }
@@ -735,6 +770,61 @@ mod tests {
         assert_eq!(health.time_of_last_processed_msg, InstantUs(0));
     }
 
+    /// Test that messages from a system ID other than 222 are completely ignored —
+    /// no health counters are updated and no command is set.
+    #[test]
+    fn test_read_uplink_once_ignores_non_gcs_system_id() {
+        use std::net::UdpSocket;
+
+        let receiver = UdpSocket::bind("127.0.0.1:0").expect("bind receiver");
+        let receiver_addr = receiver.local_addr().expect("get receiver addr");
+        let sender = UdpSocket::bind("127.0.0.1:0").expect("bind sender");
+        sender.connect(receiver_addr).expect("connect sender");
+
+        // Send from system ID 1 (flight computer itself) — should be ignored.
+        let endpoint = Endpoint::v2(MavLinkId::new(1, 1));
+        let msg =
+            Message::FlightComputer(FCMessage::ManualStateTransition(ManualStateTransition {
+                transition_index: 0,
+                state: *b"Idle\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0",
+            }));
+        mavlink_hal::transport::send_message(&msg, &endpoint, &sender).expect("send message");
+
+        let transition_command = Watchable::new(ManualStateTransition::default());
+        let actuator_command: Watchable<Option<actuator_control::Command<ActuatorName>>> =
+            Watchable::new(None);
+        let telemetry_health = Watchable::new(UplinkTelemetryHealth::default());
+        let clock = Watchable::new(Duration::from_millis(100).into());
+        let states = create_state_names();
+        let this_system = RemoteSystem::FlightComputer;
+        let mut seq = Wrapping(0u8);
+
+        read_uplink_once(
+            &receiver,
+            &telemetry_health,
+            &clock.watched(),
+            &mut seq,
+            |msg| {
+                msg_processor(
+                    &msg,
+                    &transition_command,
+                    &actuator_command,
+                    &states,
+                    this_system,
+                )
+            },
+        );
+
+        let health = telemetry_health.get();
+        // The message must not have been counted at all.
+        assert_eq!(health.num_msg_received, 0);
+        assert_eq!(health.num_msg_processed, 0);
+        assert_eq!(health.num_msg_lost, 0);
+        assert_eq!(transition_command.get(), ManualStateTransition::default());
+        // seq must not have advanced.
+        assert_eq!(seq, Wrapping(0u8));
+    }
+
     /// Test that the lost-message counter handles sequence-number wrap-around correctly.
     ///
     /// Scenario: we last saw sequence 249 (so `expected_seq = 250`).
@@ -750,7 +840,7 @@ mod tests {
         let sender = UdpSocket::bind("127.0.0.1:0").expect("bind sender");
         sender.connect(receiver_addr).expect("connect sender");
 
-        let endpoint = Endpoint::v2(MavLinkId::new(200, 1));
+        let endpoint = Endpoint::v2(MavLinkId::new(222, 1));
         let msg =
             Message::FlightComputer(FCMessage::ManualStateTransition(ManualStateTransition {
                 transition_index: 0,

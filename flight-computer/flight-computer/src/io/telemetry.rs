@@ -1,7 +1,7 @@
 //! Sets up telemetry over Mavlink.
 
 use lib_mission::telemetry::{
-    start_downlink_actor, start_uplink_actor, PeriodicLoop, RemoteSystem,
+    start_downlink_actor, start_uplink_actor, RemoteSystem, ResponsiveLoop,
 };
 use std::net::UdpSocket;
 use std::thread::JoinHandle;
@@ -61,8 +61,8 @@ pub fn init_telemetry(
     );
 
     // spawns tokio tasks which send mavlink messages periodically to the channel.
-    let input_streamers = input_tree.start_broadcasting::<PeriodicLoop>(tx.clone());
-    let output_streamers = output_tree.start_broadcasting::<PeriodicLoop>(tx.clone());
+    let input_streamers = input_tree.start_broadcasting::<ResponsiveLoop>(tx.clone());
+    let output_streamers = output_tree.start_broadcasting::<ResponsiveLoop>(tx.clone());
 
     Ok(Handles {
         uplink,
