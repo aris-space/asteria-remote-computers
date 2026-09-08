@@ -1,4 +1,4 @@
-use std::{collections::HashMap, hash::Hash, ops::RangeInclusive};
+use std::{collections::HashMap, fmt::Debug, hash::Hash, ops::RangeInclusive};
 
 use datatypes::units::ValueWithUnit;
 use futures::{FutureExt, StreamExt, stream::FuturesUnordered};
@@ -23,9 +23,13 @@ struct WatchedSensor<T: ValueWithUnit<f32>> {
 }
 
 /// Map of sensors which are currently watched.
-pub struct SensorWatcher<S: Hash + Eq, T: ValueWithUnit<f32>>(HashMap<S, Vec<WatchedSensor<T>>>);
+pub struct SensorWatcher<S: Hash + Eq + Clone + Debug, T: ValueWithUnit<f32>>(
+    HashMap<S, Vec<WatchedSensor<T>>>,
+);
 
-impl<S: Hash + Eq, T: Send + Sync + Clone + ValueWithUnit<f32>> SensorWatcher<S, T> {
+impl<S: Hash + Eq + Clone + Debug, T: Send + Sync + Clone + ValueWithUnit<f32>>
+    SensorWatcher<S, T>
+{
     pub fn new() -> Self {
         Self(HashMap::new())
     }
@@ -84,7 +88,7 @@ impl<S: Hash + Eq, T: Send + Sync + Clone + ValueWithUnit<f32>> SensorWatcher<S,
     pub async fn watch(&mut self) -> StateName {
         // "Stream" of abort states which yields as soon as a registered watcher contains
         // a value outside its allowed range.
-        let iter = self.0.values_mut().flat_map(|watchers| {
+        let iter = self.0.iter_mut().flat_map(|(name, watchers)| {
             watchers.iter_mut().map(|watched| {
                 // For each registered watcher we return a "stream" containing the abort state
                 // for every disallowed value its sensor contains.
@@ -97,14 +101,23 @@ impl<S: Hash + Eq, T: Send + Sync + Clone + ValueWithUnit<f32>> SensorWatcher<S,
                 } = watched;
                 watcher
                     .next_satisfying(|value| !range.contains(&value.value()))
-                    .map(|_| abort_state.clone())
+                    .map(|value| (name.clone(), value, range.clone(), abort_state.clone()))
             })
         });
 
         // We wait for the first watcher to produce a value outside its allowed range.
         let aborted = iter.collect::<FuturesUnordered<_>>().next().await;
         match aborted {
-            Some(abort_state) => abort_state,
+            Some((name, value, range, abort_state)) => {
+                tracing::error!(
+                    "sensor {name:?} has a value of {value} which is outside its allowed range of [{}{}, {}{}]; transitioning into {abort_state}",
+                    range.start(),
+                    T::UNIT,
+                    range.end(),
+                    T::UNIT
+                );
+                abort_state
+            }
             // Nothing to watch for, so no violation will ever happen
             None => std::future::pending().await,
         }
