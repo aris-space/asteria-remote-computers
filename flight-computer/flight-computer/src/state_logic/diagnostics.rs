@@ -187,9 +187,9 @@ fn is_recovery_board_healthy(
     use messages::datapoints::dp_recovery_board::{ActuatorStatus, WatchdogState};
 
     current.common.errors == 0
-        && (
-            !check_main_chute
-                || (matches!(
+        && (!check_main_chute
+            || (
+                matches!(
                     current.steering_watchdog_status,
                     WatchdogState::Disabled | WatchdogState::Active
                 ) && matches!(
@@ -199,32 +199,27 @@ fn is_recovery_board_healthy(
                 // FIXME: for REC board V2 this should be enabled again, but only if steering has power.
                 // && current.steering_left_connected
                 // && current.steering_right_connected
+            ))
+        && (!check_separation
+            || (
+                // Only one of the separation servos need to be connected, the other is at the CATS.
+                matches!(
+                    current.sep1_status,
+                    ActuatorStatus::Connected | ActuatorStatus::PowerOn
+                ) || matches!(
+                    current.sep2_status,
+                    ActuatorStatus::Connected | ActuatorStatus::PowerOn
                 )
-        )
-        && (
-            !check_separation
-                || (
-                    // Only one of the separation servos need to be connected, the other is at the CATS.
-                    matches!(
-                        current.sep1_status,
-                        ActuatorStatus::Connected | ActuatorStatus::PowerOn
-                    ) || matches!(
-                        current.sep2_status,
-                        ActuatorStatus::Connected | ActuatorStatus::PowerOn
-                    )
+            ))
+        && (!check_main_chute
+            || (
+                // Only one of the deployment servos need to be connected, the other is at the CATS.
+                matches!(
+                    current.depl1_status,
+                    ActuatorStatus::Connected | ActuatorStatus::PowerOn
+                ) || matches!(
+                    current.depl2_status,
+                    ActuatorStatus::Connected | ActuatorStatus::PowerOn
                 )
-        )
-        && (
-            !check_main_chute
-                || (
-                    // Only one of the deployment servos need to be connected, the other is at the CATS.
-                    matches!(
-                        current.depl1_status,
-                        ActuatorStatus::Connected | ActuatorStatus::PowerOn
-                    ) || matches!(
-                        current.depl2_status,
-                        ActuatorStatus::Connected | ActuatorStatus::PowerOn
-                    )
-                )
-        )
+            ))
 }
