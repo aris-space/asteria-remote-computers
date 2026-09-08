@@ -118,8 +118,8 @@ on_tests_pass = "Takeover"
 on_tests_fail = "Boards Unhealthy"
 outdated_threshold_sec = 5
 check_pss_boards = true
-check_separation = false           # FIXME: Enable for Flight!
-check_main_chute = false           # FIXME: Enable for Flight!
+check_separation = false
+check_main_chute = false
 
 # This abort state requires the operator to acknowledge that some boards are unhealthy.
 [state_machine.states."Boards Unhealthy"]
