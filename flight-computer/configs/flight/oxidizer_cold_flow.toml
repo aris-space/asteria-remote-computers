@@ -281,44 +281,7 @@ manual_transitions = [{ target = "Pressurized" }]
 type = "RunSequence"
 on_completed = "Firing Abort 2"
 sequence = """
-# Pre-Conditions:
-# Vent Valves Closed, Tanks Pressurized to 5 barg
-# Rocket Purge Open, Igniter Purge Open
-
-# Start Sys ID ColdFlow OSS
-
-prz_oss_dpr.activate(5.0);
-oss_ml_vlv.open();
-sys.wait(time=2s);
-
-prz_oss_dpr.activate(10.0);
-oss_ml_vlv.open();
-sys.wait(time=2s);
-
-prz_oss_dpr.activate(15.0);
-oss_ml_vlv.open();
-sys.wait(time=2s);
-
-prz_oss_dpr.activate(20.0);
-oss_ml_vlv.open();
-sys.wait(time=2s);
-
-prz_oss_dpr.activate(25.0);
-oss_ml_vlv.open();
-sys.wait(time=2s);
-
-# Shutdown
-oss_ml_vlv.close();
-
-prz_oss_dpr.deactivate();
-prz_fss_dpr.deactivate();
-
-fss_tnk_vnt.open();
-oss_tnk_vnt.open();
-
-# Post Conditions:
-# Tanks still depressurizing, DPRs closed
-# Rocket Purge will be initiated from next state (purging)
+# TODO!
 """
 manual_transitions = [{ target = "Manual Safeing" }]
 [state_machine.states."Firing Abort 2"]
@@ -336,7 +299,44 @@ on_not_armed = "Auto-Disarmed"
 type = "RunSequence"
 on_completed = "Purging"
 sequence = """
-# TODO!
+# Pre-Conditions:
+# Vent Valves Closed, Tanks Pressurized to 5 barg
+# Rocket Purge Open, Igniter Purge Open
+
+# Start Sys ID ColdFlow OSS
+
+prz_oss_dpr.activate(setpoint=5.0);
+oss_ml_vlv.open();
+sys.wait(time=2s);
+
+prz_oss_dpr.activate(setpoint=10.0);
+oss_ml_vlv.open();
+sys.wait(time=2s);
+
+prz_oss_dpr.activate(setpoint=15.0);
+oss_ml_vlv.open();
+sys.wait(time=2s);
+
+prz_oss_dpr.activate(setpoint=20.0);
+oss_ml_vlv.open();
+sys.wait(time=2s);
+
+prz_oss_dpr.activate(setpoint=25.0);
+oss_ml_vlv.open();
+sys.wait(time=2s);
+
+# Shutdown
+oss_ml_vlv.close();
+
+prz_oss_dpr.deactivate();
+prz_fss_dpr.deactivate();
+
+fss_tnk_vnt.open();
+oss_tnk_vnt.open();
+
+# Post Conditions:
+# Tanks still depressurizing, DPRs closed
+# Rocket Purge still open
 """
 manual_transitions = [{ target = "Firing Abort", abort = true }]
 
