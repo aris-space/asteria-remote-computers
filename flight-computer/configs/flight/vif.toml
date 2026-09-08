@@ -318,8 +318,8 @@ sequence = """
 # FIXME!!: eng_cc_p.watch(max=35);
 
 # Make sure DPRs are set correctly
-prz_fss_dpr.activate(17.01);
-prz_oss_dpr.activate(19.27);
+prz_fss_dpr.activate(setpoint=17.01);
+prz_oss_dpr.activate(setpoint=19.27);
 
 # Stop Igniter Purge
 h2_prg_vlv.close();
@@ -349,8 +349,8 @@ sys.wait(time=0.3s);
 fss_ml_vlv.open();
 
 # Initiate Early ramp up to NOM Setpoint
-prz_fss_dpr.activate(31.41);
-prz_oss_dpr.activate(34.64);
+prz_fss_dpr.activate(setpoint=31.41);
+prz_oss_dpr.activate(setpoint=34.64);
 
 # Wait for stable combustion
 # FIXME!!: eng_cc_p.detect(6.5, rising=true, abort='Firing Abort', patience=1s);
