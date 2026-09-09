@@ -311,43 +311,80 @@ type = "RunSequence"
 on_completed = "Purging"
 sequence = """
 # Pre-Conditions:
-# Vent Valves Closed, Tanks Pressurized to 5 barg
+# Vent Valves Closed, Tanks Pressurized to IGN Setpoint
 # Rocket Purge Open, Igniter Purge Open
 
-# Start Sys ID ColdFlow OSS
+# Abort Thresholds
+# eng_cc_p.watch(max=35);
 
-prz_oss_dpr.activate(setpoint=5.0);
+# Make sure DPRs are set correctly
+# prz_fss_dpr.activate(setpoint=5.0);
+prz_oss_dpr.activate(setpoint=7.0);
+
+# Stop Igniter Purge
+h2_prg_vlv.close();
+gox_prg_vlv.close();
+
+# Start Igniter
+ign_spk_plg.open();
+sys.wait(time=1.5s);
+ign_spk_plg.close();
+
+# gox_ign_vlv.open();
+sys.wait(time=0.5s);
+
+# h2_ign_vlv.open();
+
+# Verify Igniter Running
+# ign_cc_p.detect(4.5, rising=true, abort='Firing Abort', patience=3s);
+
+# Make sure igniter fires stable
+# ign_cc_p.watch(min=4.0, abort='Firing Abort', key=ign_sustain);
+
+# Stop Rocket Purge
+eng_prg_vlv.close();
+
+# Initiate Main Flow
 oss_ml_vlv.open();
-sys.wait(time=2s);
+sys.wait(time=0.5s);
+# fss_ml_vlv.open();
 
-prz_oss_dpr.activate(setpoint=10.0);
-oss_ml_vlv.open();
-sys.wait(time=2s);
+sys.wait(time=0.1s);
+# prz_fss_dpr.activate(setpoint=17.01);
 
-prz_oss_dpr.activate(setpoint=15.0);
-oss_ml_vlv.open();
-sys.wait(time=2s);
+# Ignore Igniter
+# ign_cc_p.ignore(key=ign_sustain);
 
-prz_oss_dpr.activate(setpoint=20.0);
-oss_ml_vlv.open();
-sys.wait(time=2s);
+# IGN thrust firing duration
+sys.wait(time=0.9s);
 
+# NOM Firing Section
+# prz_fss_dpr.activate(setpoint=45.81);
 prz_oss_dpr.activate(setpoint=25.0);
-oss_ml_vlv.open();
-sys.wait(time=2s);
+sys.wait(time=7s);
 
-# Shutdown
+# MIN Firing Section
+# prz_fss_dpr.activate(setpoint=32.22);
+prz_oss_dpr.activate(setpoint=20.0);
+sys.wait(time=4s);
+
+# Shutdown fuel rich
 oss_ml_vlv.close();
+
+sys.wait(time=0.3s);
+fss_ml_vlv.close();
 
 prz_oss_dpr.deactivate();
 prz_fss_dpr.deactivate();
 
 fss_tnk_vnt.open();
 oss_tnk_vnt.open();
+prz_copv_vnt.open();
 
 # Post Conditions:
-# Tanks still depressurizing, DPRs closed
-# Rocket Purge still open
+# Rocket depressurizing and normal state
+# Rocket Purge will be initiated from next state (purging)
+# Igniter Purge is initiated from igniter shutdown from rfs
 """
 manual_transitions = [{ target = "Firing Abort", abort = true }]
 
