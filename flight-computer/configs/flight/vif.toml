@@ -315,10 +315,10 @@ sequence = """
 # Rocket Purge Open, Igniter Purge Open
 
 # Abort Thresholds
-# FIXME!!: eng_cc_p.watch(max=35);
+eng_cc_p.watch(max=35);
 
 # Make sure DPRs are set correctly
-prz_fss_dpr.activate(setpoint=17.01);
+prz_fss_dpr.activate(setpoint=5.0);
 prz_oss_dpr.activate(setpoint=19.27);
 
 # Stop Igniter Purge
@@ -335,31 +335,37 @@ sys.wait(time=0.5s);
 h2_ign_vlv.open();
 
 # Verify Igniter Running
-# FIXME!!: ign_cc_p.detect(4.5, rising=true, abort='Firing Abort', patience=3s);
+ign_cc_p.detect(4.5, rising=true, abort='Firing Abort', patience=3s);
 
 # Make sure igniter fires stable
-# FIXME!!: ign_cc_p.watch(min=4.0, abort='Firing Abort', key=ign_sustain);
+ign_cc_p.watch(min=4.0, abort='Firing Abort', key=ign_sustain);
 
 # Stop Rocket Purge
 eng_prg_vlv.close();
 
 # Initiate Main Flow
 oss_ml_vlv.open();
-sys.wait(time=0.3s);
+sys.wait(time=0.5s);
 fss_ml_vlv.open();
 
-# Initiate Early ramp up to NOM Setpoint
-prz_fss_dpr.activate(setpoint=31.41);
-prz_oss_dpr.activate(setpoint=34.64);
-
-# Wait for stable combustion
-# FIXME!!: eng_cc_p.detect(6.5, rising=true, abort='Firing Abort', patience=1s);
+sys.wait(time=0.1s);
+prz_fss_dpr.activate(setpoint=17.01);
 
 # Ignore Igniter
-# FIXME!!: ign_cc_p.ignore(key=ign_sustain);
+ign_cc_p.ignore(key=ign_sustain);
 
-# NOM thrust firing duration
-sys.wait(time=3s);
+# IGN thrust firing duration
+sys.wait(time=0.9s);
+
+# NOM Firing Section
+prz_fss_dpr.activate(setpoint=45.81);
+prz_oss_dpr.activate(setpoint=50.0);
+sys.wait(time=7s);
+
+# MIN Firing Section
+prz_fss_dpr.activate(setpoint=32.22);
+prz_oss_dpr.activate(setpoint=35.29);
+sys.wait(time=4s);
 
 # Shutdown fuel rich
 oss_ml_vlv.close();
@@ -372,9 +378,10 @@ prz_fss_dpr.deactivate();
 
 fss_tnk_vnt.open();
 oss_tnk_vnt.open();
+prz_copv_vnt.open();
 
 # Post Conditions:
-# Tanks depressurized, DPRs closed
+# Rocket depressurizing and normal state
 # Rocket Purge will be initiated from next state (purging)
 # Igniter Purge is initiated from igniter shutdown from rfs
 """
