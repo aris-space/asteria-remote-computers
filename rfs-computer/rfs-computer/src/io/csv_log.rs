@@ -197,7 +197,7 @@ impl OutputTree {
         // This destructure is used so that we don't forget later additions.
         let OutputTree {
             rfs_actuators,
-            controllino_actuators,
+            controllino_actuators: _, // TODO kind of
             pss_valves: _,
             lox_fill_valve,
         } = self;
@@ -213,7 +213,6 @@ impl OutputTree {
             time.watched(),
         )];
         handles.extend(rfs_actuators.start_logging(folder, &time).await?);
-        handles.extend(controllino_actuators.start_logging(folder, &time).await?);
 
         Ok(handles)
     }
