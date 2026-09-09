@@ -3,6 +3,7 @@
 //! Helper functions poll data and return messages, which callers dispatch into input trees
 //! via the [`Collector`] trait. Output data is written directly to the Modbus server.
 
+use std::marker::PhantomData;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -79,20 +80,16 @@ pub struct CoilSettable<T> {
     driver: Client,
     #[allow(clippy::type_complexity)] // okay enough: it is (Channel, Message Mapping)
     log: Option<(mpsc::Sender<Message>, fn(T) -> Message)>,
-    /// The value this coil was last commanded to.
-    ///
-    /// Writing to the coil keeps nothing observable, so the commanded value is retained
-    /// here for the target state logging to watch.
-    pub target: Watchable<T>,
+    _phantom: PhantomData<T>,
 }
 
-impl<T: Default> CoilSettable<T> {
+impl<T> CoilSettable<T> {
     fn new(driver: Client, coil: tokio_modbus::Address) -> Self {
         Self {
             coil,
             driver,
             log: None,
-            target: Watchable::default(),
+            _phantom: PhantomData,
         }
     }
 
@@ -106,18 +103,17 @@ impl<T: Default> CoilSettable<T> {
             coil,
             driver,
             log: Some((log_tx, to_msg)),
-            target: Watchable::default(),
+            _phantom: PhantomData,
         }
     }
 }
 
-impl<T: Default + Energizable + Clone> CoilSettable<T> {
+impl<T: Energizable + Clone> CoilSettable<T> {
     #[allow(clippy::needless_pass_by_value)] // typically u8
     pub fn set(&self, value: T) {
         if let Some((tx, to_msg)) = &self.log {
             let _ = tx.try_send(to_msg(value.clone()));
         }
-        self.target.replace(value.clone());
         let high = value.is_active();
 
         // send to coil, need async, so spawn a task
