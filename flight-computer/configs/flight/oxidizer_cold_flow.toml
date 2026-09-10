@@ -314,12 +314,9 @@ sequence = """
 # Vent Valves Closed, Tanks Pressurized to IGN Setpoint
 # Rocket Purge Open, Igniter Purge Open
 
-# Abort Thresholds
-# eng_cc_p.watch(max=35);
-
 # Make sure DPRs are set correctly
 # prz_fss_dpr.activate(setpoint=5.0);
-prz_oss_dpr.activate(setpoint=7.0);
+prz_oss_dpr.activate(setpoint=19.27);
 
 # Stop Igniter Purge
 h2_prg_vlv.close();
@@ -328,12 +325,11 @@ gox_prg_vlv.close();
 # Start Igniter
 ign_spk_plg.open();
 sys.wait(time=1.5s);
-ign_spk_plg.close();
 
-# gox_ign_vlv.open();
+gox_ign_vlv.open();
 sys.wait(time=0.5s);
 
-# h2_ign_vlv.open();
+h2_ign_vlv.open();
 
 # Verify Igniter Running
 # ign_cc_p.detect(4.5, rising=true, abort='Firing Abort', patience=3s);
@@ -359,14 +355,9 @@ sys.wait(time=0.1s);
 sys.wait(time=0.9s);
 
 # NOM Firing Section
-# prz_fss_dpr.activate(setpoint=45.81);
-prz_oss_dpr.activate(setpoint=25.0);
-sys.wait(time=7s);
-
-# MIN Firing Section
-# prz_fss_dpr.activate(setpoint=32.22);
-prz_oss_dpr.activate(setpoint=20.0);
-sys.wait(time=4s);
+# prz_fss_dpr.activate(setpoint=50.0);
+prz_oss_dpr.activate(setpoint=12.0);
+sys.wait(time=20s);
 
 # Shutdown fuel rich
 oss_ml_vlv.close();
