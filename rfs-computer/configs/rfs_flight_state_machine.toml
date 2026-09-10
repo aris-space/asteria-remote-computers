@@ -611,7 +611,12 @@ h2_bld_vlv.open();
 ign_spk_plg.close();
 """
 [state_machine.states."Handsoff 3"]
-type = "Waiting"
+type = "ManualControl"
+allowed_actuators = [
+    "n2_bld_vlv", # N2 bleed valve
+    "n2_fll_vlv", # N2 fill valve
+    "n2_bst_vlv", # Booster valve
+]
 manual_transitions = [
     "Armed",
     "Decouple",
