@@ -332,7 +332,7 @@ sys.wait(time=0.5s);
 h2_ign_vlv.open();
 
 # Verify Igniter Running
-ign_cc_p.detect(4.5, rising=true, abort='Firing Abort', patience=3s);
+ign_cc_p.detect(value=4.5, rising=true, abort='Firing Abort', patience=3s);
 
 # Make sure igniter fires stable
 ign_cc_p.watch(min=4.0, abort='Firing Abort', key=ign_sustain);
