@@ -329,27 +329,21 @@ sys.wait(time=1.5s);
 gox_ign_vlv.open();
 sys.wait(time=0.5s);
 
+# Start Igniter and OXD Flow simultaneously
 h2_ign_vlv.open();
+oss_ml_vlv.open();
 
 # Verify Igniter Running
-ign_cc_p.detect(value=4.5, rising=true, abort='Firing Abort', patience=3s);
+ign_cc_p.detect(value=4.5, rising=true, abort='Firing Abort', patience=1s);
 
-# Make sure igniter fires stable
-ign_cc_p.watch(min=4.0, abort='Firing Abort', key=ign_sustain);
+sys.wait(time=0.15s);
 
-# Stop Rocket Purge
+# Initiate Fuel Flow
 eng_prg_vlv.close();
-
-# Initiate Main Flow
-oss_ml_vlv.open();
-sys.wait(time=0.5s);
 fss_ml_vlv.open();
 
 sys.wait(time=0.1s);
 prz_fss_dpr.activate(setpoint=17.01);
-
-# Ignore Igniter
-ign_cc_p.ignore(key=ign_sustain);
 
 # IGN thrust firing duration
 sys.wait(time=0.9s);
