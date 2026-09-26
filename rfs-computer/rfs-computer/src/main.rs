@@ -11,6 +11,7 @@ use rfs_computer::io::input::InputTree;
 use rfs_computer::io::output::OutputTree;
 use rfs_computer::io::telemetry::init_telemetry;
 use rfs_computer::state::State;
+use tracing::Instrument as _;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -102,11 +103,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     {
         let cmd = input_tree.actuator_command.clone();
         let actuators = output_tree.as_settables();
-        tokio::spawn(async move {
-            global_actuator_control
-                .act_optional(None, &cmd, actuators)
-                .await
-        });
+        tokio::spawn(
+            async move {
+                global_actuator_control
+                    .act_optional(None, false, &cmd, actuators)
+                    .await
+            }
+            .instrument(tracing::info_span!("global_actuators")),
+        );
     }
 
     tokio::select! {

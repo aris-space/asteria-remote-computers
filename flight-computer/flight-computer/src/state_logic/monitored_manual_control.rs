@@ -15,7 +15,7 @@ pub struct MonitoredManualControl {
     /// Where we can manually transition
     pub manual_transitions: ManualTransitions,
     /// The name of the actuators and their logic which can be activated.
-    pub allowed_actuators: ActuatorControl<ActuatorName>,
+    pub actuator_control: ActuatorControl<ActuatorName>,
     /// If the last telemetry message is older than this, transition to `on_violation`.
     pub telemetry_loss_threshold: Duration,
     /// Thresholds on sensors to watch during the whole operations.
@@ -23,6 +23,8 @@ pub struct MonitoredManualControl {
     pub thresholds: ThresholdWatcher,
     /// The state to transition to when a threshold has been violated.
     pub on_violation: StateName,
+    /// The state to transition to when telemetry has been lost.
+    pub on_telemetry_loss: StateName,
 }
 
 #[async_trait::async_trait]
@@ -38,10 +40,13 @@ impl StateLogic for MonitoredManualControl {
         output: &Self::Output,
         param: &AdditionalState<Self::Parameter>,
     ) -> StateName {
-        tracing::info!(?self, "Entering a monitored manual control state");
+        tracing::info!(
+            "Entering a manual control state, controllable: {:?}",
+            self.actuator_control
+        );
 
         // Prepares a background task to listen for (and act upon) manual actuator inputs.
-        let actuator_future = self.allowed_actuators.act(
+        let actuator_future = self.actuator_control.act(
             input.state.current_state.get().0 as usize,
             &input.actuator_command,
             output.as_settables(),
@@ -57,7 +62,7 @@ impl StateLogic for MonitoredManualControl {
             }
             _ = await_telemetry_loss(&input.telemetry_health, &input.time, self.telemetry_loss_threshold) => {
                 tracing::warn!("telemetry loss detected");
-                self.on_violation.clone()
+                self.on_telemetry_loss.clone()
             }
             _ = actuator_future => unreachable!("act cannot return normally"),
         }

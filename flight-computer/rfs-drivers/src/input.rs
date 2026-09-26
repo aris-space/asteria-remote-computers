@@ -34,6 +34,10 @@ pub struct Actuators {
     #[datapoint(pattern = "Message::RfsComputer(RFSCMessage::IgniterSparkPlugState(#value))")]
     #[broadcast(min_freq_hz = 1., max_freq_hz = 15.)]
     pub igniter_spark: Watchable<DigitalOut>,
+    /// The state of the N2 engine purge valve.
+    #[datapoint(pattern = "Message::RfsComputer(RFSCMessage::N2RocketPurgeValveState(#value))")]
+    #[broadcast(min_freq_hz = 1., max_freq_hz = 15.)]
+    pub n2_engine_purge_valve: Watchable<NormallyClosedValve>,
 }
 
 /// Exposed sensors on the RFS.

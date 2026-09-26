@@ -16,8 +16,11 @@ pub struct Diagnostics {
     /// Else, only the AV stack boards and recovery board are checked.
     pub check_pss_boards: bool,
     /// If `true`, include checks for the separation, as is usual during a flight.
-    /// Else, only the only the deployment and steering are checked in the recovery board
+    /// If neither this nor `check_main_chute` is set, the recovery board is not checked at all.
     pub check_separation: bool,
+    /// If `true`, include checks for recovery deployment and steering.
+    /// If neither this nor `check_separation` is set, the recovery board is not checked at all.
+    pub check_main_chute: bool,
     pub(crate) on_tests_pass: StateName,
     pub(crate) on_tests_fail: StateName,
 }
@@ -54,17 +57,21 @@ impl StateLogic for Diagnostics {
                 self.outdated_threshold,
                 is_power_board_healthy,
             ),
-            check_board(
-                &input.boards_status.recovery_board,
-                "recovery board",
-                now,
-                self.outdated_threshold,
-                if self.check_separation {
-                    is_recovery_board_healthy
-                } else {
-                    is_recovery_board_healthy_no_sep
-                },
-            ),
+            !(self.check_separation || self.check_main_chute)
+                || check_board(
+                    &input.boards_status.recovery_board,
+                    "recovery board",
+                    now,
+                    self.outdated_threshold,
+                    |current, prev| {
+                        is_recovery_board_healthy(
+                            current,
+                            prev,
+                            self.check_separation,
+                            self.check_main_chute,
+                        )
+                    },
+                ),
             !(self.check_pss_boards)
                 || check_board(
                     &input.boards_status.fuel_control_board,
@@ -169,71 +176,50 @@ fn is_oxidizer_control_board_healthy(
 
 /// Checks the recovery board status for a simple healthy / unhealthy state.
 /// Does not do any error reporting, will only return `false` if *something* is unhealthy.
+/// `check_separation` and `check_main_chute` control whether the separation / deployment
+/// servos are included in the check.
 fn is_recovery_board_healthy(
     current: &messages::datapoints::dp_recovery_board::RecoveryBoardStatus,
     _prev: &messages::datapoints::dp_recovery_board::RecoveryBoardStatus,
+    check_separation: bool,
+    check_main_chute: bool,
 ) -> bool {
     use messages::datapoints::dp_recovery_board::{ActuatorStatus, WatchdogState};
 
     current.common.errors == 0
-        && matches!(
-            current.steering_watchdog_status,
-            WatchdogState::Disabled | WatchdogState::Active
-        )
-        && matches!(
-            current.steering_general,
-            ActuatorStatus::Connected | ActuatorStatus::PowerOn
-        )
-        // FIXME: for REC board V2 this should be enabled again, but only if steering has power.
-        // && current.steering_left_connected
-        // && current.steering_right_connected
-        && (
-            // Only one of the separation servos need to be connected, the other is at the CATS.
-            matches!(
-                current.sep1_status,
-                ActuatorStatus::Connected | ActuatorStatus::PowerOn
-            ) || matches!(
-                current.sep2_status,
-                ActuatorStatus::Connected | ActuatorStatus::PowerOn
-            )
-        )
-        && (
-            // Only one of the deployment servos need to be connected, the other is at the CATS.
-            matches!(
-                current.depl1_status,
-                ActuatorStatus::Connected | ActuatorStatus::PowerOn
-            ) || matches!(
-                current.depl2_status,
-                ActuatorStatus::Connected | ActuatorStatus::PowerOn
-            )
-        )
-}
-
-/// Checks the recovery board status for a simple healthy / unhealthy state.
-/// Skips checks for separation
-fn is_recovery_board_healthy_no_sep(
-    current: &messages::datapoints::dp_recovery_board::RecoveryBoardStatus,
-    _prev: &messages::datapoints::dp_recovery_board::RecoveryBoardStatus,
-) -> bool {
-    use messages::datapoints::dp_recovery_board::{ActuatorStatus, WatchdogState};
-
-    current.common.errors == 0
-        && matches!(
-            current.steering_watchdog_status,
-            WatchdogState::Disabled | WatchdogState::Active
-        )
-        && matches!(
-            current.steering_general,
-            ActuatorStatus::Connected | ActuatorStatus::PowerOn
-        )
-        && (
-            // Only one of the deployment servos need to be connected, the other is at the CATS.
-            matches!(
-                current.depl1_status,
-                ActuatorStatus::Connected | ActuatorStatus::PowerOn
-            ) || matches!(
-                current.depl2_status,
-                ActuatorStatus::Connected | ActuatorStatus::PowerOn
-            )
-        )
+        && (!check_main_chute
+            || (
+                matches!(
+                    current.steering_watchdog_status,
+                    WatchdogState::Disabled | WatchdogState::Active
+                ) && matches!(
+                    current.steering_general,
+                    ActuatorStatus::Connected | ActuatorStatus::PowerOn
+                )
+                // FIXME: for REC board V2 this should be enabled again, but only if steering has power.
+                // && current.steering_left_connected
+                // && current.steering_right_connected
+            ))
+        && (!check_separation
+            || (
+                // Only one of the separation servos need to be connected, the other is at the CATS.
+                matches!(
+                    current.sep1_status,
+                    ActuatorStatus::Connected | ActuatorStatus::PowerOn
+                ) || matches!(
+                    current.sep2_status,
+                    ActuatorStatus::Connected | ActuatorStatus::PowerOn
+                )
+            ))
+        && (!check_main_chute
+            || (
+                // Only one of the deployment servos need to be connected, the other is at the CATS.
+                matches!(
+                    current.depl1_status,
+                    ActuatorStatus::Connected | ActuatorStatus::PowerOn
+                ) || matches!(
+                    current.depl2_status,
+                    ActuatorStatus::Connected | ActuatorStatus::PowerOn
+                )
+            ))
 }

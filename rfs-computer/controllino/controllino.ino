@@ -224,11 +224,8 @@ void writeFloat(int baseAddr, float value) {
 // Read the pressure sensor (AI12) and write to holding registers 0x300–0x301
 void updatePressure() {
     float voltage = analogRead(CONTROLLINO_A12) * (10.0f / 1023.0f);
-    float pressure = 0.0f;
-    if (voltage >= PRESSURE_V_ZERO) {
-        pressure = ((voltage - PRESSURE_V_ZERO) / PRESSURE_V_SPAN) * PRESSURE_MAX_BAR;
-    }
-    writeFloat(0x300, pressure);
+    float pressure = ((voltage - PRESSURE_V_ZERO) / PRESSURE_V_SPAN) * PRESSURE_MAX_BAR;
+    writeFloat(0x300, pressure < -2.0 ? NAN : pressure);
 }
 
 // Read both thermocouples and write to holding registers 0x302–0x305

@@ -255,6 +255,39 @@ pub fn spawn_h2_purge_valve_state_driver(
     .abort_handle()
 }
 
+/// Sends `N2RocketPurgeValveState` at 5Hz.
+pub fn spawn_engine_purge_valve_state_driver(
+    rocket_connection_detect: Watchable<DigitalIn>,
+    state: impl Watched<NormallyClosedValve> + Send + 'static,
+    tx: std::sync::mpsc::Sender<messages::Message>,
+) -> AbortHandle {
+    const STATE_RATE: f32 = 5.;
+
+    tokio::spawn(
+        async move {
+            let mut interval = tokio::time::interval(Duration::from_secs_f32(1. / STATE_RATE));
+            interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+            loop {
+                interval.tick().await;
+                let msg = messages::Message::RfsComputer(
+                    dp_rfs_computer::Message::N2RocketPurgeValveState(state.current()),
+                );
+
+                if matches!(rocket_connection_detect.get(), DigitalIn::Off) {
+                    continue;
+                }
+
+                if tx.send(msg).is_err() {
+                    tracing::warn!("CAN channel was closed. Shutting down!");
+                    break;
+                }
+            }
+        }
+        .instrument(tracing::info_span!("drivers::N2RocketPurgeValveState")),
+    )
+    .abort_handle()
+}
+
 /// Sends `IgniterSparkPlugState` at 5Hz.
 pub fn spawn_igniter_spark_plug_state_driver(
     rocket_connection_detect: Watchable<DigitalIn>,

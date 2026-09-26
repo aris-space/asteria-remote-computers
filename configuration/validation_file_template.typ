@@ -1,4 +1,4 @@
-#import "base.typ": page-layout 
+#import "base.typ": page-layout
 #show: page-layout.with(subteam: "SFW", title: "Config Validation File")
 #show "TODO": highlight
 #show "FIXME": highlight
@@ -55,31 +55,39 @@
   raw(new-text, ..fields)
 }
 
+#let is-rfsc = cfg.path.starts-with("rfs-computer")
+#let is-fc = cfg.path.starts-with("flight-computer")
+#assert(
+  is-rfsc or is-fc,
+  message: "config path "
+    + cfg.path
+    + " is not under rfs-computer/ or flight-computer/, cannot determine which computer it belongs to",
+)
+#let computer-name = if is-rfsc { "Remote Filling Station Computer" } else { "Flight Computer" }
+
 = Configuration Validation File
 
-== Flight Computer
+== #computer-name
 
 // #raw(bin.name)
 
 #table(
   columns: (1fr, 1fr, 4fr),
   [git commit], [branch], [latest change],
-  highlight(raw(bin.commit), fill: orange.lighten(70%)),
-  raw(bin.branch),
-  [#bin.last_change],
+  highlight(raw(bin.commit), fill: orange.lighten(70%)), raw(bin.branch), [#bin.last_change],
 )
 
-== GNC
+#if not is-rfsc [
+  == GNC
 
-#let gnc = data.gnc
+  #let gnc = data.gnc
 
-#table(
-  columns: (1fr, 1fr, 4fr),
-  [git commit], [branch], [latest change],
-  highlight(raw(gnc.commit), fill: orange.lighten(70%)),
-  raw(gnc.branch),
-  [#gnc.last_change],
-)
+  #table(
+    columns: (1fr, 1fr, 4fr),
+    [git commit], [branch], [latest change],
+    highlight(raw(gnc.commit), fill: orange.lighten(70%)), raw(gnc.branch), [#gnc.last_change],
+  )
+]
 
 == Config
 
@@ -88,12 +96,18 @@
 #table(
   columns: (1fr, 1fr, 4fr),
   [config hash], [branch], [latest change],
-  highlight(raw(cfg.hash)),
-  raw(cfg.branch),
-  [#cfg.last_change],
+  highlight(raw(cfg.hash)), raw(cfg.branch), [#cfg.last_change],
 )
 
 === Full config
 (diff against #raw(cfg.base)):
 
 #raw(data.toml_annotated, lang: "toml", block: true)
+
+#if cfg.diagram_path != none {
+  block(breakable: false)[
+    === State machine diagram
+
+    #image("/" + cfg.diagram_path)
+  ]
+}

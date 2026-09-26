@@ -55,12 +55,6 @@ pub use read_rfs_arming::ReadRFSArming;
 pub mod wait_while_connected;
 pub use wait_while_connected::WaitWhileConnected;
 
-pub mod ignition;
-pub use ignition::Ignition;
-
-pub mod abort_ignition;
-pub use abort_ignition::AbortIgnition;
-
 pub mod liftoff_detection;
 pub use liftoff_detection::LiftoffDetection;
 

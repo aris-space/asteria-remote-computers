@@ -17,18 +17,17 @@ diagram_path = "state-machines/fc-flight-state-machine.drawio.svg"
 # ======================================= Preparation =======================================
 
 # State machine's starting point. Simply waits for a manual command.
-# ECU config is sent automatically.
 [state_machine.states."Idle"]
 type = "Waiting"
 manual_transitions = [
-    { target = "Diagnostics", display = "Startup" },
-    { target = "Valve Check", display = "Skip Diagnostics" }, # TODO remove this transition
+    { target = "Diagnostics" },
+    { target = "Valve Check" },
 ]
 
 # This state exists for recovering from failures that can happen before liftoff
 [state_machine.states."Soft Failure"]
 type = "Waiting"
-manual_transitions = [{ target = "Idle", display = "Restart" }]
+manual_transitions = [{ target = "Idle" },]
 
 # This state continues only when all boards have sent healthy reports
 [state_machine.states."Diagnostics"]
@@ -51,8 +50,8 @@ allowed_actuators = [
     "oss_ml_vlv",
 ]
 manual_transitions = [
-    { target = "Waiting for Handsoff", display = "Valve Check OK" },
-    { target = "Soft Failure", display = "Manual Reset", abort = true },
+    { target = "Waiting for Handsoff" },
+    { target = "Soft Failure", abort = true },
 ]
 
 # In this state the rocket is transported to the pad and we wait before continueing further
@@ -66,19 +65,19 @@ on_state_set = "Waiting for Handsoff 3"
 [state_machine.states."Waiting for Handsoff 3"]
 type = "Waiting"
 manual_transitions = [
-    { target = "Passive for Filling", display = "Passive for Filling" },
-    { target = "Soft Failure", display = "Manual Reset", abort = true },
+    { target = "Passive for Filling" },
+    { target = "Soft Failure", abort = true },
 ]
 
-# ======================================= Takeback =======================================
+# ======================================= Passive =======================================
 
 
 # A state to reset to from the passive state.
 [state_machine.states."Force Abort"]
 type = "Waiting"
 manual_transitions = [
-    { target = "Waiting for Handsoff", display = "Force Reset" },
-    { target = "Override Valves", display = "Override" },
+    { target = "Waiting for Handsoff" },
+    { target = "Override Valves" },
 ]
 
 # A state to potentially fix a broken system during an off-nominal scenario.
@@ -93,7 +92,7 @@ allowed_actuators = [
     "fss_ml_vlv",
     "oss_ml_vlv",
 ]
-manual_transitions = [{ target = "Force Abort", display = "Done" }]
+manual_transitions = [{ target = "Force Abort" },]
 
 # This will set all valves inactive, essentially venting any pressure.
 # Used as the abort during filling, if connection is lost.
@@ -102,7 +101,7 @@ type = "SetNormalState"
 on_done = "Vent 2"
 [state_machine.states."Vent 2"]
 type = "Waiting"
-manual_transitions = [{ target = "Force Abort", display = "Acknowledge" }]
+manual_transitions = [{ target = "Force Abort" },]
 
 # The state in which the FC is passive while the RFSC coordinates filling the rocket
 [state_machine.states."Passive for Filling"]
@@ -110,8 +109,9 @@ type = "WaitWhileConnected"
 rfs_can_timeout_sec = 900.0
 on_timeout = "Vent"
 manual_transitions = [
-    { target = "Force Abort", display = "Force Abort", abort = true },
-    { target = "Gate", display = "Ready for Takeover" },
+    { target = "Force Abort", abort = true },
+    { target = "Gate" },
+    { target = "Takeover" }, # Skipping Diagnostics
 ]
 
 # This state continues only when all boards have sent healthy reports
@@ -121,6 +121,8 @@ on_tests_pass = "Takeover"
 on_tests_fail = "Boards Unhealthy"
 outdated_threshold_sec = 5
 check_pss_boards = true
+check_separation = false # FIXME: Enable for Flight!
+check_main_chute = false # FIXME: Enable for Flight!
 
 # This abort state requires the operator to acknowledge that some boards are unhealthy.
 [state_machine.states."Boards Unhealthy"]
@@ -128,30 +130,29 @@ type = "WaitWhileConnected"
 rfs_can_timeout_sec = 900.0
 on_timeout = "Vent"
 manual_transitions = [
-    { target = "Force Abort", display = "Force Abort", abort = true },
-    { target = "Passive for Filling", display = "Acknowledge" },
+    { target = "Force Abort", abort = true },
+    { target = "Passive for Filling" },
 ]
 
 
 # ======================================= Pressurization =======================================
 
 
-# Abort state which just stops any ongoing pressurization, but doesnt vent yet
+# Abort state which just stops any ongoing pressurization, but only vents tanks, not the COPV yet
 [state_machine.states."Stop Pressurization"]
 type = "ArmRecovery"                   # Also propagated to RFS
 arming_state = "SteeringMotorsLocked"
 on_state_set = "Stop Pressurization 3"
 [state_machine.states."Stop Pressurization 3"]
 type = "SetActuators"
-# Close DPR valves
-targets = { "prz_fss_dpr" = "DPRDisabled", "prz_oss_dpr" = "DPRDisabled" }
+# Close DPR valves & open Vent
+targets = { "prz_fss_dpr" = "DPRDisabled", "prz_oss_dpr" = "DPRDisabled", "fss_tnk_vnt" = "Open", "oss_tnk_vnt" = "Open" }
 on_done = "Stop Pressurization 4"
 [state_machine.states."Stop Pressurization 4"]
 type = "Waiting"
 manual_transitions = [
-    { target = "Takeover", display = "Reset" },
-    { target = "Override Valves P", display = "Override" },
-    { target = "Depressure", display = "Depress", abort = true },
+    { target = "Takeover" },
+    { target = "Override Valves P" },
 ]
 
 # A state to potentially fix a broken system during an off-nominal scenario.
@@ -166,30 +167,26 @@ allowed_actuators = [
     "fss_ml_vlv",
     "oss_ml_vlv",
 ]
-manual_transitions = [{ target = "Stop Pressurization", display = "Done" }]
+manual_transitions = [{ target = "Stop Pressurization" },]
 
-# Abort state which depressurizes the fuel and oxidizer tanks by venting the gasses.
+# Abort state which depressurizes the entire system, including COPV.
 [state_machine.states."Depressure"]
 type = "ArmRecovery"                  # Also propagated to RFS
 arming_state = "SteeringMotorsLocked"
 on_state_set = "Depressure 2"
 [state_machine.states."Depressure 2"]
-type = "SetActuators"
-# Close DPR valves and open oss/fss vent valves
-targets = { "prz_fss_dpr" = "DPRDisabled", "prz_oss_dpr" = "DPRDisabled", "fss_tnk_vnt" = "Open", "oss_tnk_vnt" = "Open" }
+type = "SetNormalState"
 on_done = "Depressure 3"
 [state_machine.states."Depressure 3"]
 type = "Waiting"
-manual_transitions = [{ target = "Manual Safeing", display = "Safeing" }]
+manual_transitions = [{ target = "Manual Safeing" },]
 
 # This state marks the transition to pressurization section, where the rocket is in its own control again
 [state_machine.states."Takeover"]
-type = "MonitoredWaiting"
-on_violation = "Depressure"
-telemetry_loss_threshold_sec = 900 # 15min
+type = "Waiting"
 manual_transitions = [
-    { target = "Pressurization", display = "Start Pressurization" },
-    { target = "Stop Pressurization", display = "Stop Pressurization", abort = true },
+    { target = "Pressurization" },
+    { target = "Stop Pressurization", abort = true },
 ]
 
 # This state allows manual pressurization
@@ -202,14 +199,15 @@ allowed_actuators = [
     "oss_tnk_vnt",
 ]
 telemetry_loss_threshold_sec = 900 # 15min
-on_violation = "Depressure"
+on_violation = "Stop Pressurization"
+on_telemetry_loss = "Depressure"
 manual_transitions = [
-    { target = "Pressurized", display = "Pressurization Completed" },
-    { target = "Stop Pressurization", display = "Stop Pressurization", abort = true },
+    { target = "Pressurized" },
+    { target = "Stop Pressurization", abort = true },
 ]
 [state_machine.states."Pressurization".thresholds.upper_thresholds_barg]
-fuel_tank_pressure = 50
-oxitizer_tank_pressure = 50
+fuel_tank_pressure = 54
+oxitizer_tank_pressure = 54
 
 
 # This state is reached when the tanks have reached the required pressures and is one step away from arming.
@@ -219,15 +217,16 @@ arming_state = "SteeringMotorsLocked"
 on_state_set = "Pressurized 2"
 [state_machine.states."Pressurized 2"]
 type = "MonitoredWaiting"
-on_violation = "Depressure"
+on_violation = "Stop Pressurization"
+on_telemetry_loss = "Depressure"
 telemetry_loss_threshold_sec = 900 # 15min
 manual_transitions = [
-    { target = "Armed", display = "Arm" },
-    { target = "Stop Pressurization", display = "Stop Pressurization", abort = true },
+    { target = "Armed" },
+    { target = "Stop Pressurization", abort = true },
 ]
 [state_machine.states."Pressurized 2".thresholds.upper_thresholds_barg]
-fuel_tank_pressure = 50
-oxitizer_tank_pressure = 50
+fuel_tank_pressure = 54
+oxitizer_tank_pressure = 54
 
 # This state will arm the recovery motors and allow the RFS to arm its software such that the ECU will be able to control ignition.
 [state_machine.states."Armed"]
@@ -240,16 +239,17 @@ camera_power_state = "On"
 on_state_set = "Armed 3"
 [state_machine.states."Armed 3"]
 type = "MonitoredWaiting"
-on_violation = "Depressure"
+on_violation = "Stop Pressurization"
+on_telemetry_loss = "Depressure"
 telemetry_loss_threshold_sec = 900 # 15min
 manual_transitions = [
-    { target = "Pressurized", display = "Disarm" },
-    { target = "Ignition Initiation", display = "Ignite" },
-    { target = "Stop Pressurization", display = "Stop Pressurization", abort = true },
+    { target = "Pressurized" },
+    { target = "Ignition Initiation" },
+    { target = "Stop Pressurization", abort = true },
 ]
 [state_machine.states."Armed 3".thresholds.upper_thresholds_barg]
-fuel_tank_pressure = 50
-oxitizer_tank_pressure = 50
+fuel_tank_pressure = 54
+oxitizer_tank_pressure = 54
 
 # This state exists for acknowledging that the RFS was not armed upon the ignition command
 [state_machine.states."Auto-Disarmed"]
@@ -259,14 +259,15 @@ on_state_set = "Auto-Disarmed 2"
 [state_machine.states."Auto-Disarmed 2"]
 type = "MonitoredWaiting"
 telemetry_loss_threshold_sec = 900 # 15min
-on_violation = "Depressure"
+on_violation = "Stop Pressurization"
+on_telemetry_loss = "Depressure"
 manual_transitions = [
-    { target = "Pressurized", display = "Acknowledge" },
-    { target = "Stop Pressurization", display = "Stop Pressurization", abort = true },
+    { target = "Pressurized" },
+    { target = "Stop Pressurization", abort = true },
 ]
 [state_machine.states."Auto-Disarmed 2".thresholds.upper_thresholds_barg]
-fuel_tank_pressure = 50
-oxitizer_tank_pressure = 50
+fuel_tank_pressure = 54
+oxitizer_tank_pressure = 54
 
 # This state allows full actuators control for system safeing operations
 # This is a terminal state, there is no way out
@@ -282,23 +283,27 @@ allowed_actuators = [
     "oss_ml_vlv",
 ]
 manual_transitions = [
-    { target = "Pressurized", display = "Reset" },
+    { target = "Pressurized" },
 ]
 
 
 # ======================================= Ignition =======================================
 
-# This state shows that the firing has been aborted. Either by the ECU or manually.
-[state_machine.states."Firing Aborted"]
+# This state runs if the firing sequence or a manual input aborted
+[state_machine.states."Firing Abort"]
+type = "RunSequence"
+on_completed = "Firing Abort 2"
+sequence = """
+# TODO!
+"""
+manual_transitions = [
+    { target = "Manual Safeing" },
+]
+[state_machine.states."Firing Abort 2"]
 type = "Waiting"
 manual_transitions = [
-    { target = "Manual Safeing", display = "Safeing", abort = true },
+    { target = "Manual Safeing" },
 ]
-
-# This state tells the ECU to abort the firing sequence before liftoff
-[state_machine.states."Abort Firing"]
-type = "AbortIgnition"
-on_done = "Firing Aborted"
 
 # This instantaneous state ensures that the RFS is armed for ignition
 [state_machine.states."Ignition Initiation"]
@@ -308,34 +313,41 @@ on_not_armed = "Auto-Disarmed"
 
 # The state sends the engine start signal and waits for liftoff
 [state_machine.states."Ignition"]
-type = "Ignition"
-on_done = "Ignition 2"
+type = "RunSequence"
+on_completed = "Ignition 2"
+sequence = """
+# TODO!
+"""
 [state_machine.states."Ignition 2"]
 type = "LiftoffDetection"
 acceleration_limit_ms2 = 20 # m/s^2
 required_duration_s = 0.2 # seconds
 on_liftoff_detected = "Thrusting"
-on_aborted = "Firing Aborted"
+on_aborted = "Firing Abort"
 manual_transitions = [
-    { target = "Abort Firing", display = "Abort Ignition", abort = true },
-    { target = "Thrusting", display = "Manual Liftoff" },
+    { target = "Firing Abort", abort = true },
+    { target = "Thrusting" },
 ]
 
 # ======================================= Liftoff =======================================
 
 # This state tells the ECU to abort the firing sequence while in the air
 [state_machine.states."Flight Abort"]
-type = "AbortIgnition"
-on_done = "Coasting"
+type = "RunSequence"
+sequence = """
+# TODO
+"""
+on_completed = "Coasting"
 
 # During this state the engine is running, launching us upwards
 [state_machine.states."Thrusting"]
 type = "Thrust"
-abort_downward_velocity_m_s = 5 # We abort if we move more than 5m/s downwards
+# We abort if we move more than 5m/s downwards
+abort_downward_velocity_m_s = 5
 on_apogee_reached = "Flight Abort"
 on_firing_finished = "Coasting"
 manual_transitions = [
-    { target = "Flight Abort", display = "Abort Flight", abort = true },
+    { target = "Flight Abort", abort = true },
 ]
 
 # During this state we are still moving upwards but just from momentum
@@ -345,7 +357,7 @@ type = "ApogeeTrigger"
 trigger_before_apogee_time_s = 1.5 # apogee gets detected 1.5s before actual reaching apogee.
 on_apogee_reached = "Separation"
 manual_transitions = [
-    { target = "Separation", display = "Manual Separation", abort = true },
+    { target = "Separation", abort = true },
 ]
 
 # ======================================= Recovery =======================================
@@ -364,7 +376,7 @@ on_height_limit_reached = "Main Chute Deployment"
 time_limit_sec = 999 # Config value [drogue], disabled, as not useful
 height_limit_m = 0 # Config value [alt]. TODO: Define height limit
 manual_transitions = [
-    { target = "Main Chute Deployment", display = "Manual Deployment" },
+    { target = "Main Chute Deployment" },
 ]
 
 # This state deploys the chute and waits for some time before transitioning
@@ -380,7 +392,7 @@ motors_pull_value_rev = [0.7, 0.7] # Config value [release]
 motors_ok_threshold_rev = [0.6, 0.6] # Config value [release_thr]
 on_motors_ok_threshhold_reached = "Control Loop"
 manual_transitions = [
-    { target = "Safety Spiral", display = "Manual Safety Spiral", abort = true },
+    { target = "Safety Spiral", abort = true },
 ]
 
 # This states runs the guided recovery algorithm in a loop until failure or touchdown
@@ -394,7 +406,7 @@ time_limit_sec = 600 # after at most this time, go to await recovery
 on_touchdown = "Await Recovery"
 on_failure = "Safety Spiral"
 manual_transitions = [
-    { target = "Safety Spiral", display = "Manual Safety Spiral", abort = true },
+    { target = "Safety Spiral", abort = true },
 ]
 [state_machine.states."Control Loop".gnc_config]
 controller_type = "Mock"
@@ -411,7 +423,7 @@ type = "AwaitTimer"
 duration_sec = 600
 on_timer = "Await Recovery"
 manual_transitions = [
-    { target = "Await Recovery", display = "Manual Ground Recovery", abort = true },
+    { target = "Await Recovery", abort = true },
 ]
 
 # State to conserve power

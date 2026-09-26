@@ -76,6 +76,8 @@ pub enum StateLogicConfig<Gnc: CompatGuidanceController> {
         telemetry_loss_threshold_sec: f32,
         /// The state to transition to when a sensor violation occured.
         on_violation: String,
+        /// The state to transition to when telemetry has been lost.
+        on_telemetry_loss: String,
     },
     /// Describes a [`state_logic::Diagnostics`].
     Diagnostics {
@@ -85,9 +87,13 @@ pub enum StateLogicConfig<Gnc: CompatGuidanceController> {
         /// Else, only the AV stack boards and recovery board are checked.
         check_pss_boards: bool,
         /// If `true`, include checks for the separation, as is usual during a flight.
-        /// Else, only the only the deployment and steering are checked in the recovery board
+        /// If neither this nor `check_main_chute` is set, the recovery board is not checked at all.
         #[serde(default = "yes")]
         check_separation: bool,
+        /// If `true`, include checks for recovery deployment and steering.
+        /// If neither this nor `check_separation` is set, the recovery board is not checked at all.
+        #[serde(default = "yes")]
+        check_main_chute: bool,
         /// If the diagnostics succeed, we will transition to the state with the name of `on_tests_pass`.
         on_tests_pass: String,
         /// If the diagnostics fail, we will transition to the state with the name of `on_tests_fail`.
@@ -211,16 +217,6 @@ pub enum StateLogicConfig<Gnc: CompatGuidanceController> {
         /// The name of the state which to proceed to after a timeout.
         on_timeout: String,
     },
-    /// Describes a [`state_logic::Ignition`].
-    Ignition {
-        /// The name of the state which to proceed to after sending the ignition signal.
-        on_done: String,
-    },
-    /// Describes a [`state_logic::AbortIgnition`].
-    AbortIgnition {
-        /// The name of the state which to proceed to after sending the abort signal.
-        on_done: String,
-    },
     LiftoffDetection {
         /// If the acceleration limit in -z direction is reached, we detect liftoff and proceed to the `on_liftoff_detected` state
         acceleration_limit_ms2: f32,
@@ -260,6 +256,8 @@ pub enum StateLogicConfig<Gnc: CompatGuidanceController> {
         telemetry_loss_threshold_sec: f32,
         /// The state to transition to when a sensor or telemetry violation occured.
         on_violation: String,
+        /// The state to transition to when telemetry has been lost.
+        on_telemetry_loss: String,
     },
     RunSequence {
         /// The sequence to run.
@@ -297,6 +295,7 @@ impl<Gnc: CompatGuidanceController> MakeState for StateLogicConfig<Gnc> {
                 thresholds,
                 telemetry_loss_threshold_sec,
                 on_violation,
+                on_telemetry_loss,
             } => state_logic::MonitoredWaiting {
                 manual_transitions,
                 thresholds,
@@ -304,18 +303,21 @@ impl<Gnc: CompatGuidanceController> MakeState for StateLogicConfig<Gnc> {
                     telemetry_loss_threshold_sec,
                 ),
                 on_violation: StateName::try_new(&on_violation, names)?,
+                on_telemetry_loss: StateName::try_new(&on_telemetry_loss, names)?,
             }
             .into_box(),
             StateLogicConfig::Diagnostics {
                 outdated_threshold_sec,
                 check_pss_boards,
                 check_separation,
+                check_main_chute,
                 on_tests_pass,
                 on_tests_fail,
             } => state_logic::Diagnostics {
                 outdated_threshold: Duration::from_secs_f64(outdated_threshold_sec),
                 check_pss_boards,
                 check_separation,
+                check_main_chute,
                 on_tests_pass: StateName::try_new(&on_tests_pass, names)?,
                 on_tests_fail: StateName::try_new(&on_tests_fail, names)?,
             }
@@ -496,14 +498,6 @@ impl<Gnc: CompatGuidanceController> MakeState for StateLogicConfig<Gnc> {
                 on_timeout: StateName::try_new(&on_timeout, names)?,
             }
             .into_box(),
-            StateLogicConfig::Ignition { on_done } => state_logic::Ignition {
-                on_done: StateName::try_new(&on_done, names)?,
-            }
-            .into_box(),
-            StateLogicConfig::AbortIgnition { on_done } => state_logic::AbortIgnition {
-                on_done: StateName::try_new(&on_done, names)?,
-            }
-            .into_box(),
             StateLogicConfig::LiftoffDetection {
                 acceleration_limit_ms2,
                 required_duration_s,
@@ -542,9 +536,10 @@ impl<Gnc: CompatGuidanceController> MakeState for StateLogicConfig<Gnc> {
                 thresholds,
                 telemetry_loss_threshold_sec,
                 on_violation,
+                on_telemetry_loss,
             } => state_logic::MonitoredManualControl {
                 manual_transitions,
-                allowed_actuators: ActuatorControl::from_strings(
+                actuator_control: ActuatorControl::from_strings(
                     allowed_actuators.iter().map(String::as_str),
                 )
                 .map_err(lib_mission::Error::malformed_config)?,
@@ -553,6 +548,7 @@ impl<Gnc: CompatGuidanceController> MakeState for StateLogicConfig<Gnc> {
                 ),
                 thresholds,
                 on_violation: StateName::try_new(&on_violation, names)?,
+                on_telemetry_loss: StateName::try_new(&on_telemetry_loss, names)?,
             }
             .into_box(),
             Self::RunSequence {

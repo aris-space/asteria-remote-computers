@@ -42,11 +42,6 @@ pub struct InputTree {
     #[broadcast(flatten)]
     #[collector(flatten)]
     pub rocket_health: BoardsHealthyAsOf,
-    /// The last received status of the flight computer.
-    #[datapoint(pattern = "Message::FlightComputer(FCMessage::Status(#value))")]
-    #[broadcast(min_freq_hz = 0.5, max_freq_hz = 2.)]
-    pub flight_computer_status: Watchable<FlightComputerStatus>,
-
     /// The sensors connected to the uremote.
     #[broadcast(flatten)]
     pub uremote_sensors: uremote::Sensors,

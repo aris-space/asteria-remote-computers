@@ -185,6 +185,8 @@ pub enum StateLogicConfig {
     SetNormalState {
         /// The name of the state which to proceed to after completing setting all valves.
         on_done: String,
+        /// If true, also attempt to set rocket valves to normal. Else they won't be touched.
+        include_pss: bool,
     },
     /// Describes a [`state_logic::RunSequence`].
     RunSequence {
@@ -205,8 +207,6 @@ pub enum StateLogicConfig {
         on_ignition: String,
         /// The name of the state which to proceed to if the RFS is not ready for ignition.
         on_not_ready: String,
-        /// The [names][crate::io::output::ActuatorName] of the actuators that are allowed to be activated in this state.
-        allowed_actuators: Vec<String>,
     },
 }
 
@@ -301,8 +301,12 @@ impl MakeState for StateLogicConfig {
                 on_done: StateName::try_new(&on_done, names)?,
             }
             .into_box(),
-            StateLogicConfig::SetNormalState { on_done } => state_logic::SetNormalState {
+            StateLogicConfig::SetNormalState {
+                on_done,
+                include_pss,
+            } => state_logic::SetNormalState {
                 on_done: StateName::try_new(&on_done, names)?,
+                include_pss,
             }
             .into_box(),
             StateLogicConfig::RunSequence {
@@ -321,15 +325,10 @@ impl MakeState for StateLogicConfig {
             StateLogicConfig::WaitForIgnition {
                 on_ignition,
                 on_not_ready,
-                allowed_actuators,
             } => state_logic::WaitForIgnition {
                 manual_transitions: transitions,
                 on_ignition: StateName::try_new(&on_ignition, names)?,
                 on_not_ready: StateName::try_new(&on_not_ready, names)?,
-                actuator_control: ActuatorControl::from_strings(
-                    allowed_actuators.iter().map(String::as_str),
-                )
-                .map_err(lib_mission::Error::malformed_config)?,
             }
             .into_box(),
         })
