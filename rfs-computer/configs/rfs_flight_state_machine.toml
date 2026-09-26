@@ -118,8 +118,64 @@ allowed_actuators = [
 manual_transitions = [
     "System Idle",
     "Igniter Test",
+    "Igniter Deactivation",
     { target = "Safe Abort", abort = true },
 ]
+
+# This state runs the igniter deactivation/purge sequence to safely depressurize the igniter.
+[state_machine.states."Igniter Deactivation"]
+type = "RunSequence"
+on_completed = "System Controllable"
+manual_transitions = [{ target = "Safe Abort", abort = true }]
+sequence = """
+# Preconditions:
+# H2 and GOx Bottle closed
+
+# Clear leftover H2
+h2_ign_vlv.open();
+sys.wait(time=0.5s);
+
+# Purge through bleed
+h2_prg_vlv.open();
+sys.wait(time=1s);
+h2_bld_vlv.close();
+
+# Purge through igniter
+sys.wait(time=5s);
+h2_prg_vlv.close();
+
+# open H2 bleed again
+h2_bld_vlv.open();
+sys.wait(time=0.5s);
+
+# finally close h2 main again
+h2_ign_vlv.close();
+
+# Same for GOx side
+# Clear leftover GOx
+gox_ign_vlv.open();
+sys.wait(time=0.5s);
+
+# Purge through bleed
+gox_prg_vlv.open();
+sys.wait(time=1s);
+gox_bld_vlv.close();
+
+# Purge through igniter
+sys.wait(time=5s);
+gox_prg_vlv.close();
+
+# open H2 bleed again
+gox_bld_vlv.open();
+sys.wait(time=0.5s);
+
+# finally close gox main again
+gox_ign_vlv.close();
+
+# Post-Conditions:
+# Igniter Fully Depressurized
+# All Igniter Valves Normal State
+"""
 
 # This state runs the igniter test sequence to test ignition.
 [state_machine.states."Igniter Test"]
@@ -734,5 +790,61 @@ allowed_actuators = [
 ]
 manual_transitions = [
     "Safeing Idle",
+    "Safeing Igniter Deactivation",
     { target = "Safeing Normal", abort = true },
 ]
+
+# This state runs the igniter deactivation/purge sequence to safely depressurize the igniter.
+[state_machine.states."Igniter Deactivation S"]
+type = "RunSequence"
+on_completed = "Safeing Controllable"
+manual_transitions = [{ target = "Safeing Normal", abort = true }]
+sequence = """
+# Preconditions:
+# H2 and GOx Bottle closed
+
+# Clear leftover H2
+h2_ign_vlv.open();
+sys.wait(time=0.5s);
+
+# Purge through bleed
+h2_prg_vlv.open();
+sys.wait(time=1s);
+h2_bld_vlv.close();
+
+# Purge through igniter
+sys.wait(time=5s);
+h2_prg_vlv.close();
+
+# open H2 bleed again
+h2_bld_vlv.open();
+sys.wait(time=0.5s);
+
+# finally close h2 main again
+h2_ign_vlv.close();
+
+# Same for GOx side
+# Clear leftover GOx
+gox_ign_vlv.open();
+sys.wait(time=0.5s);
+
+# Purge through bleed
+gox_prg_vlv.open();
+sys.wait(time=1s);
+gox_bld_vlv.close();
+
+# Purge through igniter
+sys.wait(time=5s);
+gox_prg_vlv.close();
+
+# open H2 bleed again
+gox_bld_vlv.open();
+sys.wait(time=0.5s);
+
+# finally close gox main again
+gox_ign_vlv.close();
+
+# Post-Conditions:
+# Igniter Fully Depressurized
+# All Igniter Valves Normal State
+"""
