@@ -326,6 +326,12 @@ prz_oss_dpr.activate(setpoint=10.0);
 oss_tnk_vnt.open();
 # Purge oxidizer tank for 10 sec
 sys.wait(time=10s);
+
+# Close OSS Vent and open main
+oss_tnk_vnt.close();
+oss_ml_vlv.open();
+# Purge through OSS Main
+sys.wait(time=5s);
 """
 # Close n2 purge, open oss tank and reset rest to normal.
 [state_machine.states."Purge 2"]
@@ -348,17 +354,10 @@ sys.wait(time=0.4s);
 
 # Now open lox purge
 lox_prg_vlv.open();
-# Purge lox decoupler line (?) for 5 sec
-sys.wait(time=5s);
+# Purge lox decoupler line for 10 sec
+sys.wait(time=10s);
 
-# Now open lox main, but close oss vent
-oss_ml_vlv.open();
-oss_tnk_vnt.close();
-# Purge lox main line for 5 sec
-sys.wait(time=5s);
-
-# Close main again, open bleed
-oss_ml_vlv.close();
+# Now open bleed
 lox_bld_vlv.open();
 # Purge through bleed for 5 sec
 sys.wait(time=5s);
