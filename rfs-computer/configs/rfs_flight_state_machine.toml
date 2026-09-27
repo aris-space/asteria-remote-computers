@@ -549,22 +549,33 @@ on_violation = "Filling Abort"
 on_completed = "LOX Filling"
 manual_transitions = ["Filling", { target = "Filling Abort", abort = true }]
 sequence = """
+# Pre-Conditions:
+# LOx being Filled, everything depressurized
+
 # Close vent valves
 n2_bld_vlv.close();
 prz_copv_vnt.close();
+
+# Close fuel vent and open fuel dpr
+fss_tnk_vnt.close();
+prz_fss_dpr.activate(setpoint=25.0);
+
 sys.wait(time=0.4s);
 
 # Then open N2 fill valve
 n2_fll_vlv.open();
 
-# Detect proper opening of the post-booster line
-n2_post_bst_p.detect(value=100, rising=true, abort='Filling', patience=10s);
+# Detect copv pressure increase above 30 barg, meaning fuel tank was filled
+prz_copv_p.detect(value=30, rising=true, abort='Filling', patience=10s);
+
+# close fss dpr
+prz_fss_dpr.deactivate();
 
 # Then open booster valve
 n2_bst_vlv.open();
 
-# And wait for filling to 305 bar post-booster
-prz_copv_p.detect(value=305, rising=true, abort='Filling', patience=3600s);
+# And wait for filling to 320 bar post-booster
+n2_post_bst_p.detect(value=320, rising=true, abort='Filling', patience=3600s);
 
 # Finally close the booster and fill valve again
 n2_bst_vlv.close();
@@ -595,9 +606,10 @@ manual_transitions = [
 type = "RunSequence"
 on_completed = "Decouple"
 sequence = """
-# Off normal: oss & prz vent closed
+# Off normal: rocket vents closed
 prz_copv_vnt.close();
 oss_tnk_vnt.close();
+fss_tnk_vnt.close();
 n2_shw_vlv.open();
 # Normal
 lox_bld_vlv.close();
@@ -790,7 +802,7 @@ allowed_actuators = [
 ]
 manual_transitions = [
     "Safeing Idle",
-    "Safeing Igniter Deactivation",
+    "Igniter Deactivation S",
     { target = "Safeing Normal", abort = true },
 ]
 
