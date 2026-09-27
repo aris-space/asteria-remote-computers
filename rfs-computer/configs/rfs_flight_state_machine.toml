@@ -706,7 +706,6 @@ h2_prg_vlv.close();
 h2_ign_vlv.close();
 h2_bld_vlv.open();
 ign_spk_plg.close();
-eng_prg_vlv.close();
 """
 [state_machine.states."Auto-Disarmed 3"]
 type = "Waiting"
@@ -723,7 +722,6 @@ h2_bld_vlv.close();
 gox_bld_vlv.close();
 gox_prg_vlv.open();
 h2_prg_vlv.open();
-eng_prg_vlv.open();
 """
 [state_machine.states."Armed 2"]
 type = "WaitForIgnition"
