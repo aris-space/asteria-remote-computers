@@ -315,7 +315,7 @@ sequence = """
 # Rocket Purge Open, Igniter Purge Open
 
 # Make sure DPRs are set correctly
-prz_fss_dpr.activate(setpoint=50.0);
+prz_fss_dpr.activate(setpoint=25.0);
 prz_oss_dpr.deactivate();
 
 # Stop Igniter Purge
@@ -343,8 +343,7 @@ eng_prg_vlv.close();
 fss_ml_vlv.open();
 
 
-# Thrusting
-prz_fss_dpr.activate(setpoint=50.0);
+# Thrusting at 25barg
 sys.wait(time=11s);
 
 # Shutdown fuel rich
