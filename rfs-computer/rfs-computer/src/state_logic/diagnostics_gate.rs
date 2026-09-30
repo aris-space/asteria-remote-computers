@@ -71,6 +71,7 @@ impl StateLogic for DiagnosticsGate {
             ambient_temperature: _, // not important
             valves_armed: _,        // nothing to check
             igniter_armed: _,       // nothing to check
+            rocket_connection_detect: _, // nothing to check
         } = &input.uremote_sensors;
 
         let healths = [
