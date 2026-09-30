@@ -66,11 +66,11 @@ impl StateLogic for DiagnosticsGate {
 
         let uremote_electronics::input::Sensors {
             lox_temperature,
-            custom_temperature: _,  // sometimes not connected
-            cabinet_temperature: _, // not important
-            ambient_temperature: _, // not important
-            valves_armed: _,        // nothing to check
-            igniter_armed: _,       // nothing to check
+            custom_temperature: _,       // sometimes not connected
+            cabinet_temperature: _,      // not important
+            ambient_temperature: _,      // not important
+            valves_armed: _,             // nothing to check
+            igniter_armed: _,            // nothing to check
             rocket_connection_detect: _, // nothing to check
         } = &input.uremote_sensors;
 
