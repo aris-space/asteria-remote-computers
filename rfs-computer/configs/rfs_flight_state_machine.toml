@@ -146,10 +146,6 @@ h2_prg_vlv.close();
 
 # open H2 bleed again
 h2_bld_vlv.open();
-sys.wait(time=0.5s);
-
-# finally close h2 main again
-h2_ign_vlv.close();
 
 # Same for GOx side
 # Clear leftover GOx
@@ -165,11 +161,12 @@ gox_bld_vlv.close();
 sys.wait(time=5s);
 gox_prg_vlv.close();
 
-# open H2 bleed again
+# open GOx bleed again
 gox_bld_vlv.open();
-sys.wait(time=0.5s);
+sys.wait(time=2s);
 
-# finally close gox main again
+# finally close h2 and gox igniter valves again
+h2_ign_vlv.close();
 gox_ign_vlv.close();
 
 # Post-Conditions:
@@ -530,15 +527,14 @@ prz_copv_vnt.close();
 
 # Close fuel vent and open fuel dpr
 fss_tnk_vnt.close();
-prz_fss_dpr.activate(setpoint=25.0);
-
+prz_fss_dpr.activate(setpoint=50.0);
 sys.wait(time=0.4s);
 
 # Then open N2 fill valve
 n2_fll_vlv.open();
 
-# Detect copv pressure increase above 30 barg, meaning fuel tank was filled
-prz_copv_p.detect(value=30, rising=true, abort='Filling', patience=10s);
+# Detect copv pressure increase above 55 barg, meaning fuel tank was filled
+prz_copv_p.detect(value=55, rising=true, abort='Filling', patience=10s);
 
 # close fss dpr
 prz_fss_dpr.deactivate();
@@ -781,10 +777,6 @@ h2_prg_vlv.close();
 
 # open H2 bleed again
 h2_bld_vlv.open();
-sys.wait(time=0.5s);
-
-# finally close h2 main again
-h2_ign_vlv.close();
 
 # Same for GOx side
 # Clear leftover GOx
@@ -800,11 +792,12 @@ gox_bld_vlv.close();
 sys.wait(time=5s);
 gox_prg_vlv.close();
 
-# open H2 bleed again
+# open GOx bleed again
 gox_bld_vlv.open();
-sys.wait(time=0.5s);
+sys.wait(time=2s);
 
-# finally close gox main again
+# finally close h2 and gox igniter valves again
+h2_ign_vlv.close();
 gox_ign_vlv.close();
 
 # Post-Conditions:
