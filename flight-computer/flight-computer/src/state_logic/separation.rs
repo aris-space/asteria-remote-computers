@@ -7,6 +7,7 @@ use crate::util::timer::Timer;
 
 /// This state separates the nosecone, which pulls out the drogue, then waits
 /// for `deploy_time` time before transiting into the `on_after_separation` state.
+/// With `deploy_time` equals to zero, it immediately transitions.
 #[derive(Debug)]
 pub struct Separate {
     pub(crate) deploy_time: Duration,

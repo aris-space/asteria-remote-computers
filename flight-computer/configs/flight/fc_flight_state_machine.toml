@@ -362,10 +362,9 @@ manual_transitions = [
 
 # ======================================= Recovery =======================================
 
-# This state separates the drogue and waits for some time before transitioning
+# This state separates the drogue and immediately transitions
 [state_machine.states."Separation"]
 type = "Separation"
-deploy_time_sec = 6                    # config value [sep]
 on_after_separation = "Drogue Descent"
 
 # This state is active when the rocket is dropped up until the chute is deployed

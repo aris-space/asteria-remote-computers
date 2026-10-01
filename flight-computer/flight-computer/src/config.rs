@@ -121,8 +121,9 @@ pub enum StateLogicConfig<Gnc: CompatGuidanceController> {
     },
     /// Describes a [`state_logic::Separate`].
     Separation {
-        /// If the `deploy_time_sec` time passes since transitioning into the state,
-        /// we proceed to the `on_after_separation` state
+        /// If set, we wait this long after separating before proceeding to `on_after_separation`.
+        /// If not set, we proceed immediately.
+        #[serde(default)]
         deploy_time_sec: f64,
         on_after_separation: String,
     },
