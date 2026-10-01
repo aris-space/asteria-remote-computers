@@ -21,7 +21,7 @@ diagram_path = "state-machines/fc-flight-state-machine.drawio.svg"
 type = "Waiting"
 manual_transitions = [
     { target = "Diagnostics" },
-    { target = "Valve Check" },
+    { target = "Normal" },
 ]
 
 # This state exists for recovering from failures that can happen before liftoff
@@ -32,10 +32,22 @@ manual_transitions = [{ target = "Idle" },]
 # This state continues only when all boards have sent healthy reports
 [state_machine.states."Diagnostics"]
 type = "Diagnostics"
-on_tests_pass = "Valve Check"
+on_tests_pass = "Normal"
 on_tests_fail = "Soft Failure"
 outdated_threshold_sec = 5
 check_pss_boards = true
+
+# Sets all valves to their normal state before the valve check or the handoff
+[state_machine.states."Normal"]
+type = "SetNormalState"
+on_done = "Normal 2"
+[state_machine.states."Normal 2"]
+type = "Waiting"
+manual_transitions = [
+    { target = "Valve Check" },
+    { target = "Locked" },
+    { target = "Soft Failure", abort = true },
+]
 
 # This state allows full actuators control for system functionality checks
 [state_machine.states."Valve Check"]
@@ -50,24 +62,32 @@ allowed_actuators = [
     "oss_ml_vlv",
 ]
 manual_transitions = [
-    { target = "Waiting for Handsoff" },
+    { target = "Normal" },
     { target = "Soft Failure", abort = true },
 ]
 
-# In this state the rocket is transported to the pad and we wait before continueing further
-[state_machine.states."Waiting for Handsoff"]
-type = "SetNormalState"
-on_done = "Waiting for Handsoff 2"
-[state_machine.states."Waiting for Handsoff 2"]
+# In this state the rocket is transported to the pad and we wait before continueing further.
+# The steering motors are powered and locked.
+[state_machine.states."Locked"]
 type = "ArmRecovery"
 arming_state = "SteeringMotorsLocked"
-on_state_set = "Waiting for Handsoff 3"
-[state_machine.states."Waiting for Handsoff 3"]
+on_state_set = "Locked 2"
+[state_machine.states."Locked 2"]
 type = "Waiting"
 manual_transitions = [
     { target = "Passive for Filling" },
+    { target = "Zero Motors" },
     { target = "Soft Failure", abort = true },
 ]
+
+# Powers the separation actuators (and all others) for zeroing the motors. Going back to Locked unpowers them again.
+[state_machine.states."Zero Motors"]
+type = "ArmRecovery"
+arming_state = "Armed"
+on_state_set = "Zero Motors 2"
+[state_machine.states."Zero Motors 2"]
+type = "Waiting"
+manual_transitions = [{ target = "Locked" },]
 
 # ======================================= Passive =======================================
 
@@ -76,7 +96,7 @@ manual_transitions = [
 [state_machine.states."Force Abort"]
 type = "Waiting"
 manual_transitions = [
-    { target = "Waiting for Handsoff" },
+    { target = "Locked" },
     { target = "Override Valves" },
 ]
 
