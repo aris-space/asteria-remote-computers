@@ -276,19 +276,25 @@ manual_transitions = [
 
 # This state runs if the firing sequence or a manual input aborted
 [state_machine.states."Firing Abort"]
-type = "RunSequence"
-on_completed = "Firing Abort 2"
-sequence = """
-# TODO!
-"""
-manual_transitions = [
-    { target = "Manual Safeing" },
-]
+type = "SetNormalState"
+on_done = "Firing Abort 2"
 [state_machine.states."Firing Abort 2"]
+type = "RunSequence"
+on_completed = "Firing Abort 3"
+sequence = """
+# Igniter off
+h2_ign_vlv.close();
+gox_ign_vlv.close();
+ign_spk_plg.close();
+# Purge on
+gox_prg_vlv.open();
+h2_prg_vlv.open();
+eng_prg_vlv.open();
+"""
+manual_transitions = [{ target = "Manual Safeing" }]
+[state_machine.states."Firing Abort 3"]
 type = "Waiting"
-manual_transitions = [
-    { target = "Manual Safeing" },
-]
+manual_transitions = [{ target = "Manual Safeing" }]
 
 # This instantaneous state ensures that the RFS is armed for ignition
 [state_machine.states."Ignition Initiation"]
@@ -300,8 +306,13 @@ on_not_armed = "Auto-Disarmed"
 [state_machine.states."Ignition"]
 type = "RunSequence"
 on_completed = "Ignition 2"
+# FIXME: This is a scrub sequence
 sequence = """
-# TODO!
+# Pre-Conditions:
+# Vent Valves Closed, Tanks Pressurized to IGN Setpoint
+# Igniter Purge Open
+# do nothing because we scrub
+sys.wait(time=1s);
 """
 [state_machine.states."Ignition 2"]
 type = "LiftoffDetection"
