@@ -234,6 +234,8 @@ pub enum StateLogicConfig<Gnc: CompatGuidanceController> {
         trigger_before_apogee_time_s: f32,
         /// The name of the state which to proceed to after apogee detection.
         on_apogee_reached: String,
+        /// The name of the state which to proceed to if CATS signals separation.
+        on_cats_separation: String,
     },
     /// Describes a [`state_logic::Thrust`].
     Thrust {
@@ -243,6 +245,8 @@ pub enum StateLogicConfig<Gnc: CompatGuidanceController> {
         abort_downward_velocity_m_s: f32,
         /// The name of the state which to proceed to after apogee detection.
         on_apogee_reached: String,
+        /// The name of the state which to proceed to if CATS signals separation.
+        on_cats_separation: String,
     },
     /// Describes a [`state_logic::MonitoredManualControl`].
     MonitoredManualControl {
@@ -515,9 +519,11 @@ impl<Gnc: CompatGuidanceController> MakeState for StateLogicConfig<Gnc> {
             StateLogicConfig::ApogeeTrigger {
                 trigger_before_apogee_time_s,
                 on_apogee_reached,
+                on_cats_separation,
             } => state_logic::ApogeeTrigger {
                 trigger_before_apogee_time: Duration::from_secs_f32(trigger_before_apogee_time_s),
                 on_apogee_reached: StateName::try_new(&on_apogee_reached, names)?,
+                on_cats_separation: StateName::try_new(&on_cats_separation, names)?,
                 manual_transitions,
             }
             .into_box(),
@@ -525,10 +531,12 @@ impl<Gnc: CompatGuidanceController> MakeState for StateLogicConfig<Gnc> {
                 abort_downward_velocity_m_s,
                 on_apogee_reached,
                 on_firing_finished,
+                on_cats_separation,
             } => state_logic::Thrust {
                 abort_downward_velocity_m_s,
                 on_apogee_reached: StateName::try_new(&on_apogee_reached, names)?,
                 on_firing_finished: StateName::try_new(&on_firing_finished, names)?,
+                on_cats_separation: StateName::try_new(&on_cats_separation, names)?,
                 manual_transitions,
             }
             .into_box(),

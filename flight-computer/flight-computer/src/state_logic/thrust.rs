@@ -1,15 +1,18 @@
+use crate::io::types::SeparationState;
 use lib_mission::reactive::{IntoWatched, WatchedExt};
 use lib_mission::state_machine::{AdditionalState, StateLogic, StateName};
 use lib_mission::transition::ManualTransitions;
 
-/// This state waits until the firing completes or aborts or if something goes wrong, an apogee is reached.
-/// When the down velocity gets positive (rocket starts descending more than `abort_downward_velocity_m_s` m/s down).
+/// This state waits until the firing is finished, which is detected by the N2 pressure dropping to or below
+/// `n2_pressure_limit_barg`, until an apogee is reached, or until CATS signals separation (`on_cats_separation`).
+/// Apogee is detected when the rocket starts descending more than `abort_downward_velocity_m_s` m/s down.
 #[derive(Debug)]
 pub struct Thrust {
     pub(crate) abort_downward_velocity_m_s: f32,
     pub(crate) on_apogee_reached: StateName,
     #[allow(dead_code)] // todo
     pub(crate) on_firing_finished: StateName,
+    pub(crate) on_cats_separation: StateName,
     pub(crate) manual_transitions: ManualTransitions,
 }
 
@@ -27,6 +30,7 @@ impl StateLogic for Thrust {
         _p: &AdditionalState<Self::Parameter>,
     ) -> StateName {
         let mut velocity_watcher = input.velocity.watched();
+        let mut cats_watcher = input.cats_separation.watched();
 
         tokio::select! {
             next = self.manual_transitions.next(input, _p) => {
@@ -37,7 +41,10 @@ impl StateLogic for Thrust {
                 tracing::info!(cause = "fc apogee trigger", "transitioning");
                 return self.on_apogee_reached.clone();
             },
-            // TODO: monitor firing sequence and move to on_firing_finished if done
+            _ = cats_watcher.next_satisfying(|s| matches!(s, SeparationState::Separated)) => {
+                tracing::info!(cause = "cats separation", "transitioning");
+                return self.on_cats_separation.clone();
+            },
         }
     }
 }

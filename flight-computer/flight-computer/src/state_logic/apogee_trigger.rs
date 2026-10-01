@@ -3,15 +3,19 @@ use lib_mission::state_machine::{AdditionalState, StateLogic, StateName};
 use lib_mission::transition::ManualTransitions;
 use std::time::Duration;
 
+use crate::io::types::SeparationState;
+
 /// This state detects apogee in three cases and transitions in `on_apogee_reached`:
 /// 1. When the down velocity gets positive (rocket starts descending).
 /// 2. When the time to apogee is shorter than `trigger_before_apogee_time`. The time is predicted
 ///    with a simple model only taking gravity into account.
-/// 3. The CATS backup flight computer detects apogee first and signals this to the fc.
+/// 3. The CATS backup flight computer detects apogee first and signals separation to the fc,
+///    in which case we transition to `on_cats_separation`.
 #[derive(Debug)]
 pub struct ApogeeTrigger {
     pub(crate) trigger_before_apogee_time: Duration,
     pub(crate) on_apogee_reached: StateName,
+    pub(crate) on_cats_separation: StateName,
     pub(crate) manual_transitions: ManualTransitions,
 }
 
@@ -29,6 +33,7 @@ impl StateLogic for ApogeeTrigger {
         _p: &AdditionalState<Self::Parameter>,
     ) -> StateName {
         let mut velocity_watcher = input.velocity.watched();
+        let mut cats_watcher = input.cats_separation.watched();
         // The velocity is positive in down (NED) direction. Therefore, apogee gets triggered the latest if the down velocity gets positive.
         // The main trigger is based on a prediction of the time before apogee. Based on a simple model, not taking drag into account the velocity
         // is divided by gravity to predict time to apogee. If this time goes below `trigger_before_apogee_time` apogee is triggered.
@@ -45,6 +50,10 @@ impl StateLogic for ApogeeTrigger {
             _ = velocity_watcher.next_satisfying(|v| v.velocity_down > simplified_trigger_threshold) => {
                 tracing::info!(cause = "fc apogee trigger", "transitioning");
                 return self.on_apogee_reached.clone();
+            },
+            _ = cats_watcher.next_satisfying(|s| matches!(s, SeparationState::Separated)) => {
+                tracing::info!(cause = "cats separation", "transitioning");
+                return self.on_cats_separation.clone();
             },
         }
     }
