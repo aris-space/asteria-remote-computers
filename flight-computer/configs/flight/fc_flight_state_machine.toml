@@ -331,31 +331,34 @@ manual_transitions = [
 
 # ======================================= Liftoff =======================================
 
-# This state tells the ECU to abort the firing sequence while in the air
-[state_machine.states."Flight Abort"]
-type = "RunSequence"
-sequence = """
-# TODO
-"""
-on_completed = "Coasting"
-
 # During this state the engine is running, launching us upwards
 [state_machine.states."Thrusting"]
 type = "Thrust"
-# We abort if we move more than 5m/s downwards
+# Apogee is detected if we move more than 5m/s downwards
 abort_downward_velocity_m_s = 5
-on_apogee_reached = "Flight Abort"
+on_apogee_reached = "Coasting"
+# The firing is finished once the N2 pressure drops to or below this value
+n2_pressure_limit_barg = 3
 on_firing_finished = "Coasting"
+# CATS signalled separation
+on_cats_separation = "Separation"
 manual_transitions = [
-    { target = "Flight Abort", abort = true },
+    { target = "Coasting", abort = true },
 ]
+
+# Sets all valves to their normal state (PSS normal), then waits for apogee
+[state_machine.states."Coasting"]
+type = "SetNormalState"
+on_done = "Coasting 2"
 
 # During this state we are still moving upwards but just from momentum
 # This state waits until apogee is detected
-[state_machine.states."Coasting"]
+[state_machine.states."Coasting 2"]
 type = "ApogeeTrigger"
 trigger_before_apogee_time_s = 1.5 # apogee gets detected 1.5s before actual reaching apogee.
 on_apogee_reached = "Separation"
+# CATS signalled separation
+on_cats_separation = "Separation"
 manual_transitions = [
     { target = "Separation", abort = true },
 ]

@@ -10,8 +10,8 @@ use lib_mission::transition::ManualTransitions;
 pub struct Thrust {
     pub(crate) abort_downward_velocity_m_s: f32,
     pub(crate) on_apogee_reached: StateName,
-    #[allow(dead_code)] // todo
     pub(crate) on_firing_finished: StateName,
+    pub(crate) n2_pressure_limit_barg: f32,
     pub(crate) on_cats_separation: StateName,
     pub(crate) manual_transitions: ManualTransitions,
 }
@@ -31,6 +31,7 @@ impl StateLogic for Thrust {
     ) -> StateName {
         let mut velocity_watcher = input.velocity.watched();
         let mut cats_watcher = input.cats_separation.watched();
+        let mut n2_pressure_watcher = input.pss_sensors.pressurization_line_pressure.watched();
 
         tokio::select! {
             next = self.manual_transitions.next(input, _p) => {
@@ -44,6 +45,10 @@ impl StateLogic for Thrust {
             _ = cats_watcher.next_satisfying(|s| matches!(s, SeparationState::Separated)) => {
                 tracing::info!(cause = "cats separation", "transitioning");
                 return self.on_cats_separation.clone();
+            },
+            _ = n2_pressure_watcher.next_satisfying(|p| p.0 <= self.n2_pressure_limit_barg) => {
+                tracing::info!(cause = "n2 depleted", "transitioning");
+                return self.on_firing_finished.clone();
             },
         }
     }
