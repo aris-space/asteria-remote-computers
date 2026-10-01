@@ -150,24 +150,7 @@ targets = { "prz_fss_dpr" = "DPRDisabled", "prz_oss_dpr" = "DPRDisabled", "fss_t
 on_done = "Stop Pressurization 4"
 [state_machine.states."Stop Pressurization 4"]
 type = "Waiting"
-manual_transitions = [
-    { target = "Takeover" },
-    { target = "Override Valves P" },
-]
-
-# A state to potentially fix a broken system during an off-nominal scenario.
-[state_machine.states."Override Valves P"]
-type = "ManualControl"
-allowed_actuators = [
-    "prz_copv_vnt",
-    "prz_fss_dpr",
-    "fss_tnk_vnt",
-    "prz_oss_dpr",
-    "oss_tnk_vnt",
-    "fss_ml_vlv",
-    "oss_ml_vlv",
-]
-manual_transitions = [{ target = "Stop Pressurization" },]
+manual_transitions = [{ target = "Manual Safeing" },]
 
 # Abort state which depressurizes the entire system, including COPV.
 [state_machine.states."Depressure"]
@@ -181,41 +164,21 @@ on_done = "Depressure 3"
 type = "Waiting"
 manual_transitions = [{ target = "Manual Safeing" },]
 
-# This state marks the transition to pressurization section, where the rocket is in its own control again
+# This state marks the transition to the section where the rocket is in its own control again
 [state_machine.states."Takeover"]
 type = "Waiting"
 manual_transitions = [
-    { target = "Pressurization" },
+    { target = "Ready" },
+    { target = "Passive for Filling" }, # Redo diagnostics
     { target = "Stop Pressurization", abort = true },
 ]
 
-# This state allows manual pressurization
-[state_machine.states."Pressurization"]
-type = "MonitoredManualControl"
-allowed_actuators = [
-    "prz_fss_dpr",
-    "fss_tnk_vnt",
-    "prz_oss_dpr",
-    "oss_tnk_vnt",
-]
-telemetry_loss_threshold_sec = 900 # 15min
-on_violation = "Stop Pressurization"
-on_telemetry_loss = "Depressure"
-manual_transitions = [
-    { target = "Pressurized" },
-    { target = "Stop Pressurization", abort = true },
-]
-[state_machine.states."Pressurization".thresholds.upper_thresholds_barg]
-fuel_tank_pressure = 54
-oxitizer_tank_pressure = 54
-
-
-# This state is reached when the tanks have reached the required pressures and is one step away from arming.
-[state_machine.states."Pressurized"]
+# This state is reached after takeover (tanks pressurized) and is one step away from arming.
+[state_machine.states."Ready"]
 type = "ArmRecovery"
 arming_state = "SteeringMotorsLocked"
-on_state_set = "Pressurized 2"
-[state_machine.states."Pressurized 2"]
+on_state_set = "Ready 2"
+[state_machine.states."Ready 2"]
 type = "MonitoredWaiting"
 on_violation = "Stop Pressurization"
 on_telemetry_loss = "Depressure"
@@ -224,7 +187,7 @@ manual_transitions = [
     { target = "Armed" },
     { target = "Stop Pressurization", abort = true },
 ]
-[state_machine.states."Pressurized 2".thresholds.upper_thresholds_barg]
+[state_machine.states."Ready 2".thresholds.upper_thresholds_barg]
 fuel_tank_pressure = 54
 oxitizer_tank_pressure = 54
 
@@ -243,7 +206,7 @@ on_violation = "Stop Pressurization"
 on_telemetry_loss = "Depressure"
 telemetry_loss_threshold_sec = 900 # 15min
 manual_transitions = [
-    { target = "Pressurized" },
+    { target = "Ready" },
     { target = "Ignition Initiation" },
     { target = "Stop Pressurization", abort = true },
 ]
@@ -262,7 +225,7 @@ telemetry_loss_threshold_sec = 900 # 15min
 on_violation = "Stop Pressurization"
 on_telemetry_loss = "Depressure"
 manual_transitions = [
-    { target = "Pressurized" },
+    { target = "Ready" },
     { target = "Stop Pressurization", abort = true },
 ]
 [state_machine.states."Auto-Disarmed 2".thresholds.upper_thresholds_barg]
@@ -283,7 +246,9 @@ allowed_actuators = [
     "oss_ml_vlv",
 ]
 manual_transitions = [
-    { target = "Pressurized" },
+    { target = "Takeover" },
+    { target = "Depressure" },
+    { target = "Stop Pressurization" },
 ]
 
 
