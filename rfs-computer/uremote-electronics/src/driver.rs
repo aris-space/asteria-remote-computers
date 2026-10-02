@@ -113,6 +113,11 @@ mod channels {
         module: 7,
         channel: 0,
     };
+    /// `On` if the rocket is connected, as detected via the u-remote.
+    pub const ROCKET_CONNECTION_DETECT: ur20::Address = ur20::Address {
+        module: 0,
+        channel: 4,
+    };
     pub const LOX_TEMPERATURE: ur20::Address = ur20::Address {
         module: 1,
         channel: 0,
@@ -440,6 +445,7 @@ impl input::Sensors {
             ambient_temperature,
             valves_armed,
             igniter_armed,
+            rocket_connection_detect,
         } = self;
 
         read_temp(lox_temperature, channels::LOX_TEMPERATURE);
@@ -447,6 +453,7 @@ impl input::Sensors {
         read_temp(cabinet_temperature, channels::CABINET_TEMPERATURE);
         read_temp(ambient_temperature, channels::AMBIENT_TEMPERATURE);
         read_coil(valves_armed, channels::VALVE_ARMING_CIRCUIT);
+        read_coil(rocket_connection_detect, channels::ROCKET_CONNECTION_DETECT);
 
         let Some(ur20::ChannelValue::SilPFIn(sil)) = values.get(&channels::IGNITER_ARMING_CIRCUIT)
         else {

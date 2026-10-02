@@ -42,6 +42,7 @@ implicit_hasher = "allow"            # We'll only ever use the default hasher
 doc_markdown = "allow"               # Too many false positives for acronymes I can't bother to whitelist
 duration-suboptimal-units = "allow"  # Don't want to bump MSRV yet
 unsafe_derive_deserialize = "allow"  # Appears when serde and facet are both derived
+map_unwrap_or = "allow"              # Suggests `map_or_default` which would raise MSRV
 [workspace.lints.rustdoc]
 private_intra_doc_links = "allow"    # We don't export our docs
 

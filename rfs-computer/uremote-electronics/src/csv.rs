@@ -267,7 +267,7 @@ impl input::Sensors {
         &self,
         folder: &std::path::Path,
         time: &Watchable<lib_mission::util::time::MissionTime>,
-    ) -> Result<[tokio::task::AbortHandle; 6], Box<dyn std::error::Error>> {
+    ) -> Result<[tokio::task::AbortHandle; 7], Box<dyn std::error::Error>> {
         use lib_mission::reactive::IntoWatched as _;
         macro_rules! spawn_serializable_logger {
             ($name:literal, $e:expr, $headers:expr,) => {
@@ -287,6 +287,7 @@ impl input::Sensors {
             ambient_temperature,
             valves_armed,
             igniter_armed,
+            rocket_connection_detect,
         } = self;
 
         Ok([
@@ -308,6 +309,11 @@ impl input::Sensors {
             ),
             spawn_serializable_logger!("arming_valve_power", valves_armed, ["are armed [bool]"],),
             spawn_serializable_logger!("arming_igniter_power", igniter_armed, ["is armed [bool]"],),
+            spawn_serializable_logger!(
+                "rocket_connection_detect",
+                rocket_connection_detect,
+                ["is connected [bool]"],
+            ),
         ])
     }
 }

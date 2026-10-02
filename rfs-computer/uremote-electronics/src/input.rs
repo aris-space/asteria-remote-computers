@@ -34,6 +34,10 @@ pub struct Sensors {
     #[datapoint(pattern = "Message::RfsComputer(RFSCMessage::IgniterArmed(#value))")]
     #[broadcast(min_freq_hz = 0.5, max_freq_hz = 5.)]
     pub igniter_armed: Watchable<DigitalIn>,
+    /// `On` if the rocket is connected, as detected via the u-remote.
+    ///
+    /// This is currenlty purely local state. To be made into Mavlink message.
+    pub rocket_connection_detect: Watchable<DigitalIn>,
 }
 
 /// See the matching fields in [`Sensors`].

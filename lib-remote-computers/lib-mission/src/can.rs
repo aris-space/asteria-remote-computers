@@ -4,6 +4,7 @@
 //! Additionally, the structured messages will be logged in debug representation to debug-level.
 
 use std::collections::BTreeMap;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use can_hal::{CanDecode as _, CanEncode as _};
 use embedded_can::{Frame, StandardId};
@@ -159,15 +160,24 @@ fn read_can_once<S: embedded_can::blocking::Can, Col>(
 /// This is needed, as only one thread can send at a time. This actor arbitrates the accesses.
 /// Writing to the mpsc won't block.
 ///
+/// `enabled` gates the transmission: while it is `false`, messages are read from `receiver` (so
+/// producers never block) but dropped instead of being sent out on the bus.
+///
 /// Even though encoding should never fail, we log and otherwise ignore bad messages.
 #[tracing::instrument(level = "DEBUG", name = "can::transmit", skip_all)]
 pub fn run_can_transmit_actor<S: embedded_can::blocking::Can>(
     transmitter: &mut S,
     receiver: std::sync::mpsc::Receiver<CanMessage>,
+    enabled: &AtomicBool,
 ) {
     // initialize writer for all CAN messages
     // Blocking iterator
     for msg in receiver {
+        if !enabled.load(Ordering::Relaxed) {
+            tracing::trace!(?msg, "transmit gate closed, dropping CAN message");
+            continue;
+        }
+
         tracing::debug!(?msg, "transmitting CAN message");
 
         let mut buf = [0; 64];

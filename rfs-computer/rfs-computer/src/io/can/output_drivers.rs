@@ -1,7 +1,6 @@
 use std::time::Duration;
 
 use datatypes::actuator::{DigitalOut, NormallyClosedValve};
-use datatypes::sensor::DigitalIn;
 use datatypes::status::BuildInformationCommon;
 use datatypes::units::BarG;
 use lib_mission::reactive::Watched;
@@ -14,7 +13,6 @@ use watchable::Watchable;
 /// Sends `RfsComputerStatus` at 1Hz.
 #[allow(clippy::cast_possible_truncation)] // u64 micros since start
 pub fn spawn_rfsc_status_driver(
-    rocket_connection_detect: Watchable<DigitalIn>,
     rfsc_status: Watchable<dp_rfs_computer::RfsComputerStatus>,
     tx: std::sync::mpsc::Sender<messages::Message>,
 ) -> AbortHandle {
@@ -26,10 +24,6 @@ pub fn spawn_rfsc_status_driver(
                 interval.tick().await;
                 let status = rfsc_status.get();
                 let msg = messages::Message::RfsComputer(dp_rfs_computer::Message::Status(status));
-
-                if matches!(rocket_connection_detect.get(), DigitalIn::Off) {
-                    continue;
-                }
 
                 if tx.send(msg).is_err() {
                     tracing::warn!("CAN channel was closed. Shutting down!");
@@ -45,7 +39,6 @@ pub fn spawn_rfsc_status_driver(
 /// Sends `FlightComputerBuildInfo` at 0.2Hz.
 #[allow(clippy::needless_pass_by_value)] // needed to move `build_info` to future. Is a const anyway.
 pub fn spawn_rfsc_debug_driver(
-    rocket_connection_detect: Watchable<DigitalIn>,
     build_info: BuildInfo,
     tx: std::sync::mpsc::Sender<messages::Message>,
 ) -> AbortHandle {
@@ -74,10 +67,6 @@ pub fn spawn_rfsc_debug_driver(
                     },
                 ));
 
-                if matches!(rocket_connection_detect.get(), DigitalIn::Off) {
-                    continue;
-                }
-
                 if tx.send(msg).is_err() {
                     tracing::warn!("CAN channel was closed. Shutting down!");
                     break;
@@ -92,7 +81,6 @@ pub fn spawn_rfsc_debug_driver(
 /// Sends `IgniterPressure` at 30Hz (not 40Hz as not that much data is available) to the FC.
 #[allow(clippy::cast_possible_truncation)] // u64 micros since start
 pub fn spawn_fc_igniter_pressure_driver(
-    rocket_connection_detect: Watchable<DigitalIn>,
     igniter_pressure: impl Watched<BarG> + Send + 'static,
     tx: std::sync::mpsc::Sender<messages::Message>,
 ) -> AbortHandle {
@@ -108,10 +96,6 @@ pub fn spawn_fc_igniter_pressure_driver(
                     dp_rfs_computer::Message::IgniterPressure(BarG(igniter_pressure.current().0)),
                 );
 
-                if matches!(rocket_connection_detect.get(), DigitalIn::Off) {
-                    continue;
-                }
-
                 if tx.send(msg).is_err() {
                     tracing::warn!("CAN channel was closed. Shutting down!");
                     break;
@@ -125,7 +109,6 @@ pub fn spawn_fc_igniter_pressure_driver(
 
 /// Sends `GoxIgniterValveState` at 5Hz.
 pub fn spawn_gox_igniter_valve_state_driver(
-    rocket_connection_detect: Watchable<DigitalIn>,
     state: impl Watched<NormallyClosedValve> + Send + 'static,
     tx: std::sync::mpsc::Sender<messages::Message>,
 ) -> AbortHandle {
@@ -141,10 +124,6 @@ pub fn spawn_gox_igniter_valve_state_driver(
                     dp_rfs_computer::Message::GoxIgniterValveState(state.current()),
                 );
 
-                if matches!(rocket_connection_detect.get(), DigitalIn::Off) {
-                    continue;
-                }
-
                 if tx.send(msg).is_err() {
                     tracing::warn!("CAN channel was closed. Shutting down!");
                     break;
@@ -158,7 +137,6 @@ pub fn spawn_gox_igniter_valve_state_driver(
 
 /// Sends `H2IgniterValveState` at 5Hz.
 pub fn spawn_h2_igniter_valve_state_driver(
-    rocket_connection_detect: Watchable<DigitalIn>,
     state: impl Watched<NormallyClosedValve> + Send + 'static,
     tx: std::sync::mpsc::Sender<messages::Message>,
 ) -> AbortHandle {
@@ -174,10 +152,6 @@ pub fn spawn_h2_igniter_valve_state_driver(
                     dp_rfs_computer::Message::H2IgniterValveState(state.current()),
                 );
 
-                if matches!(rocket_connection_detect.get(), DigitalIn::Off) {
-                    continue;
-                }
-
                 if tx.send(msg).is_err() {
                     tracing::warn!("CAN channel was closed. Shutting down!");
                     break;
@@ -191,7 +165,6 @@ pub fn spawn_h2_igniter_valve_state_driver(
 
 /// Sends `GoxPurgeValveState` at 5Hz.
 pub fn spawn_gox_purge_valve_state_driver(
-    rocket_connection_detect: Watchable<DigitalIn>,
     state: impl Watched<NormallyClosedValve> + Send + 'static,
     tx: std::sync::mpsc::Sender<messages::Message>,
 ) -> AbortHandle {
@@ -207,10 +180,6 @@ pub fn spawn_gox_purge_valve_state_driver(
                     dp_rfs_computer::Message::GoxPurgeValveState(state.current()),
                 );
 
-                if matches!(rocket_connection_detect.get(), DigitalIn::Off) {
-                    continue;
-                }
-
                 if tx.send(msg).is_err() {
                     tracing::warn!("CAN channel was closed. Shutting down!");
                     break;
@@ -224,7 +193,6 @@ pub fn spawn_gox_purge_valve_state_driver(
 
 /// Sends `H2PurgeValveState` at 5Hz.
 pub fn spawn_h2_purge_valve_state_driver(
-    rocket_connection_detect: Watchable<DigitalIn>,
     state: impl Watched<NormallyClosedValve> + Send + 'static,
     tx: std::sync::mpsc::Sender<messages::Message>,
 ) -> AbortHandle {
@@ -240,10 +208,6 @@ pub fn spawn_h2_purge_valve_state_driver(
                     dp_rfs_computer::Message::H2PurgeValveState(state.current()),
                 );
 
-                if matches!(rocket_connection_detect.get(), DigitalIn::Off) {
-                    continue;
-                }
-
                 if tx.send(msg).is_err() {
                     tracing::warn!("CAN channel was closed. Shutting down!");
                     break;
@@ -257,7 +221,6 @@ pub fn spawn_h2_purge_valve_state_driver(
 
 /// Sends `N2RocketPurgeValveState` at 5Hz.
 pub fn spawn_engine_purge_valve_state_driver(
-    rocket_connection_detect: Watchable<DigitalIn>,
     state: impl Watched<NormallyClosedValve> + Send + 'static,
     tx: std::sync::mpsc::Sender<messages::Message>,
 ) -> AbortHandle {
@@ -273,10 +236,6 @@ pub fn spawn_engine_purge_valve_state_driver(
                     dp_rfs_computer::Message::N2RocketPurgeValveState(state.current()),
                 );
 
-                if matches!(rocket_connection_detect.get(), DigitalIn::Off) {
-                    continue;
-                }
-
                 if tx.send(msg).is_err() {
                     tracing::warn!("CAN channel was closed. Shutting down!");
                     break;
@@ -290,7 +249,6 @@ pub fn spawn_engine_purge_valve_state_driver(
 
 /// Sends `IgniterSparkPlugState` at 5Hz.
 pub fn spawn_igniter_spark_plug_state_driver(
-    rocket_connection_detect: Watchable<DigitalIn>,
     state: impl Watched<DigitalOut> + Send + 'static,
     tx: std::sync::mpsc::Sender<messages::Message>,
 ) -> AbortHandle {
@@ -305,10 +263,6 @@ pub fn spawn_igniter_spark_plug_state_driver(
                 let msg = messages::Message::RfsComputer(
                     dp_rfs_computer::Message::IgniterSparkPlugState(state.current()),
                 );
-
-                if matches!(rocket_connection_detect.get(), DigitalIn::Off) {
-                    continue;
-                }
 
                 if tx.send(msg).is_err() {
                     tracing::warn!("CAN channel was closed. Shutting down!");

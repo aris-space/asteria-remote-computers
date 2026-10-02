@@ -50,10 +50,11 @@ pub fn init_can_drivers(
         let mut receiver = receiver;
         read_can(&mut receiver, &mut consumers);
     });
-    // Spawn the transmitting thread
+    // Spawn the always enabled transmitting thread
     std::thread::spawn(move || {
         let mut transmitter = transmitter;
-        run_can_transmit_actor(&mut transmitter, rx);
+        let enabled = std::sync::atomic::AtomicBool::new(true);
+        run_can_transmit_actor(&mut transmitter, rx, &enabled);
     });
 
     Ok(output_handles)

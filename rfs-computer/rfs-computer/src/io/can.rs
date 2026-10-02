@@ -1,6 +1,12 @@
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
+
+use datatypes::sensor::DigitalIn;
 use lib_mission::can::{ConsumerRegistry, read_can, run_can_transmit_actor};
-use lib_mission::reactive::IntoWatched;
+use lib_mission::reactive::{IntoWatched, Watched};
 use tokio::task::AbortHandle;
+use tracing::Instrument;
+use watchable::Watchable;
 
 use crate::config::CANConfig;
 use crate::state::State;
@@ -10,6 +16,34 @@ use super::output::OutputTree;
 
 mod input_drivers;
 mod output_drivers;
+
+/// Spawns a task which keeps `enabled` up to date with whether either the Controllino's or the
+/// uremote's rocket connection detect currently indicates the rocket is connected. Either one
+/// being active is sufficient to enable CAN transmission.
+fn spawn_can_gate_driver(
+    enabled: Arc<AtomicBool>,
+    controllino_rocket_connection_detect: Watchable<DigitalIn>,
+    uremote_rocket_connection_detect: Watchable<DigitalIn>,
+) -> AbortHandle {
+    tokio::spawn(
+        async move {
+            let mut controllino_detect = controllino_rocket_connection_detect.watched();
+            let mut uremote_detect = uremote_rocket_connection_detect.watched();
+            loop {
+                let is_connected = matches!(controllino_detect.current(), DigitalIn::On)
+                    || matches!(uremote_detect.current(), DigitalIn::On);
+                enabled.store(is_connected, Ordering::Relaxed);
+
+                tokio::select! {
+                    _ = controllino_detect.next() => {},
+                    _ = uremote_detect.next() => {},
+                }
+            }
+        }
+        .instrument(tracing::info_span!("drivers::CANTransmitGate")),
+    )
+    .abort_handle()
+}
 
 /// Initializes CAN and its drivers
 pub fn init_can_drivers(
@@ -47,6 +81,18 @@ pub fn init_can_drivers(
     let mut output_handles = init_output_drivers(state_tree, input_tree, tx);
     let mut consumers = ConsumerRegistry::new().with_collector(input_tree.clone());
 
+    // The transmit gate: enabled while either the Controllino's or the uremote's rocket
+    // connection detect indicates the rocket is connected.
+    let can_enabled = Arc::new(AtomicBool::new(false));
+    output_handles.push(spawn_can_gate_driver(
+        can_enabled.clone(),
+        input_tree
+            .controllino_sensors
+            .rocket_connection_detect
+            .clone(),
+        input_tree.uremote_sensors.rocket_connection_detect.clone(),
+    ));
+
     // Register the gated igniter control consumer. This takes precedence over the collector and
     // only applies commands while the RFS is armed.
     let actuators = &output_tree.rfs_actuators;
@@ -75,7 +121,7 @@ pub fn init_can_drivers(
     // Spawn the transmitting thread
     std::thread::spawn(move || {
         let mut transmitter = transmitter;
-        run_can_transmit_actor(&mut transmitter, rx);
+        run_can_transmit_actor(&mut transmitter, rx, &can_enabled);
     });
 
     Ok(output_handles)
@@ -92,69 +138,31 @@ fn init_output_drivers(
         rfs_computer_status,
         ..
     } = state_tree;
-    // Register the emitters
+    // Register the emitter.
     let handles = vec![
-        output_drivers::spawn_rfsc_status_driver(
-            input_tree
-                .controllino_sensors
-                .rocket_connection_detect
-                .clone(),
-            rfs_computer_status.clone(),
-            tx.clone(),
-        ),
-        output_drivers::spawn_rfsc_debug_driver(
-            input_tree
-                .controllino_sensors
-                .rocket_connection_detect
-                .clone(),
-            crate::build_info::THIS_BUILD,
-            tx.clone(),
-        ),
+        output_drivers::spawn_rfsc_status_driver(rfs_computer_status.clone(), tx.clone()),
+        output_drivers::spawn_rfsc_debug_driver(crate::build_info::THIS_BUILD, tx.clone()),
         output_drivers::spawn_fc_igniter_pressure_driver(
-            input_tree
-                .controllino_sensors
-                .rocket_connection_detect
-                .clone(),
             input_tree.controllino_sensors.igniter_pressure.watched(),
             tx.clone(),
         ),
         output_drivers::spawn_gox_igniter_valve_state_driver(
-            input_tree
-                .controllino_sensors
-                .rocket_connection_detect
-                .clone(),
             input_tree.uremote_actuators.gox_igniter_valve.watched(),
             tx.clone(),
         ),
         output_drivers::spawn_h2_igniter_valve_state_driver(
-            input_tree
-                .controllino_sensors
-                .rocket_connection_detect
-                .clone(),
             input_tree.uremote_actuators.h2_igniter_valve.watched(),
             tx.clone(),
         ),
         output_drivers::spawn_gox_purge_valve_state_driver(
-            input_tree
-                .controllino_sensors
-                .rocket_connection_detect
-                .clone(),
             input_tree.uremote_actuators.gox_purge_valve.watched(),
             tx.clone(),
         ),
         output_drivers::spawn_h2_purge_valve_state_driver(
-            input_tree
-                .controllino_sensors
-                .rocket_connection_detect
-                .clone(),
             input_tree.uremote_actuators.h2_purge_valve.watched(),
             tx.clone(),
         ),
         output_drivers::spawn_engine_purge_valve_state_driver(
-            input_tree
-                .controllino_sensors
-                .rocket_connection_detect
-                .clone(),
             input_tree
                 .controllino_valves
                 .n2_engine_purge_valve
@@ -162,10 +170,6 @@ fn init_output_drivers(
             tx.clone(),
         ),
         output_drivers::spawn_igniter_spark_plug_state_driver(
-            input_tree
-                .controllino_sensors
-                .rocket_connection_detect
-                .clone(),
             input_tree.uremote_actuators.igniter_spark.watched(),
             tx.clone(),
         ),
