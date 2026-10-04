@@ -14,7 +14,7 @@ use datapoints::dp_sensor_carrier::Message as SCMessage;
 use datapoints::dp_sensor_carrier::{
     EnvironmentalData, ImuData, OrientationData, PositionData, VelocityData,
 };
-use datatypes::status::{ArmingState, DownlinkTelemetryStats, UplinkTelemetryHealth};
+use datatypes::status::{DownlinkTelemetryStats, UplinkTelemetryHealth};
 use datatypes::units::HPa;
 use datatypes::units::RailStatus;
 use datatypes::units::{BarG, Celsius};
@@ -89,10 +89,6 @@ pub struct InputTree {
     #[collector(flatten)]
     #[broadcast(flatten)]
     pub boards_status: BoardsStatus,
-    /// Hardware arming as detected by the recovery board.
-    pub recovery_armed: Watchable<ArmingState>,
-    /// Main valve hardware arming as detected by the engine control board.
-    pub ecu_armed: Watchable<ArmingState>,
     /// The newest raw data from the AV stack sensors.
     #[broadcast(flatten)]
     #[collector(flatten)]
