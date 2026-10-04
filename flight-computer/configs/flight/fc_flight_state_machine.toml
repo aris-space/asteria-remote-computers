@@ -141,8 +141,8 @@ on_tests_pass = "Takeover"
 on_tests_fail = "Boards Unhealthy"
 outdated_threshold_sec = 5
 check_pss_boards = true
-check_separation = false # FIXME: Enable for Flight!
-check_main_chute = false # FIXME: Enable for Flight!
+check_separation = true
+check_main_chute = true
 
 # This abort state requires the operator to acknowledge that some boards are unhealthy.
 [state_machine.states."Boards Unhealthy"]
@@ -202,7 +202,7 @@ on_state_set = "Ready 2"
 type = "MonitoredWaiting"
 on_violation = "Stop Pressurization"
 on_telemetry_loss = "Depressure"
-telemetry_loss_threshold_sec = 900 # 15min
+telemetry_loss_threshold_sec = 600 # 10min
 manual_transitions = [
     { target = "Armed" },
     { target = "Stop Pressurization", abort = true },
@@ -224,7 +224,7 @@ on_state_set = "Armed 3"
 type = "MonitoredWaiting"
 on_violation = "Stop Pressurization"
 on_telemetry_loss = "Depressure"
-telemetry_loss_threshold_sec = 900 # 15min
+telemetry_loss_threshold_sec = 600 # 10min
 manual_transitions = [
     { target = "Ready" },
     { target = "Ignition Initiation" },
@@ -241,7 +241,7 @@ arming_state = "SteeringMotorsLocked"
 on_state_set = "Auto-Disarmed 2"
 [state_machine.states."Auto-Disarmed 2"]
 type = "MonitoredWaiting"
-telemetry_loss_threshold_sec = 900 # 15min
+telemetry_loss_threshold_sec = 600 # 10min
 on_violation = "Stop Pressurization"
 on_telemetry_loss = "Depressure"
 manual_transitions = [
@@ -267,8 +267,8 @@ allowed_actuators = [
 ]
 manual_transitions = [
     { target = "Takeover" },
-    { target = "Depressure" },
     { target = "Stop Pressurization" },
+    { target = "Depressure", abort = true },
 ]
 
 

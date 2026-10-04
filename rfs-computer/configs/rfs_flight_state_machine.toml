@@ -468,7 +468,7 @@ allowed_actuators = [
     "n2_shw_vlv",  # N2 shower valves
     "eng_prg_vlv", # Engine Purge valve
 ]
-telemetry_loss_threshold_sec = 300 # 5min
+telemetry_loss_threshold_sec = 600 # 10min
 on_violation = "Filling Abort"
 manual_transitions = ["Pre Filling", { target = "Filling Abort", abort = true }]
 
@@ -496,7 +496,7 @@ allowed_actuators = [
     "prz_copv_vnt", # rocket N2(PRZ) vent valve
     "n2_shw_vlv",   # N2 shower valves
 ]
-telemetry_loss_threshold_sec = 900 # 15min
+telemetry_loss_threshold_sec = 600 # 10min
 on_violation = "Filling Abort"
 manual_transitions = [
     "Parallel Filling",
@@ -513,7 +513,7 @@ allowed_actuators = [
     "oss_ml_vlv",  # rocket LOX(OSS) main valve
     "n2_shw_vlv",  # N2 shower valves
 ]
-telemetry_loss_threshold_sec = 900 # 15min
+telemetry_loss_threshold_sec = 600 # 10min
 on_violation = "Filling Abort"
 on_completed = "Filling"
 manual_transitions = ["Filling", { target = "Filling Abort", abort = true }]
@@ -572,7 +572,7 @@ eng_prg_vlv.close();
 
 # State to try to decouple the hoses
 [state_machine.states."Decouple"]
-type = "ManualControl"
+type = "MonitoredManualControl"
 allowed_actuators = [
     "lox_dec_ext", # LOX decoupler
     "lox_dec_ret", # LOX decoupler
@@ -583,6 +583,8 @@ allowed_actuators = [
     "n2_shw_vlv",  # N2 shower valves
     "eng_prg_vlv", # Engine Purge valve
 ]
+telemetry_loss_threshold_sec = 600 # 10min
+on_violation = "Filling Abort"
 manual_transitions = ["Handsoff", { target = "Filling Abort", abort = true }]
 
 
@@ -658,7 +660,7 @@ ign_spk_plg.close();
 """
 [state_machine.states."Auto-Disarmed 3"]
 type = "Waiting"
-manual_transitions = ["Handsoff"]
+manual_transitions = ["Handsoff", { target = "Abort Firing", abort = true }]
 
 
 # State which allows the FC to ignite.
