@@ -1,5 +1,6 @@
 //! Contains [`OutputTree`].
 
+use messages::datapoints::dp_recovery_board::DeploymentState;
 use std::collections::BTreeMap;
 
 use datatypes::actuator::Settable;
@@ -13,19 +14,16 @@ use pss_drivers::output::PSSValves;
 use rfs_drivers::output::ActuatorChannel;
 use watchable::Watchable;
 
-use super::types::{
-    CameraPowerState, MainDeploymentState, RecoveryArmingState, SeparationState,
-    SteeringMotorRevolutions,
-};
+use super::types::{CameraPowerState, RecoveryArmingState, SteeringMotorRevolutions};
 
 /// Holds the things we want to set
 #[derive(Debug, Clone, Broadcast)]
 #[broadcast(message_type = "messages::Message")]
 pub struct OutputTree {
-    /// When turning [`SeparationState::Separated`], the drogue should be separated.
-    pub separate_drogue: Watchable<SeparationState>,
-    /// When turning [`MainDeploymentState::Deployed`], the chute should be deployed.
-    pub deploy_main_chute: Watchable<MainDeploymentState>,
+    /// When turning [`DeploymentState::Deployed`], the drogue should be separated.
+    pub separate_drogue: Watchable<DeploymentState>,
+    /// When turning [`DeploymentState::Deployed`], the chute should be deployed.
+    pub deploy_main_chute: Watchable<DeploymentState>,
 
     /// The target revolutions of the steering motors for the parachute.
     /// Whenever this changes, the recovery board will start moving toward this target.

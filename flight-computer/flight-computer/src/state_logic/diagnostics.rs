@@ -175,6 +175,8 @@ fn is_oxidizer_control_board_healthy(
 }
 
 /// Checks the recovery board status for a simple healthy / unhealthy state.
+///
+/// This assumes that the steering motors are powered, but the separation and deployment unpowered.
 /// Does not do any error reporting, will only return `false` if *something* is unhealthy.
 /// `check_separation` and `check_main_chute` control whether the separation / deployment
 /// servos are included in the check.
@@ -184,42 +186,38 @@ fn is_recovery_board_healthy(
     check_separation: bool,
     check_main_chute: bool,
 ) -> bool {
-    use messages::datapoints::dp_recovery_board::{ActuatorStatus, WatchdogState};
+    use messages::datapoints::dp_recovery_board::{ActuatorStatus, SteeringStatus, WatchdogState};
 
-    current.common.errors == 0
-        && (!check_main_chute
-            || (
-                matches!(
-                    current.steering_watchdog_status,
-                    WatchdogState::Disabled | WatchdogState::Active
-                ) && matches!(
-                    current.steering_general,
-                    ActuatorStatus::Connected | ActuatorStatus::PowerOn
-                )
-                // FIXME: for REC board V2 this should be enabled again, but only if steering has power.
-                // && current.steering_left_connected
-                // && current.steering_right_connected
-            ))
-        && (!check_separation
-            || (
-                // Only one of the separation servos need to be connected, the other is at the CATS.
-                matches!(
-                    current.sep1_status,
-                    ActuatorStatus::Connected | ActuatorStatus::PowerOn
-                ) || matches!(
-                    current.sep2_status,
-                    ActuatorStatus::Connected | ActuatorStatus::PowerOn
-                )
-            ))
-        && (!check_main_chute
-            || (
-                // Only one of the deployment servos need to be connected, the other is at the CATS.
-                matches!(
-                    current.depl1_status,
-                    ActuatorStatus::Connected | ActuatorStatus::PowerOn
-                ) || matches!(
-                    current.depl2_status,
-                    ActuatorStatus::Connected | ActuatorStatus::PowerOn
-                )
-            ))
+    // An unpowered servo shows as Connected
+    fn actuator_ok(s: ActuatorStatus) -> bool {
+        matches!(s, ActuatorStatus::Connected)
+    }
+    // If powered (as assumed), should be responsive
+    fn steer_ok(s: SteeringStatus) -> bool {
+        matches!(s, SteeringStatus::Responsive)
+    }
+
+    let steering_ok = {
+        let watchdog_ok = matches!(
+            current.steering_watchdog_status,
+            WatchdogState::Disabled | WatchdogState::Active
+        );
+
+        let left_ok = steer_ok(current.steering_left_status);
+        let right_ok = steer_ok(current.steering_right_status);
+        watchdog_ok && left_ok && right_ok
+    };
+
+    // Only one of the separation servos need to be connected, the other is at the CATS.
+    let separation_ok = actuator_ok(current.sep1_status) || actuator_ok(current.sep2_status);
+
+    // Only one of the deployment servos need to be connected, the other is at the CATS.
+    let deployment_ok = actuator_ok(current.depl1_status) || actuator_ok(current.depl2_status);
+
+    let no_errors = current.common.errors == 0;
+
+    no_errors
+        && (!check_separation || separation_ok)
+        && (!check_main_chute || steering_ok)
+        && (!check_main_chute || deployment_ok)
 }

@@ -1,3 +1,4 @@
+use messages::datapoints::dp_recovery_board::DeploymentState;
 use std::time::Duration;
 
 use datatypes::status::{ArmingState, BuildInformationCommon, StatusCommonMessage};
@@ -11,9 +12,7 @@ use tokio::task::AbortHandle;
 use tracing::Instrument;
 use watchable::Watchable;
 
-use crate::io::types::{
-    MainDeploymentState, RecoveryArmingState, SeparationState, SteeringMotorRevolutions,
-};
+use crate::io::types::{RecoveryArmingState, SteeringMotorRevolutions};
 
 /// Sends [`dp_recovery_board::Message::SteeringTargetPositions`].
 pub fn spawn_steering_motor_driver(
@@ -106,14 +105,14 @@ pub fn spawn_recovery_arming_driver(
 
 /// Sends [`dp_recovery_board::Message::SeparationTrigger`].
 pub fn spawn_separation_driver(
-    mut watched_sep: impl Watched<SeparationState> + Send + 'static,
+    mut watched_sep: impl Watched<DeploymentState> + Send + 'static,
     mut clock: impl Watched<MissionTime> + Send + 'static,
     tx: std::sync::mpsc::Sender<messages::Message>,
 ) -> AbortHandle {
     tokio::spawn(
         async move {
             loop {
-                let SeparationState::Separated = watched_sep.next().await else {
+                let DeploymentState::Deployed = watched_sep.next().await else {
                     continue;
                 };
                 tracing::info!("separating");
@@ -141,14 +140,14 @@ pub fn spawn_separation_driver(
 
 /// Sends [`dp_recovery_board::Message::DeploymentTrigger`].
 pub fn spawn_deployment_driver(
-    mut watched_sep: impl Watched<MainDeploymentState> + Send + 'static,
+    mut watched_sep: impl Watched<DeploymentState> + Send + 'static,
     mut clock: impl Watched<MissionTime> + Send + 'static,
     tx: std::sync::mpsc::Sender<messages::Message>,
 ) -> AbortHandle {
     tokio::spawn(
         async move {
             loop {
-                let MainDeploymentState::Deployed = watched_sep.next().await else {
+                let DeploymentState::Deployed = watched_sep.next().await else {
                     continue;
                 };
                 tracing::info!("deploying main chute");

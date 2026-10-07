@@ -28,22 +28,6 @@ impl CameraPowerState {
     }
 }
 
-/// Describes the target state of the nosecone separation, and thus drogue deployment.
-#[derive(Default, Debug, Clone, Copy, PartialEq, serde::Serialize)]
-pub enum SeparationState {
-    #[default]
-    NotYetSeparated,
-    Separated,
-}
-
-/// Tells whether we should deploy the chute.
-#[derive(Default, Debug, Clone, Copy, PartialEq, serde::Serialize)]
-pub enum MainDeploymentState {
-    #[default]
-    NotYetDeployed,
-    Deployed,
-}
-
 // TODO: replace with REC datapoint type
 /// Steps of the steering motor, starting from 0 each during power-up
 /// and increasing by 1 for pulling the line a 1/4096th of a full rotation,

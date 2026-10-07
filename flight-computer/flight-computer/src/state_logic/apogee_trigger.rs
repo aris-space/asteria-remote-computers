@@ -1,9 +1,8 @@
 use lib_mission::reactive::{IntoWatched, WatchedExt};
 use lib_mission::state_machine::{AdditionalState, StateLogic, StateName};
 use lib_mission::transition::ManualTransitions;
+use messages::datapoints::dp_recovery_board::DeploymentState;
 use std::time::Duration;
-
-use crate::io::types::SeparationState;
 
 /// This state detects apogee in three cases and transitions in `on_apogee_reached`:
 /// 1. When the down velocity gets positive (rocket starts descending).
@@ -51,7 +50,7 @@ impl StateLogic for ApogeeTrigger {
                 tracing::info!(cause = "fc apogee trigger", "transitioning");
                 return self.on_apogee_reached.clone();
             },
-            _ = cats_watcher.next_satisfying(|s| matches!(s, SeparationState::Separated)) => {
+            _ = cats_watcher.next_satisfying(|s| matches!(s, DeploymentState::Deployed)) => {
                 tracing::info!(cause = "cats separation", "transitioning");
                 return self.on_cats_separation.clone();
             },
