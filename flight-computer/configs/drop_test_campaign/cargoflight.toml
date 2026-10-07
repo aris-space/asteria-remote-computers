@@ -19,7 +19,7 @@ diagram_path = "state-machines/separation-drop-test-state-machine.drawio.svg"
 # State machine's starting point. Simply waits for a manual command.
 [state_machine.states."Idle"]
 type = "Waiting"
-manual_transitions = [{ target = "Diagnostics", display = "Startup" }]
+manual_transitions = ["Diagnostics", "Ready"]
 
 # This state exists for recovering from failures that can happen before liftoff
 [state_machine.states."Soft Failure"]
@@ -180,11 +180,26 @@ ned_origin_alt = 435.0
 dt_hint = 0.01
 [state_machine.states."Control Loop".gnc_config.inner]
 bounding_polygon = [
-    [427.7, 328.7],
-    [304.1, 440.9],
-    [-108.871476, -6.790393],
-    [15.378971, -127.065187],
-    [427.7, 328.7],
+    [
+        427.7,
+        328.7,
+    ],
+    [
+        304.1,
+        440.9,
+    ],
+    [
+        -108.871476,
+        -6.790393,
+    ],
+    [
+        15.378971,
+        -127.065187,
+    ],
+    [
+        427.7,
+        328.7,
+    ],
 ]
 safety_spiral_timeout = 5.0
 safety_spiral_deflection_left = 0.6
