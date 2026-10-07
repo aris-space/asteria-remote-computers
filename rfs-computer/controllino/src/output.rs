@@ -25,7 +25,7 @@ pub struct Actuators {
     pub n2_decoupler_retract_valve: CoilSettable<NormallyClosedValve>,
     /// The target state of the N2 shower valves.
     pub n2_shower_valve: CoilSettable<NormallyClosedValve>,
-    /// The target state of the N2 engine purge valve.
+    /// The target state of the engine purge valve.
     pub n2_engine_purge_valve: CoilSettable<NormallyClosedValve>,
 }
 
