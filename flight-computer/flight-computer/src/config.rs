@@ -121,8 +121,9 @@ pub enum StateLogicConfig<Gnc: CompatGuidanceController> {
     },
     /// Describes a [`state_logic::Separate`].
     Separation {
-        /// If the `deploy_time_sec` time passes since transitioning into the state,
-        /// we proceed to the `on_after_separation` state
+        /// If set, we wait this long after separating before proceeding to `on_after_separation`.
+        /// If not set, we proceed immediately.
+        #[serde(default)]
         deploy_time_sec: f64,
         on_after_separation: String,
     },
@@ -233,15 +234,22 @@ pub enum StateLogicConfig<Gnc: CompatGuidanceController> {
         trigger_before_apogee_time_s: f32,
         /// The name of the state which to proceed to after apogee detection.
         on_apogee_reached: String,
+        /// The name of the state which to proceed to if CATS signals separation.
+        on_cats_separation: String,
     },
     /// Describes a [`state_logic::Thrust`].
     Thrust {
-        /// When the ECU signals an completed or aborted firing, we transition to this state.
+        /// If the N2 pressure (pressurization line) drops to or below `n2_pressure_limit_barg`,
+        /// the engine is considered to be out of pressurant and we transition to this state.
         on_firing_finished: String,
+        /// N2 pressure at or below which the firing is considered finished.
+        n2_pressure_limit_barg: f32,
         /// If the downward velocity is larger than `abort_downward_velocity_m_s` apogee gets detected.
         abort_downward_velocity_m_s: f32,
         /// The name of the state which to proceed to after apogee detection.
         on_apogee_reached: String,
+        /// The name of the state which to proceed to if CATS signals separation.
+        on_cats_separation: String,
     },
     /// Describes a [`state_logic::MonitoredManualControl`].
     MonitoredManualControl {
@@ -514,9 +522,11 @@ impl<Gnc: CompatGuidanceController> MakeState for StateLogicConfig<Gnc> {
             StateLogicConfig::ApogeeTrigger {
                 trigger_before_apogee_time_s,
                 on_apogee_reached,
+                on_cats_separation,
             } => state_logic::ApogeeTrigger {
                 trigger_before_apogee_time: Duration::from_secs_f32(trigger_before_apogee_time_s),
                 on_apogee_reached: StateName::try_new(&on_apogee_reached, names)?,
+                on_cats_separation: StateName::try_new(&on_cats_separation, names)?,
                 manual_transitions,
             }
             .into_box(),
@@ -524,10 +534,14 @@ impl<Gnc: CompatGuidanceController> MakeState for StateLogicConfig<Gnc> {
                 abort_downward_velocity_m_s,
                 on_apogee_reached,
                 on_firing_finished,
+                n2_pressure_limit_barg,
+                on_cats_separation,
             } => state_logic::Thrust {
                 abort_downward_velocity_m_s,
+                n2_pressure_limit_barg,
                 on_apogee_reached: StateName::try_new(&on_apogee_reached, names)?,
                 on_firing_finished: StateName::try_new(&on_firing_finished, names)?,
+                on_cats_separation: StateName::try_new(&on_cats_separation, names)?,
                 manual_transitions,
             }
             .into_box(),

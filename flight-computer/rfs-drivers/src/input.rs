@@ -17,26 +17,26 @@ use watchable::Watchable;
 pub struct Actuators {
     /// The state of the GOX purge valve.
     #[datapoint(pattern = "Message::RfsComputer(RFSCMessage::GoxPurgeValveState(#value))")]
-    #[broadcast(min_freq_hz = 1., max_freq_hz = 15.)]
+    #[broadcast(min_freq_hz = 0.5, max_freq_hz = 10.)]
     pub gox_purge_valve: Watchable<NormallyClosedValve>,
     /// The state of the H2 purge valve.
     #[datapoint(pattern = "Message::RfsComputer(RFSCMessage::H2PurgeValveState(#value))")]
-    #[broadcast(min_freq_hz = 1., max_freq_hz = 15.)]
+    #[broadcast(min_freq_hz = 0.5, max_freq_hz = 10.)]
     pub h2_purge_valve: Watchable<NormallyClosedValve>,
     #[datapoint(pattern = "Message::RfsComputer(RFSCMessage::H2IgniterValveState(#value))")]
-    #[broadcast(min_freq_hz = 1., max_freq_hz = 15.)]
+    #[broadcast(min_freq_hz = 0.5, max_freq_hz = 10.)]
     pub h2_igniter_valve: Watchable<NormallyClosedValve>,
     /// The state of the GOX igniter valve.
     #[datapoint(pattern = "Message::RfsComputer(RFSCMessage::GoxIgniterValveState(#value))")]
-    #[broadcast(min_freq_hz = 1., max_freq_hz = 15.)]
+    #[broadcast(min_freq_hz = 0.5, max_freq_hz = 10.)]
     pub gox_igniter_valve: Watchable<NormallyClosedValve>,
     /// The state of the igniter spark.
     #[datapoint(pattern = "Message::RfsComputer(RFSCMessage::IgniterSparkPlugState(#value))")]
-    #[broadcast(min_freq_hz = 1., max_freq_hz = 15.)]
+    #[broadcast(min_freq_hz = 0.5, max_freq_hz = 10.)]
     pub igniter_spark: Watchable<DigitalOut>,
     /// The state of the engine purge valve.
     #[datapoint(pattern = "Message::RfsComputer(RFSCMessage::N2RocketPurgeValveState(#value))")]
-    #[broadcast(min_freq_hz = 1., max_freq_hz = 15.)]
+    #[broadcast(min_freq_hz = 0.5, max_freq_hz = 10.)]
     pub n2_engine_purge_valve: Watchable<NormallyClosedValve>,
 }
 
@@ -50,11 +50,11 @@ pub struct Actuators {
 pub struct Sensors {
     /// The last received pressure of the igniter box.
     #[datapoint(pattern = "Message::RfsComputer(RFSCMessage::IgniterPressure(#value))")]
-    #[broadcast(min_freq_hz = 1., max_freq_hz = 10.)]
+    #[broadcast(min_freq_hz = 0.2, max_freq_hz = 3.)]
     pub igniter_pressure: Watchable<BarG>,
     /// The last received temperature of the igniter box.
     #[datapoint(pattern = "Message::RfsComputer(RFSCMessage::IgniterTemperature(#value))")]
-    #[broadcast(min_freq_hz = 1., max_freq_hz = 3.)]
+    #[broadcast(min_freq_hz = 0.2, max_freq_hz = 1.5)]
     pub igniter_temperature: Watchable<Celsius>,
 }
 

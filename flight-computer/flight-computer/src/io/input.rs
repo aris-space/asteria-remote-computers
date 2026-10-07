@@ -14,7 +14,7 @@ use datapoints::dp_sensor_carrier::Message as SCMessage;
 use datapoints::dp_sensor_carrier::{
     EnvironmentalData, ImuData, OrientationData, PositionData, VelocityData,
 };
-use datatypes::status::{ArmingState, DownlinkTelemetryStats, UplinkTelemetryHealth};
+use datatypes::status::{DownlinkTelemetryStats, UplinkTelemetryHealth};
 use datatypes::units::HPa;
 use datatypes::units::RailStatus;
 use datatypes::units::{BarG, Celsius};
@@ -40,7 +40,7 @@ use watchable::Watchable;
 pub struct RawUnprocessedData {
     /// The newest environmental data from the sensors.
     #[datapoint(pattern = "Message::SensorCarrier(SCMessage::EnvironmentalData(#value))")]
-    #[broadcast(min_freq_hz = 0.5, max_freq_hz = 2.)]
+    #[broadcast(min_freq_hz = 0.2, max_freq_hz = 0.5)]
     pub environmental_data: Watchable<EnvironmentalData>,
     /// The power status of the 24V rail of the AV stack.
     #[datapoint(pattern = "Message::Backplane(BPMessage::RailStatus24V(#value))")]
@@ -52,7 +52,7 @@ pub struct RawUnprocessedData {
     pub rail_status_5v: Watchable<RailStatus>,
     /// The power source which is currently active.
     #[datapoint(pattern = "Message::Backplane(BPMessage::ActivePowerSource(#value))")]
-    #[broadcast(min_freq_hz = 0.5, max_freq_hz = 2.0)]
+    #[broadcast(min_freq_hz = 0.2, max_freq_hz = 1.0)]
     pub active_power_source: Watchable<ActivePowerSource>,
 }
 
@@ -79,7 +79,7 @@ pub struct InputTree {
 
     /// Statistics about the health of the telemetry uplink.
     #[datapoint(pattern = "Message::FlightComputer(FCMessage::UplinkTelemetryHealth(#value))")]
-    #[broadcast(min_freq_hz = 0.5, max_freq_hz = 1.)]
+    #[broadcast(min_freq_hz = 0.5, max_freq_hz = 0.8)]
     pub telemetry_health: Watchable<UplinkTelemetryHealth>,
     /// Statistics about the telemetry downlink (bytes and messages sent).
     #[datapoint(pattern = "Message::FlightComputer(FCMessage::DownlinkTelemetryStats(#value))")]
@@ -89,10 +89,6 @@ pub struct InputTree {
     #[collector(flatten)]
     #[broadcast(flatten)]
     pub boards_status: BoardsStatus,
-    /// Hardware arming as detected by the recovery board.
-    pub recovery_armed: Watchable<ArmingState>,
-    /// Main valve hardware arming as detected by the engine control board.
-    pub ecu_armed: Watchable<ArmingState>,
     /// The newest raw data from the AV stack sensors.
     #[broadcast(flatten)]
     #[collector(flatten)]
@@ -100,10 +96,10 @@ pub struct InputTree {
 
     /// The most recently provided positions of the motors.
     #[datapoint(pattern = "Message::RecoveryBoard(RECMessage::SteeringActualPositions(#value))")]
-    #[broadcast(min_freq_hz = 10., max_freq_hz = 10.)]
+    #[broadcast(min_freq_hz = 1., max_freq_hz = 8.)]
     pub motors_position: Watchable<SteeringPositions>,
 
-    /// The state of whether CATS has triggered separation.
+    /// The state of whether - has triggered separation.
     /// Might also be `Separated` for a short time during start up.
     pub cats_separation: Watchable<SeparationState>,
     /// The state of whether CATS has triggered deployment.
@@ -112,16 +108,16 @@ pub struct InputTree {
 
     // GNC fields, see the types for documentation.
     #[datapoint(pattern = "Message::SensorCarrier(SCMessage::PositionData(#value))")]
-    #[broadcast(min_freq_hz = 5., max_freq_hz = 15.)]
+    #[broadcast(min_freq_hz = 4., max_freq_hz = 12.)]
     pub location: Watchable<PositionData>,
     #[datapoint(pattern = "Message::SensorCarrier(SCMessage::VelocityData(#value))")]
-    #[broadcast(min_freq_hz = 5., max_freq_hz = 15.)]
+    #[broadcast(min_freq_hz = 4., max_freq_hz = 12.)]
     pub velocity: Watchable<VelocityData>,
     #[datapoint(pattern = "Message::SensorCarrier(SCMessage::ImuData(#value))")]
-    #[broadcast(min_freq_hz = 5., max_freq_hz = 10.)]
+    #[broadcast(min_freq_hz = 1., max_freq_hz = 6.)]
     pub imu: Watchable<ImuData>,
     #[datapoint(pattern = "Message::SensorCarrier(SCMessage::OrientationData(#value))")]
-    #[broadcast(min_freq_hz = 5., max_freq_hz = 10.)]
+    #[broadcast(min_freq_hz = 1., max_freq_hz = 6.)]
     pub orientation: Watchable<OrientationData>,
 
     #[datapoint(pattern = "Message::SensorCarrier(SCMessage::MagnetometerData(#value))")]

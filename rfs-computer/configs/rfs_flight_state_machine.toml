@@ -77,7 +77,7 @@ type = "Waiting"
 manual_transitions = [
     "System Idle",
     "Rocket Diagnostics",
-    "Takeover",                              # Skip diagnostics
+    "Waiting for Filling",                   # Skip diagnostics
     { target = "Safe Abort", abort = true },
 ]
 
@@ -118,8 +118,61 @@ allowed_actuators = [
 manual_transitions = [
     "System Idle",
     "Igniter Test",
+    "Igniter Deactivation",
     { target = "Safe Abort", abort = true },
 ]
+
+# This state runs the igniter deactivation/purge sequence to safely depressurize the igniter.
+[state_machine.states."Igniter Deactivation"]
+type = "RunSequence"
+on_completed = "System Controllable"
+manual_transitions = [{ target = "Safe Abort", abort = true }]
+sequence = """
+# Preconditions:
+# H2 and GOx Bottle closed
+
+# Clear leftover H2
+h2_ign_vlv.open();
+sys.wait(time=0.5s);
+
+# Purge through bleed
+h2_prg_vlv.open();
+sys.wait(time=1s);
+h2_bld_vlv.close();
+
+# Purge through igniter
+sys.wait(time=5s);
+h2_prg_vlv.close();
+
+# open H2 bleed again
+h2_bld_vlv.open();
+
+# Same for GOx side
+# Clear leftover GOx
+gox_ign_vlv.open();
+sys.wait(time=0.5s);
+
+# Purge through bleed
+gox_prg_vlv.open();
+sys.wait(time=1s);
+gox_bld_vlv.close();
+
+# Purge through igniter
+sys.wait(time=5s);
+gox_prg_vlv.close();
+
+# open GOx bleed again
+gox_bld_vlv.open();
+sys.wait(time=2s);
+
+# finally close h2 and gox igniter valves again
+h2_ign_vlv.close();
+gox_ign_vlv.close();
+
+# Post-Conditions:
+# Igniter Fully Depressurized
+# All Igniter Valves Normal State
+"""
 
 # This state runs the igniter test sequence to test ignition.
 [state_machine.states."Igniter Test"]
@@ -194,7 +247,7 @@ gox_prg_vlv.close();
 h2_prg_vlv.close();
 """
 
-# ======================================= Takeover =======================================
+# ======================================= Pre Filling =======================================
 
 # Abort state before ethanol filling, which sets all valves in a normal state
 [state_machine.states."Pre Filling Abort"]
@@ -243,7 +296,7 @@ manual_transitions = ["Pre Filling Abort"]
 [state_machine.states."Rocket Diagnostics"]
 type = "PSSDiagnosticsGate"
 outdated_threshold_sec = 5
-on_tests_pass = "Takeover"
+on_tests_pass = "Waiting for Filling"
 on_tests_fail = "Rocket Unhealthy"
 
 # This state lets the operator acknowledge that the connection to the rocket is unhealthy
@@ -254,30 +307,6 @@ manual_transitions = [
     { target = "Pre Filling Abort", abort = true },
 ]
 
-# This idle state waits for coupling
-[state_machine.states."Takeover"]
-type = "Waiting"
-manual_transitions = ["Couple", { target = "Pre Filling Abort", abort = true }]
-
-# ======================================= Pre Filling =======================================
-
-# This state allows controlling the decoupling actuators for assisting the manual coupling operations
-[state_machine.states."Couple"]
-type = "ManualControl"
-allowed_actuators = [
-    "lox_dec_ext", # LOX decoupler
-    "lox_dec_ret", # LOX decoupler
-    "n2_dec_ext",  # N2 decoupler
-    "n2_dec_ret",  # N2 decoupler
-    "n2_prg_vlv",  # N2 purge valve
-    "lox_prg_vlv", # LOX purge valve
-    "n2_shw_vlv",  # N2 shower valves
-    "eng_prg_vlv", # connecting eng purge
-]
-manual_transitions = [
-    { target = "Pre Filling Abort", abort = true },
-    "Waiting for Filling",
-]
 
 # This waiting state leaves the RFS to be while the rocket is erected and until we are GO for filling.
 [state_machine.states."Waiting for Filling"]
@@ -288,7 +317,7 @@ on_done = "Waiting for Filling 2"
 type = "Waiting"
 manual_transitions = [
     "Purge",
-    "Ethanol Filling",
+    "Activation",
     { target = "Pre Filling Abort", abort = true },
 ]
 
@@ -326,6 +355,12 @@ prz_oss_dpr.activate(setpoint=10.0);
 oss_tnk_vnt.open();
 # Purge oxidizer tank for 10 sec
 sys.wait(time=10s);
+
+# Close OSS Vent and open main
+oss_tnk_vnt.close();
+oss_ml_vlv.open();
+# Purge through OSS Main
+sys.wait(time=5s);
 """
 # Close n2 purge, open oss tank and reset rest to normal.
 [state_machine.states."Purge 2"]
@@ -348,17 +383,10 @@ sys.wait(time=0.4s);
 
 # Now open lox purge
 lox_prg_vlv.open();
-# Purge lox decoupler line (?) for 5 sec
-sys.wait(time=5s);
+# Purge lox decoupler line for 10 sec
+sys.wait(time=10s);
 
-# Now open lox main, but close oss vent
-oss_ml_vlv.open();
-oss_tnk_vnt.close();
-# Purge lox main line for 5 sec
-sys.wait(time=5s);
-
-# Close main again, open bleed
-oss_ml_vlv.close();
+# Now open bleed
 lox_bld_vlv.open();
 # Purge through bleed for 5 sec
 sys.wait(time=5s);
@@ -379,20 +407,6 @@ type = "SetNormalState"
 include_pss = true
 on_done = "Waiting for Filling"
 
-# This waiting state lets humans fill in ethanol and keeps the lox tank pure
-[state_machine.states."Ethanol Filling"]
-type = "RunSequence"
-on_completed = "Ethanol Filling 2"
-sequence = """
-oss_tnk_vnt.close();
-"""
-[state_machine.states."Ethanol Filling 2"]
-type = "Waiting"
-manual_transitions = [
-    "Dewar Connection",
-    { target = "Pre Filling Abort", abort = true },
-]
-
 # ======================================= Filling =======================================
 
 # Abort state during filling, sets everything normal.
@@ -402,7 +416,7 @@ include_pss = true
 on_done = "Filling Abort 2"
 [state_machine.states."Filling Abort 2"]
 type = "Waiting"
-manual_transitions = ["Abort Overrides", "Dewar Connection"]
+manual_transitions = ["Abort Overrides", "Activation"]
 
 # This state allows full actuators control during safing operations in an abort scenario
 [state_machine.states."Abort Overrides"]
@@ -438,48 +452,59 @@ allowed_actuators = [
 ]
 manual_transitions = ["Filling Abort"]
 
-# A state where the LOX filling dewar can be connected
-[state_machine.states."Dewar Connection"]
+# A state for activating everything that is needed to connect the dewar and decouplers, before filling.
+[state_machine.states."Activation"]
 type = "MonitoredManualControl"
 allowed_actuators = [
-    "lox_fll_vlv", # LOX fill valve for safety
-    "lox_bld_vlv", # LOX bleed valve for safety
-    "lox_prg_vlv", # LOX purge valve for safety
+    "lox_fll_vlv", # LOX fill valve
+    "lox_bld_vlv", # LOX bleed valve
+    "oss_tnk_vnt", # LOX tank vent valve
+    "lox_prg_vlv", # LOX purge valve
+    "lox_dec_ext", # LOX decoupler
+    "lox_dec_ret", # LOX decoupler
+    "n2_dec_ext",  # N2 decoupler
+    "n2_dec_ret",  # N2 decoupler
+    "n2_prg_vlv",  # N2 purge valve
     "n2_shw_vlv",  # N2 shower valves
     "eng_prg_vlv", # Engine Purge valve
 ]
-telemetry_loss_threshold_sec = 300 # 5min
+telemetry_loss_threshold_sec = 600 # 10min
 on_violation = "Filling Abort"
 manual_transitions = ["Pre Filling", { target = "Filling Abort", abort = true }]
 
-# This instantaeous state resets the lox fill and bleed valve to normal before proceeding.
+# This instantaneous state resets all valves to normal before proceeding.
 [state_machine.states."Pre Filling"]
 type = "SetNormalState"
 include_pss = true
 on_done = "Filling"
 
-# A state where lox filling can start, and manual n2 filling preparations are also allowed.
+# A state where LOX, ethanol and N2 filling can be done manually.
 [state_machine.states."Filling"]
 type = "MonitoredManualControl"
 allowed_actuators = [
     "lox_fll_vlv",  # LOX fill valve
     "lox_bld_vlv",  # LOX bleed valve
+    "oss_ml_vlv",   # rocket LOX(OSS) main valve
+    "oss_tnk_vnt",  # rocket LOX(OSS) vent valve
+    "prz_oss_dpr",  # rocket LOX(OSS) DPR valve
+    "lox_dec_ext",  # LOX decoupler extend valve
+    "fss_tnk_vnt",  # rocket ethanol(FSS) vent valve
+    "prz_fss_dpr",  # rocket ethanol(FSS) DPR valve
     "n2_fll_vlv",   # N2 fill valve
     "n2_bld_vlv",   # N2 bleed valve
     "n2_bst_vlv",   # N2/pneumatic booster valve
-    "oss_ml_vlv",   # rocket LOX(OSS) main valve
     "prz_copv_vnt", # rocket N2(PRZ) vent valve
     "n2_shw_vlv",   # N2 shower valves
 ]
-telemetry_loss_threshold_sec = 900 # 15min
+telemetry_loss_threshold_sec = 600 # 10min
 on_violation = "Filling Abort"
 manual_transitions = [
     "Parallel Filling",
-    "LOX Filling",
+    "Set Ready State",
     { target = "Filling Abort", abort = true },
 ]
 
-# A state where lox filling can continue, and the n2 sequence is being run.
+# A state where LOX filling can continue, and the n2 sequence is being run.
 [state_machine.states."Parallel Filling"]
 type = "RunSeqWithControl"
 allowed_actuators = [
@@ -487,62 +512,53 @@ allowed_actuators = [
     "lox_bld_vlv", # LOX bleed valve
     "oss_ml_vlv",  # rocket LOX(OSS) main valve
     "n2_shw_vlv",  # N2 shower valves
-    "eng_prg_vlv", # Engine Purge valve
 ]
-telemetry_loss_threshold_sec = 900 # 15min
+telemetry_loss_threshold_sec = 600 # 10min
 on_violation = "Filling Abort"
-on_completed = "LOX Filling"
+on_completed = "Filling"
 manual_transitions = ["Filling", { target = "Filling Abort", abort = true }]
 sequence = """
+# Pre-Conditions:
+# LOx being Filled, everything depressurized
+
 # Close vent valves
 n2_bld_vlv.close();
 prz_copv_vnt.close();
+
+# Close fuel vent and open fuel dpr
+fss_tnk_vnt.close();
+prz_fss_dpr.activate(setpoint=50.0);
 sys.wait(time=0.4s);
 
 # Then open N2 fill valve
 n2_fll_vlv.open();
 
-# Detect proper opening of the post-booster line
-n2_post_bst_p.detect(value=100, rising=true, abort='Filling', patience=10s);
+# Detect copv pressure increase above 55 barg, meaning fuel tank was filled
+prz_copv_p.detect(value=55, rising=true, abort='Filling', patience=10s);
+
+# close fss dpr
+prz_fss_dpr.deactivate();
 
 # Then open booster valve
 n2_bst_vlv.open();
 
-# And wait for filling to 305 bar post-booster
-prz_copv_p.detect(value=305, rising=true, abort='Filling', patience=3600s);
+# And wait for filling to 320 bar post-booster
+n2_post_bst_p.detect(value=320, rising=true, abort='Filling', patience=3600s);
 
 # Finally close the booster and fill valve again
 n2_bst_vlv.close();
 n2_fll_vlv.close();
 """
 
-# A state where lox filling can continue, and n2 is locked.
-[state_machine.states."LOX Filling"]
-type = "MonitoredManualControl"
-allowed_actuators = [
-    "lox_fll_vlv", # LOX fill valve
-    "lox_bld_vlv", # LOX bleed valve
-    "lox_dec_ext", # LOX decoupler extend valve
-    "oss_ml_vlv",  # rocket LOX(OSS) main valve
-    "n2_shw_vlv",  # N2 shower valves
-    "n2_bld_vlv",  # N2 bleed valve
-]
-telemetry_loss_threshold_sec = 900 # 15min
-on_violation = "Filling Abort"
-manual_transitions = [
-    "Filling",
-    "Set Known State",
-    { target = "Filling Abort", abort = true },
-]
-
 # An instantaneous state to set a decouple ready state
-[state_machine.states."Set Known State"]
+[state_machine.states."Set Ready State"]
 type = "RunSequence"
 on_completed = "Decouple"
 sequence = """
-# Off normal: oss & prz vent closed
+# Off normal: rocket vents closed
 prz_copv_vnt.close();
 oss_tnk_vnt.close();
+fss_tnk_vnt.close();
 n2_shw_vlv.open();
 # Normal
 lox_bld_vlv.close();
@@ -556,7 +572,7 @@ eng_prg_vlv.close();
 
 # State to try to decouple the hoses
 [state_machine.states."Decouple"]
-type = "ManualControl"
+type = "MonitoredManualControl"
 allowed_actuators = [
     "lox_dec_ext", # LOX decoupler
     "lox_dec_ret", # LOX decoupler
@@ -567,6 +583,8 @@ allowed_actuators = [
     "n2_shw_vlv",  # N2 shower valves
     "eng_prg_vlv", # Engine Purge valve
 ]
+telemetry_loss_threshold_sec = 600 # 10min
+on_violation = "Filling Abort"
 manual_transitions = ["Handsoff", { target = "Filling Abort", abort = true }]
 
 
@@ -639,11 +657,10 @@ h2_prg_vlv.close();
 h2_ign_vlv.close();
 h2_bld_vlv.open();
 ign_spk_plg.close();
-eng_prg_vlv.close();
 """
 [state_machine.states."Auto-Disarmed 3"]
 type = "Waiting"
-manual_transitions = ["Handsoff"]
+manual_transitions = ["Handsoff", { target = "Abort Firing", abort = true }]
 
 
 # State which allows the FC to ignite.
@@ -656,7 +673,6 @@ h2_bld_vlv.close();
 gox_bld_vlv.close();
 gox_prg_vlv.open();
 h2_prg_vlv.open();
-eng_prg_vlv.open();
 """
 [state_machine.states."Armed 2"]
 type = "WaitForIgnition"
@@ -735,5 +751,58 @@ allowed_actuators = [
 ]
 manual_transitions = [
     "Safeing Idle",
+    "Igniter Deactivation S",
     { target = "Safeing Normal", abort = true },
 ]
+
+# This state runs the igniter deactivation/purge sequence to safely depressurize the igniter.
+[state_machine.states."Igniter Deactivation S"]
+type = "RunSequence"
+on_completed = "Safeing Controllable"
+manual_transitions = [{ target = "Safeing Normal", abort = true }]
+sequence = """
+# Preconditions:
+# H2 and GOx Bottle closed
+
+# Clear leftover H2
+h2_ign_vlv.open();
+sys.wait(time=0.5s);
+
+# Purge through bleed
+h2_prg_vlv.open();
+sys.wait(time=1s);
+h2_bld_vlv.close();
+
+# Purge through igniter
+sys.wait(time=5s);
+h2_prg_vlv.close();
+
+# open H2 bleed again
+h2_bld_vlv.open();
+
+# Same for GOx side
+# Clear leftover GOx
+gox_ign_vlv.open();
+sys.wait(time=0.5s);
+
+# Purge through bleed
+gox_prg_vlv.open();
+sys.wait(time=1s);
+gox_bld_vlv.close();
+
+# Purge through igniter
+sys.wait(time=5s);
+gox_prg_vlv.close();
+
+# open GOx bleed again
+gox_bld_vlv.open();
+sys.wait(time=2s);
+
+# finally close h2 and gox igniter valves again
+h2_ign_vlv.close();
+gox_ign_vlv.close();
+
+# Post-Conditions:
+# Igniter Fully Depressurized
+# All Igniter Valves Normal State
+"""

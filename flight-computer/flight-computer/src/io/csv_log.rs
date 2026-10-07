@@ -28,8 +28,6 @@ impl InputTree {
             telemetry_health,
             downlink_telemetry_stats: _, // TODO: log
             boards_status,
-            recovery_armed,
-            ecu_armed,
             motors_position,
             cats_separation,
             cats_deployment,
@@ -288,27 +286,6 @@ impl InputTree {
                     rep.current_status.is_ignition_armed == datatypes::status::ArmingState::Armed,
                 )
             }),
-            time.watched(),
-        );
-        // Log arming states
-        spawn_watchable_logger(
-            make_timeseries_writer(
-                folder,
-                "recovery_hardware_arming",
-                &["recovery arming state [Safe|Armed]"],
-            )
-            .await?,
-            recovery_armed.watched(),
-            time.watched(),
-        );
-        spawn_watchable_logger(
-            make_timeseries_writer(
-                folder,
-                "ecu_hardware_arming",
-                &["ecu arming state [Safe|Armed]"],
-            )
-            .await?,
-            ecu_armed.watched(),
             time.watched(),
         );
 
