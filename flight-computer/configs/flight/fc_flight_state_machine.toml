@@ -112,7 +112,7 @@ allowed_actuators = [
     "fss_ml_vlv",
     "oss_ml_vlv",
 ]
-manual_transitions = [{ target = "Force Abort" },]
+manual_transitions = [{ target = "Force Abort" }, { target = "Vent", abort = true }]
 
 # This will set all valves inactive, essentially venting any pressure.
 # Used as the abort during filling, if connection is lost.
