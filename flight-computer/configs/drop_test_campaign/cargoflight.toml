@@ -1,0 +1,229 @@
+# AST Cargo flight 2 (Dübendorf): separation test, triggered by time and manually only.
+
+# System configuration
+system_time_rate_hz = 100
+[telemetry]
+mavlink_address = "127.0.0.1:5760"
+[can]
+socket_address = "can0"
+ecu_thrust_curve = []
+
+[state_machine]
+name = "ASTERIA Cargo Flight 2"
+initial_state = "Idle"
+
+# Path to the state machine diagram SVG which is used by the mission control.
+# **Note**: This path is relative to the root of the repository.
+diagram_path = "state-machines/separation-drop-test-state-machine.drawio.svg"
+
+# State machine's starting point. Simply waits for a manual command.
+[state_machine.states."Idle"]
+type = "Waiting"
+manual_transitions = [{ target = "Diagnostics", display = "Startup" }]
+
+# This state exists for recovering from failures that can happen before liftoff
+[state_machine.states."Soft Failure"]
+type = "Waiting"
+manual_transitions = [{ target = "Idle", display = "Restart" }]
+
+# Powers the steering motors and checks the boards. Once healthy, waits for the motors to come up and checks again, now including steering.
+[state_machine.states."Diagnostics"]
+type = "ArmRecovery"
+arming_state = "SteeringMotorsLocked"
+on_state_set = "Diagnostics 2"
+[state_machine.states."Diagnostics 2"]
+type = "Diagnostics"
+on_tests_pass = "Diagnostics 3"
+on_tests_fail = "Soft Failure"
+outdated_threshold_sec = 5
+check_pss_boards = false        # Not connected during drop tests
+check_main_chute = false        # Skip that for now, as it is still powering up
+[state_machine.states."Diagnostics 3"]
+type = "AwaitTimer"
+duration_sec = 2           # Wait for 1 sec startup and 1 sec message delay
+on_timer = "Diagnostics 4"
+[state_machine.states."Diagnostics 4"]
+type = "Diagnostics"
+on_tests_pass = "Ready"
+on_tests_fail = "Soft Failure"
+outdated_threshold_sec = 5
+check_pss_boards = false       # Not connected during drop tests
+
+# This state waits for a manual command which indicates that the rocket is ready for hooking onto the helicopter
+[state_machine.states."Ready"] # First unpower everything, then wait
+type = "ArmRecovery"
+arming_state = "Unarmed"
+on_state_set = "Ready 2"
+[state_machine.states."Ready 2"]
+type = "Waiting"
+manual_transitions = [
+    { target = "Live Helicopter", display = "Live" },
+    { target = "Zero Motors" },
+    { target = "Soft Failure", display = "Manual Reset", abort = true },
+]
+
+# Powers the separation actuators (and all others) for zeroing the motors. Going back re-runs the diagnostics, which unpowers them again.
+[state_machine.states."Zero Motors"]
+type = "ArmRecovery"
+arming_state = "Armed"
+on_state_set = "Zero Motors 2"
+[state_machine.states."Zero Motors 2"]
+type = "Waiting"
+manual_transitions = [{ target = "Diagnostics", display = "Done" }]
+
+# This state should be active when the heli lifts off the ground up until it reaches
+# the necessary altitude for final checks before the dropoff
+[state_machine.states."Live Helicopter"] # First lock the steering motors, then continue with the actual state
+type = "ArmRecovery"
+arming_state = "SteeringMotorsLocked"
+on_state_set = "Live Helicopter - W"
+[state_machine.states."Live Helicopter - W"]
+type = "Waiting"
+manual_transitions = [{ target = "Helicopter Armed", display = "Arm" }]
+
+# This state is there to make sure everything's ready, while the helicopter
+# is already on the dropping altitude
+[state_machine.states."Helicopter Armed"] # First arm, then continue with the actual state
+type = "ArmRecovery"
+arming_state = "Armed"
+on_state_set = "Helicopter Armed - W"
+[state_machine.states."Helicopter Armed - W"]
+type = "HeightOrTimeTrigger"
+on_time_limit_reached = "Live Helicopter"
+on_height_limit_reached = "Fall"
+# Config value [2]
+time_limit_sec = 60
+height_limit_m = -1 # Disabled: never reached, only time and manual triggers
+manual_transitions = [
+    { target = "Live Helicopter", display = "Disarm" },
+    { target = "Fall", display = "Countdown" },
+    { target = "Separation", display = "Manual Separation", abort = true },
+]
+
+# This state is active when we drop the rocket up until we start the separation
+[state_machine.states."Fall"]
+type = "HeightOrTimeTrigger"
+on_time_limit_reached = "Separation"
+on_height_limit_reached = "Separation"
+# TODO Approve after separation test
+# Config value [4]
+time_limit_sec = 10
+height_limit_m = -1 # Disabled: never reached, only time and manual triggers
+manual_transitions = [
+    { target = "Live Helicopter", display = "Disarm" },
+    { target = "Separation", display = "Manual Separation", abort = true },
+]
+
+# This state separates the drogue and waits for some time before transitioning
+[state_machine.states."Separation"]
+type = "Separation"
+# TODO Approve after separation test
+# Config value [5]
+deploy_time_sec = 10
+on_after_separation = "Drogue Descent"
+
+# This state is active when the rocket is dropped up until the chute is deployed
+[state_machine.states."Drogue Descent"]
+type = "HeightOrTimeTrigger"
+on_time_limit_reached = "Main Chute Deployment"
+on_height_limit_reached = "Main Chute Deployment"
+# Config value [7]
+time_limit_sec = 60
+height_limit_m = -1 # Disabled: never reached, only time and manual triggers
+manual_transitions = [
+    { target = "Main Disarmed", display = "Disarm", abort = true },
+    { target = "Main Chute Deployment", display = "Manual Deployment" },
+]
+
+[state_machine.states."Main Disarmed"]
+type = "Shutdown"
+
+# This state deploys the chute and waits for some time before transitioning
+[state_machine.states."Main Chute Deployment"]
+type = "MainChuteDeployment"
+# Config value [8]
+deploy_time_sec = 10
+on_after_deployment = "Hook Release"
+
+[state_machine.states."Hook Release"]
+type = "HookRelease"
+# Motor positions are expressed in full revolutions
+# Config value [10]
+motors_pull_value_rev = [0.7, 0.7]
+# Config value [11]
+motors_ok_threshold_rev = [0.6, 0.6]
+on_motors_ok_threshhold_reached = "Control Loop"
+manual_transitions = [
+    { target = "Safety Spiral", display = "Manual Safety Spiral", abort = true },
+]
+
+# This states runs the guided recovery algorithm in a loop until failure or touchdown
+[state_machine.states."Control Loop"]
+type = "ControlLoop"
+# Config value [9]
+loop_frequency_hz = 10.0
+# mappings taken from nicollier.
+revolution_interval_mapping_left = [-3.36, 1.59]
+revolution_interval_mapping_right = [-2.273, 2.677]
+on_failure = "Safety Spiral"
+time_limit_sec = 600
+on_touchdown = "Await Recovery"
+manual_transitions = [
+    { target = "Safety Spiral", display = "Manual Safety Spiral", abort = true },
+]
+[state_machine.states."Control Loop".gnc_config]
+controller_type = "LimitCycles"
+# Dübendorf, from gnc_configurations::limit_cycle_hil_duebendorf
+ned_origin_lat = 47.405072
+ned_origin_lon = 8.63092
+ned_origin_alt = 435.0
+dt_hint = 0.01
+[state_machine.states."Control Loop".gnc_config.inner]
+bounding_polygon = [
+    [427.7, 328.7],
+    [304.1, 440.9],
+    [-108.871476, -6.790393],
+    [15.378971, -127.065187],
+    [427.7, 328.7],
+]
+safety_spiral_timeout = 5.0
+safety_spiral_deflection_left = 0.6
+safety_spiral_deflection_right = 0.95
+[state_machine.states."Control Loop".gnc_config.inner.inner_config.guidance_config]
+emp = [46.7, 36.1]
+ipi = [160.5, 232.4, 0.0]
+holding_radius = 10.0
+convergence_rate = 0.15
+angular_rate = 0.1
+transition_start_height = 500.0
+transition_end_height = 350.0
+flare_height = 20.0
+glide_ratio = 2.5
+ramp_time = 2.0
+landing_direction_angle = 0.75
+braking_altitude_gain = 20.0
+[state_machine.states."Control Loop".gnc_config.inner.inner_config.controller_config]
+gain = 0.4
+steady_state_braking = 0.5
+
+[state_machine.states."Safety Spiral"]
+type = "SafetySpiral"
+# Motor positions are expressed in full revolutions
+motors_pull_value_rev = [0.6, -0.788]
+on_motors_pulled = "Safety Spiral 2"
+[state_machine.states."Safety Spiral 2"]
+type = "AwaitTimer"
+# Wait ten minutes and assume it's safe to recover
+duration_sec = 600
+on_timer = "Await Recovery"
+manual_transitions = [
+    { target = "Await Recovery", display = "Manual Ground Recovery", abort = true },
+]
+
+[state_machine.states."Await Recovery"] # First unarm, then just idle.
+type = "ArmRecovery"
+arming_state = "Unarmed"
+on_state_set = "Await Recovery - W"
+
+[state_machine.states."Await Recovery - W"]
+type = "Shutdown"
