@@ -172,54 +172,27 @@ manual_transitions = [
     { target = "Safety Spiral", display = "Manual Safety Spiral", abort = true },
 ]
 [state_machine.states."Control Loop".gnc_config]
-controller_type = "LimitCycles"
-# Dübendorf, from gnc_configurations::limit_cycle_hil_duebendorf
+controller_type = "Cargoflight"
+# Dübendorf, from gnc_configurations::safety_spiral_cargoflights
 ned_origin_lat = 47.405072
 ned_origin_lon = 8.63092
 ned_origin_alt = 435.0
 dt_hint = 0.01
 [state_machine.states."Control Loop".gnc_config.inner]
 bounding_polygon = [
-    [
-        427.7,
-        328.7,
-    ],
-    [
-        304.1,
-        440.9,
-    ],
-    [
-        -108.871476,
-        -6.790393,
-    ],
-    [
-        15.378971,
-        -127.065187,
-    ],
-    [
-        427.7,
-        328.7,
-    ],
+    [-278.85, -105.09],
+    [273.67, 497.05],
+    [-143.48, 1083.32],
+    [-651.17, 1201.89],
+    [-1030.2, 633.89],
+    [-278.85, -105.09],
 ]
 safety_spiral_timeout = 5.0
 safety_spiral_deflection_left = 0.6
 safety_spiral_deflection_right = 0.95
-[state_machine.states."Control Loop".gnc_config.inner.inner_config.guidance_config]
-emp = [46.7, 36.1]
-ipi = [160.5, 232.4, 0.0]
-holding_radius = 10.0
-convergence_rate = 0.15
-angular_rate = 0.1
-transition_start_height = 500.0
-transition_end_height = 350.0
-flare_height = 20.0
-glide_ratio = 2.5
-ramp_time = 2.0
-landing_direction_angle = 0.75
-braking_altitude_gain = 20.0
-[state_machine.states."Control Loop".gnc_config.inner.inner_config.controller_config]
-gain = 0.4
-steady_state_braking = 0.5
+[state_machine.states."Control Loop".gnc_config.inner.inner_config]
+left_deflection = 0.6
+right_deflection = 0.95
 
 [state_machine.states."Safety Spiral"]
 type = "SafetySpiral"

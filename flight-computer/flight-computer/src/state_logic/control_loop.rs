@@ -1,5 +1,7 @@
 use crate::util::timer::Timer;
 #[cfg(feature = "gnc")]
+use gnc_algorithms::guidance::constant_safety_spiral::ConstantGuidance as CargoflightGuidance;
+#[cfg(feature = "gnc")]
 use gnc_algorithms::guidance::sysid_flight::SysIdGuidance;
 #[cfg(feature = "gnc")]
 use gnc_algorithms::{CompositeController, LimitCycleGuidance, PController, SafetySpiralGuidance};
@@ -285,6 +287,10 @@ pub enum AnyGncController {
     #[cfg(feature = "gnc")]
     SysID(Box<gnc_interface::adapter::CompatAdapter<SafetySpiralGuidance<SysIdGuidance>>>),
     #[cfg(feature = "gnc")]
+    Cargoflight(
+        Box<gnc_interface::adapter::CompatAdapter<SafetySpiralGuidance<CargoflightGuidance>>>,
+    ),
+    #[cfg(feature = "gnc")]
     LimitCycles(
         Box<
             gnc_interface::adapter::CompatAdapter<
@@ -319,6 +325,8 @@ pub enum AnyGncControllerConfig {
     #[cfg(feature = "gnc")]
     SysID(<gnc_interface::adapter::CompatAdapter<SafetySpiralGuidance<SysIdGuidance>>as gnc_interface::CompatGuidanceController>::Config),
     #[cfg(feature = "gnc")]
+    Cargoflight(<gnc_interface::adapter::CompatAdapter<SafetySpiralGuidance<CargoflightGuidance>> as gnc_interface::CompatGuidanceController>::Config),
+    #[cfg(feature = "gnc")]
     LimitCycles(<gnc_interface::adapter::CompatAdapter<SafetySpiralGuidance<CompositeController<LimitCycleGuidance, PController>>>as gnc_interface::CompatGuidanceController>::Config),
 }
 
@@ -344,6 +352,12 @@ impl gnc_interface::CompatGuidanceController for AnyGncController {
             #[cfg(feature = "gnc")]
             AnyGncControllerConfig::SysID(gnc) => Ok(Self::SysID(Box::new(
                 gnc_interface::adapter::CompatAdapter::<SafetySpiralGuidance<SysIdGuidance>>::new(
+                    gnc,
+                )?,
+            ))),
+            #[cfg(feature = "gnc")]
+            AnyGncControllerConfig::Cargoflight(gnc) => Ok(Self::Cargoflight(Box::new(
+                gnc_interface::adapter::CompatAdapter::<SafetySpiralGuidance<CargoflightGuidance>>::new(
                     gnc,
                 )?,
             ))),
@@ -399,6 +413,10 @@ impl gnc_interface::CompatGuidanceController for AnyGncController {
                 gnc.step(time_unix, position, velocity, acceleration, orientation)
             }
             AnyGncController::SysID(gnc) => {
+                gnc.step(time_unix, position, velocity, acceleration, orientation)
+            }
+            #[cfg(feature = "gnc")]
+            AnyGncController::Cargoflight(gnc) => {
                 gnc.step(time_unix, position, velocity, acceleration, orientation)
             }
             #[cfg(feature = "gnc")]

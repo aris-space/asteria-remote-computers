@@ -117,16 +117,13 @@ mod tests {
         fn check_type(
             _: &<gnc_interface::adapter::CompatAdapter<
                 gnc_algorithms::SafetySpiralGuidance<
-                    gnc_algorithms::CompositeController<
-                        gnc_algorithms::LimitCycleGuidance,
-                        gnc_algorithms::PController,
-                    >,
+                    gnc_algorithms::guidance::constant_safety_spiral::ConstantGuidance,
                 >,
             > as gnc_interface::CompatGuidanceController>::Config,
         ) {
         }
 
-        let cfg = gnc_configurations::limit_cycle_hil_duebendorf::hil_limit_cycle_compat_adapter_config_with_safety_spiral();
+        let cfg = gnc_configurations::safety_spiral_cargoflights::official_compat_adapter_config();
         check_type(&cfg);
 
         let ser = toml::to_string(&cfg).expect("has to serialize");
