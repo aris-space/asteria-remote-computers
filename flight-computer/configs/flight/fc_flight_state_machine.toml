@@ -415,7 +415,7 @@ loop_frequency_hz = 10.0
 # mappings taken from nicollier.
 revolution_interval_mapping_left = [-3.36, 1.59]
 revolution_interval_mapping_right = [-2.273, 2.677]
-time_limit_sec = 600 # after at most this time, go to await recovery
+time_limit_sec = 1800 # after at most this time, go to await recovery
 on_touchdown = "Await Recovery"
 on_failure = "Safety Spiral"
 manual_transitions = [
@@ -433,7 +433,7 @@ on_motors_pulled = "Safety Spiral 2"
 [state_machine.states."Safety Spiral 2"]
 type = "AwaitTimer"
 # After ten minutes it will be on the ground and we can conserve power
-duration_sec = 600
+duration_sec = 1800
 on_timer = "Await Recovery"
 manual_transitions = [
     { target = "Await Recovery", abort = true },
