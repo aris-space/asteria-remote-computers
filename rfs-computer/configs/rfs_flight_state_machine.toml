@@ -533,8 +533,8 @@ sys.wait(time=0.4s);
 # Then open N2 fill valve
 n2_fll_vlv.open();
 
-# Detect copv pressure increase above 55 barg, meaning fuel tank was filled
-prz_copv_p.detect(value=55, rising=true, abort='Filling', patience=10s);
+# Detect copv pressure increase above 50 barg, meaning fuel tank was filled
+fss_tnk_p_flt.detect(value=50, rising=true, abort='Filling', patience=15s);
 
 # close fss dpr
 prz_fss_dpr.deactivate();
