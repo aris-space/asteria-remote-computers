@@ -29,8 +29,23 @@ manual_transitions = [
 type = "Waiting"
 manual_transitions = [{ target = "Idle" },]
 
-# This state continues only when all boards have sent healthy reports
+# Powers the steering motors and checks the boards. Once healthy, waits for the motors to come up and checks again, now including steering.
 [state_machine.states."Diagnostics"]
+type = "ArmRecovery"
+arming_state = "SteeringMotorsLocked"
+on_state_set = "Diagnostics 2"
+[state_machine.states."Diagnostics 2"]
+type = "Diagnostics"
+on_tests_pass = "Diagnostics 3"
+on_tests_fail = "Soft Failure"
+outdated_threshold_sec = 5
+check_pss_boards = true
+check_main_chute = false # Skip that for now, as it is still powering up
+[state_machine.states."Diagnostics 3"]
+type = "AwaitTimer"
+duration_sec = 2 # Wait for 1 sec startup and 1 sec message delay
+on_timer = "Diagnostics 4"
+[state_machine.states."Diagnostics 4"]
 type = "Diagnostics"
 on_tests_pass = "Normal"
 on_tests_fail = "Soft Failure"

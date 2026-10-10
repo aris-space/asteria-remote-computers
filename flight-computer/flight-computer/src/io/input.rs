@@ -1,7 +1,5 @@
 //! Contains [`InputTree`]
 
-use crate::io::types::{MainDeploymentState, SeparationState};
-
 use datapoints::dp_backplane::Message as BPMessage;
 use datapoints::dp_engine_control_board::Message as ECUMessage;
 use datapoints::dp_flight_computer::Message as FCMessage;
@@ -25,6 +23,7 @@ use lib_mission::{actuator_control, transition};
 use messages::datapoints;
 use messages::datapoints::dp_backplane::__message_meta_types::ActivePowerSource;
 use messages::datapoints::dp_flight_computer::__message_meta_types::ManualStateTransition;
+use messages::datapoints::dp_recovery_board::DeploymentState;
 use messages::datapoints::dp_sensor_carrier::MagnetometerData;
 use messages::Message;
 use pss_drivers::input::{PSSSensors, PSSValves};
@@ -99,12 +98,14 @@ pub struct InputTree {
     #[broadcast(min_freq_hz = 1., max_freq_hz = 8.)]
     pub motors_position: Watchable<SteeringPositions>,
 
-    /// The state of whether - has triggered separation.
-    /// Might also be `Separated` for a short time during start up.
-    pub cats_separation: Watchable<SeparationState>,
+    /// The state of whether CATS has triggered separation.
+    #[datapoint(pattern = "Message::RecoveryBoard(RECMessage::CATSSeparationState(#value))")]
+    #[broadcast(min_freq_hz = 0.5, max_freq_hz = 2.)]
+    pub cats_separation: Watchable<DeploymentState>,
     /// The state of whether CATS has triggered deployment.
-    /// Might also be `Deployed` for a short time during start up.
-    pub cats_deployment: Watchable<MainDeploymentState>,
+    #[datapoint(pattern = "Message::RecoveryBoard(RECMessage::CATSDeploymentState(#value))")]
+    #[broadcast(min_freq_hz = 0.5, max_freq_hz = 2.)]
+    pub cats_deployment: Watchable<DeploymentState>,
 
     // GNC fields, see the types for documentation.
     #[datapoint(pattern = "Message::SensorCarrier(SCMessage::PositionData(#value))")]

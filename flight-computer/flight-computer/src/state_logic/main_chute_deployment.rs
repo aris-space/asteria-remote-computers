@@ -1,8 +1,8 @@
 use lib_mission::reactive::IntoWatched;
 use lib_mission::state_machine::{AdditionalState, StateLogic, StateName};
+use messages::datapoints::dp_recovery_board::DeploymentState;
 use std::time::Duration;
 
-use crate::io::types::MainDeploymentState;
 use crate::util::timer::Timer;
 
 /// This state deploys the chute and then waits for `deploy_time` time
@@ -26,9 +26,7 @@ impl StateLogic for MainChuteDeployment {
         output: &Self::Output,
         _p: &AdditionalState<Self::Parameter>,
     ) -> StateName {
-        output
-            .deploy_main_chute
-            .replace(MainDeploymentState::Deployed);
+        output.deploy_main_chute.replace(DeploymentState::Deployed);
 
         let mut timer = Timer::new(input.time.watched(), self.deploy_time);
         timer.wait().await;

@@ -1,8 +1,8 @@
 use lib_mission::reactive::IntoWatched;
 use lib_mission::state_machine::{AdditionalState, StateLogic, StateName};
+use messages::datapoints::dp_recovery_board::DeploymentState;
 use std::time::Duration;
 
-use crate::io::types::SeparationState;
 use crate::util::timer::Timer;
 
 /// This state separates the nosecone, which pulls out the drogue, then waits
@@ -27,7 +27,7 @@ impl StateLogic for Separate {
         output: &Self::Output,
         _p: &AdditionalState<Self::Parameter>,
     ) -> StateName {
-        output.separate_drogue.replace(SeparationState::Separated);
+        output.separate_drogue.replace(DeploymentState::Deployed);
 
         let mut timer = Timer::new(input.time.watched(), self.deploy_time);
         timer.wait().await;

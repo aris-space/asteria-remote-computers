@@ -6,7 +6,6 @@ use datatypes::status::ConfigHash;
 use flight_computer::build_info;
 use flight_computer::config::{Config, MissionProfile};
 use flight_computer::io::can::init_can_drivers;
-use flight_computer::io::gpio::start_cats_driver;
 use flight_computer::io::input::InputTree;
 use flight_computer::io::output::OutputTree;
 use flight_computer::io::telemetry::init_telemetry;
@@ -66,10 +65,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     )?;
 
     init_can_drivers(&config_file.can, &input_tree, &output_tree, &can_tx, can_rx)?;
-    start_cats_driver(
-        input_tree.cats_separation.clone(),
-        input_tree.cats_deployment.clone(),
-    );
     flight_computer::io::gpio::start_status_led(
         build_info::THIS_BUILD.is_release,
         build_info::THIS_BUILD.git_dirty,

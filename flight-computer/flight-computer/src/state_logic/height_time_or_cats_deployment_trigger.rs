@@ -1,8 +1,8 @@
-use crate::io::types::MainDeploymentState;
 use crate::util::timer::Timer;
 use lib_mission::reactive::{IntoWatched, WatchedExt};
 use lib_mission::state_machine::{AdditionalState, StateLogic, StateName};
 use lib_mission::transition::ManualTransitions;
+use messages::datapoints::dp_recovery_board::DeploymentState;
 use std::time::Duration;
 
 /// This state transitions in four cases:
@@ -52,7 +52,7 @@ impl StateLogic for HeightTimeOrCATSDeplTrigger {
                 tracing::info!(cause = "time trigger", "transitioning");
                 return self.on_time_limit_reached.clone();
             },
-            _ = cats_watcher.next_satisfying(|d| matches!(d, MainDeploymentState::Deployed)) => {
+            _ = cats_watcher.next_satisfying(|d| matches!(d, DeploymentState::Deployed)) => {
                 tracing::info!(cause = "cats deployment", "transitioning");
                 return self.on_cats_deployment.clone();
             }
