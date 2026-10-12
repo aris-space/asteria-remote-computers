@@ -19,7 +19,7 @@ diagram_path = "state-machines/separation-drop-test-state-machine.drawio.svg"
 # State machine's starting point. Simply waits for a manual command.
 [state_machine.states."Idle"]
 type = "Waiting"
-manual_transitions = [{ target = "Diagnostics", display = "Startup" }]
+manual_transitions = [{ target = "Diagnostics", display = "Startup" }, "Ready"]
 
 # This state exists for recovering from failures that can happen before liftoff
 [state_machine.states."Soft Failure"]
