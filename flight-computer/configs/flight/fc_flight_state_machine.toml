@@ -185,7 +185,7 @@ targets = { "prz_fss_dpr" = "DPRDisabled", "prz_oss_dpr" = "DPRDisabled", "fss_t
 on_done = "Stop Pressurization 4"
 [state_machine.states."Stop Pressurization 4"]
 type = "Waiting"
-manual_transitions = [{ target = "Manual Safeing" },]
+manual_transitions = [{ target = "Manual Safeing" }, { target = "Depressure", abort = true }]
 
 # Abort state which depressurizes the entire system, including COPV.
 [state_machine.states."Depressure"]
@@ -306,7 +306,6 @@ gox_prg_vlv.open();
 h2_prg_vlv.open();
 eng_prg_vlv.open();
 """
-manual_transitions = [{ target = "Manual Safeing" }]
 [state_machine.states."Firing Abort 3"]
 type = "Waiting"
 manual_transitions = [{ target = "Manual Safeing" }]
