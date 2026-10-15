@@ -143,11 +143,14 @@ manual_transitions = [
 ]
 [state_machine.states."Control Loop".gnc_config]
 controller_type = "LimitCyclesHIL"
+initial_height = 1300
+descent_per_tick = 0.6
+[state_machine.states."Control Loop".gnc_config.gnc]
 ned_origin_lat = 39.596798
 ned_origin_lon = -8.295386
 ned_origin_alt = 292.0
 dt_hint = 0.01
-[state_machine.states."Control Loop".gnc_config.inner]
+[state_machine.states."Control Loop".gnc_config.gnc.inner]
 bounding_polygon = [
     [
         50.253,
@@ -173,7 +176,7 @@ bounding_polygon = [
 safety_spiral_timeout = 5.0
 safety_spiral_deflection_left = 0.6
 safety_spiral_deflection_right = 0.95
-[state_machine.states."Control Loop".gnc_config.inner.inner_config.guidance_config]
+[state_machine.states."Control Loop".gnc_config.gnc.inner.inner_config.guidance_config]
 emp = [-5.0, 5.0]
 ipi = [25.0, -55.0, 3.0]
 holding_radius = 7.0
@@ -192,7 +195,7 @@ transition_glide_ratio = 1.65
 transition_height_reserve = 20.0
 min_braking = -0.7
 max_braking = 0.9
-[state_machine.states."Control Loop".gnc_config.inner.inner_config.controller_config]
+[state_machine.states."Control Loop".gnc_config.gnc.inner.inner_config.controller_config]
 gain = 0.8
 steady_state_braking = 0.5
 
