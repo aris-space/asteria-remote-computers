@@ -316,17 +316,45 @@ type = "ReadRFSArming"
 on_armed = "Ignition"
 on_not_armed = "Auto-Disarmed"
 
-# The state sends the engine start signal and waits for liftoff
+# The state ignites the engine and waits for liftoff
 [state_machine.states."Ignition"]
 type = "RunSequence"
 on_completed = "Ignition 2"
-# FIXME: This is a scrub sequence
 sequence = """
 # Pre-Conditions:
-# Vent Valves Closed, Tanks Pressurized to IGN Setpoint
+# Vent Valves Closed, Tanks Pressurized to FULL THRUST Setpoint
 # Igniter Purge Open
-# do nothing because we scrub
-sys.wait(time=1s);
+
+# Make sure DPRs are set correctly
+prz_fss_dpr.activate(setpoint=50.0);
+prz_oss_dpr.activate(setpoint=25.0);
+
+# Stop Igniter Purge
+h2_prg_vlv.close();
+gox_prg_vlv.close();
+
+# Start Igniter
+ign_spk_plg.open();
+sys.wait(time=1.5s);
+
+# gox_ign_vlv.open();
+sys.wait(time=0.5s);
+
+# Start Igniter and OXD Flow simultaneously
+h2_ign_vlv.open();
+oss_ml_vlv.open();
+
+# Verify Igniter Running
+ign_cc_p.detect(value=4.5, rising=true, abort='Firing Abort', patience=1s);
+
+sys.wait(time=0.15s);
+
+# Initiate Fuel Flow
+fss_ml_vlv.open();
+
+# Post Conditions:
+# Engine Firing Full Thrust
+# OSS and FSS Mains open, Tanks pressurized, DPRs opened
 """
 [state_machine.states."Ignition 2"]
 type = "LiftoffDetection"
