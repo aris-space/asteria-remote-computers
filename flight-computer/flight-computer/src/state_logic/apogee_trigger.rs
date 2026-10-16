@@ -10,12 +10,15 @@ use std::time::Duration;
 ///    with a simple model only taking gravity into account.
 /// 3. The CATS backup flight computer detects apogee first and signals separation to the fc,
 ///    in which case we transition to `on_cats_separation`.
+/// 4. The latitude exceeds a north coordinate of `north_limit` (i.e. is northwards of it).
 #[derive(Debug)]
 pub struct ApogeeTrigger {
     pub(crate) trigger_before_apogee_time: Duration,
     pub(crate) on_apogee_reached: StateName,
     pub(crate) on_cats_separation: StateName,
+    pub(crate) on_north_limit_reached: StateName,
     pub(crate) manual_transitions: ManualTransitions,
+    pub(crate) north_limit: f64,
 }
 
 #[async_trait::async_trait]
@@ -32,6 +35,7 @@ impl StateLogic for ApogeeTrigger {
         _p: &AdditionalState<Self::Parameter>,
     ) -> StateName {
         let mut velocity_watcher = input.velocity.watched();
+        let mut location_watcher = input.location.watched();
         let mut cats_watcher = input.cats_separation.watched();
         // The velocity is positive in down (NED) direction. Therefore, apogee gets triggered the latest if the down velocity gets positive.
         // The main trigger is based on a prediction of the time before apogee. Based on a simple model, not taking drag into account the velocity
@@ -49,6 +53,11 @@ impl StateLogic for ApogeeTrigger {
             _ = velocity_watcher.next_satisfying(|v| v.velocity_down > simplified_trigger_threshold) => {
                 tracing::info!(cause = "fc apogee trigger", "transitioning");
                 return self.on_apogee_reached.clone();
+            },
+            _ = location_watcher.next_satisfying(|l| l.location_latitude > self.north_limit)
+              => {
+                tracing::info!(cause = "fc bounding box", "transitioning");
+                return self.on_north_limit_reached.clone();
             },
             _ = cats_watcher.next_satisfying(|s| matches!(s, DeploymentState::Deployed)) => {
                 tracing::info!(cause = "cats separation", "transitioning");

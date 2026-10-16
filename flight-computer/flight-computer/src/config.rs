@@ -236,6 +236,10 @@ pub enum StateLogicConfig<Gnc: CompatGuidanceController> {
         on_apogee_reached: String,
         /// The name of the state which to proceed to if CATS signals separation.
         on_cats_separation: String,
+        /// The name of the state which to proceed to if the latitude exceeds `north_limit_deg`.
+        on_north_limit_reached: String,
+        /// Latitude (degrees north) above which we transition to `on_north_limit_reached`.
+        north_limit_deg: f64,
     },
     /// Describes a [`state_logic::Thrust`].
     Thrust {
@@ -250,6 +254,10 @@ pub enum StateLogicConfig<Gnc: CompatGuidanceController> {
         on_apogee_reached: String,
         /// The name of the state which to proceed to if CATS signals separation.
         on_cats_separation: String,
+        /// The name of the state which to proceed to if the latitude exceeds `north_limit_deg`.
+        on_north_limit_reached: String,
+        /// Latitude (degrees north) above which we transition to `on_north_limit_reached`.
+        north_limit_deg: f64,
     },
     /// Describes a [`state_logic::MonitoredManualControl`].
     MonitoredManualControl {
@@ -523,11 +531,15 @@ impl<Gnc: CompatGuidanceController> MakeState for StateLogicConfig<Gnc> {
                 trigger_before_apogee_time_s,
                 on_apogee_reached,
                 on_cats_separation,
+                on_north_limit_reached,
+                north_limit_deg,
             } => state_logic::ApogeeTrigger {
                 trigger_before_apogee_time: Duration::from_secs_f32(trigger_before_apogee_time_s),
                 on_apogee_reached: StateName::try_new(&on_apogee_reached, names)?,
                 on_cats_separation: StateName::try_new(&on_cats_separation, names)?,
+                on_north_limit_reached: StateName::try_new(&on_north_limit_reached, names)?,
                 manual_transitions,
+                north_limit: north_limit_deg,
             }
             .into_box(),
             StateLogicConfig::Thrust {
@@ -536,12 +548,16 @@ impl<Gnc: CompatGuidanceController> MakeState for StateLogicConfig<Gnc> {
                 on_firing_finished,
                 n2_pressure_limit_barg,
                 on_cats_separation,
+                on_north_limit_reached,
+                north_limit_deg,
             } => state_logic::Thrust {
                 abort_downward_velocity_m_s,
                 n2_pressure_limit_barg,
                 on_apogee_reached: StateName::try_new(&on_apogee_reached, names)?,
                 on_firing_finished: StateName::try_new(&on_firing_finished, names)?,
                 on_cats_separation: StateName::try_new(&on_cats_separation, names)?,
+                on_north_limit_reached: StateName::try_new(&on_north_limit_reached, names)?,
+                north_limit: north_limit_deg,
                 manual_transitions,
             }
             .into_box(),
