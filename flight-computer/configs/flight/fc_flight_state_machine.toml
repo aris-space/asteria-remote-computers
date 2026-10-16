@@ -316,10 +316,10 @@ type = "ReadRFSArming"
 on_armed = "Ignition"
 on_not_armed = "Auto-Disarmed"
 
-# The state ignites the engine and waits for liftoff
+# The state ignites the engine
 [state_machine.states."Ignition"]
 type = "RunSequence"
-on_completed = "Ignition 2"
+on_completed = "Liftoff Detection"
 sequence = """
 # Pre-Conditions:
 # Vent Valves Closed, Tanks Pressurized to FULL THRUST Setpoint
@@ -356,7 +356,9 @@ fss_ml_vlv.open();
 # Engine Firing Full Thrust
 # OSS and FSS Mains open, Tanks pressurized, DPRs opened
 """
-[state_machine.states."Ignition 2"]
+
+# waits for liftoff
+[state_machine.states."Liftoff Detection"]
 type = "LiftoffDetection"
 acceleration_limit_ms2 = 20 # m/s^2
 required_duration_s = 0.2 # seconds
