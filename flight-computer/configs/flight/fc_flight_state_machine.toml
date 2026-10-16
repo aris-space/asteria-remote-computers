@@ -386,7 +386,7 @@ type = "HeightOrTimeTrigger"
 on_time_limit_reached = "Main Chute Deployment"
 on_height_limit_reached = "Main Chute Deployment"
 time_limit_sec = 999 # Config value [drogue], disabled, as not useful
-height_limit_m = 0 # Config value [alt]. TODO: Define height limit
+height_limit_m = 1890 # Config value [alt]. 1730m AGL + 160m ground level
 manual_transitions = [
     { target = "Main Chute Deployment" },
 ]
@@ -414,7 +414,7 @@ loop_frequency_hz = 10.0
 # mappings taken from nicollier.
 revolution_interval_mapping_left = [-3.36, 1.59]
 revolution_interval_mapping_right = [-2.273, 2.677]
-time_limit_sec = 1800 # after at most this time, go to await recovery
+time_limit_sec = 1200 # after at most 20min, power off the motors
 on_touchdown = "Await Recovery"
 on_failure = "Safety Spiral"
 manual_transitions = [
@@ -431,8 +431,8 @@ motors_pull_value_rev = [0.6, -0.788]
 on_motors_pulled = "Safety Spiral 2"
 [state_machine.states."Safety Spiral 2"]
 type = "AwaitTimer"
-# After ten minutes it will be on the ground and we can conserve power
-duration_sec = 1800
+# After twenty minutes it will be on the ground and we can conserve power
+duration_sec = 1200
 on_timer = "Await Recovery"
 manual_transitions = [
     { target = "Await Recovery", abort = true },
