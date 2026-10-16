@@ -449,8 +449,51 @@ manual_transitions = [
     { target = "Safety Spiral", abort = true },
 ]
 [state_machine.states."Control Loop".gnc_config]
-controller_type = "Mock"
-# FIXME: to insert the actual control loop configurations
+controller_type = "LimitCycles"
+# from `gnc_configurations::euroc_limit_cycle::official_compat_adapter_config_with_safety_spiral()`, branch `euroc_hil_config`
+ned_origin_lat = 39.39
+ned_origin_lon = -8.289166
+ned_origin_alt = 160.0
+dt_hint = 0.01
+[state_machine.states."Control Loop".gnc_config.inner]
+bounding_polygon = [
+    [-4000.0, 200.0],
+    [-6000.0, 1700.0],
+    [-4000.0, 6500.0],
+    [1500.0, 8000.0],
+    [4000.0, 6000.0],
+    [3800.0, 3600.0],
+    [2000.0, 1200.0],
+    [-200.0, 100.0],
+    [-300.0, 100.0],
+    [-400.0, 100.0],
+    [-4000.0, 200.0],
+]
+safety_spiral_timeout = 5.0
+safety_spiral_deflection_left = 0.6
+safety_spiral_deflection_right = 0.95
+[state_machine.states."Control Loop".gnc_config.inner.inner_config.guidance_config]
+emp = [-769.0, 1265.0]
+ipi = [-305.6, 231.6, 0.0]
+holding_radius = 200.0
+convergence_rate = 0.15
+angular_rate = 0.1
+transition_start_height = 700.0
+transition_end_height = 650.0
+flare_height = 10.0
+glide_ratio = 2.0
+ramp_time = 15.0
+landing_direction_angle = -1.9
+braking_altitude_gain = 3.0
+braking_ramp = 0.2
+glide_ratio_braking = -0.3
+transition_glide_ratio = 1.65
+transition_height_reserve = 50.0
+min_braking = -0.7
+max_braking = 0.9
+[state_machine.states."Control Loop".gnc_config.inner.inner_config.controller_config]
+gain = 0.4
+steady_state_braking = 0.5
 
 [state_machine.states."Safety Spiral"]
 type = "SafetySpiral"
