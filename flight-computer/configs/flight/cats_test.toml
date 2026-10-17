@@ -92,6 +92,7 @@ type = "Waiting"
 manual_transitions = [
     { target = "Passive for Filling" },
     { target = "Zero Motors" },
+    "Ready",
     { target = "Soft Failure", abort = true },
 ]
 
