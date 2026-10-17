@@ -1,0 +1,536 @@
+# CATS HIL TEST
+
+# ======================================= System configuration =======================================
+system_time_rate_hz = 100
+[telemetry]
+mavlink_address = "127.0.0.1:5760"
+[can]
+socket_address = "can0"
+[state_machine]
+name = "Launch State Machine"
+initial_state = "Idle"
+
+# Path to the state machine diagram SVG which is used by the mission control.
+# **Note**: This path is relative to the root of the repository.
+diagram_path = "state-machines/fc-flight-state-machine.drawio.svg"
+
+# ======================================= Preparation =======================================
+
+# State machine's starting point. Simply waits for a manual command.
+[state_machine.states."Idle"]
+type = "Waiting"
+manual_transitions = [
+    { target = "Diagnostics" },
+    { target = "Normal" },
+]
+
+# This state exists for recovering from failures that can happen before liftoff
+[state_machine.states."Soft Failure"]
+type = "Waiting"
+manual_transitions = [{ target = "Idle" },]
+
+# Powers the steering motors and checks the boards. Once healthy, waits for the motors to come up and checks again, now including steering.
+[state_machine.states."Diagnostics"]
+type = "ArmRecovery"
+arming_state = "SteeringMotorsLocked"
+on_state_set = "Diagnostics 2"
+[state_machine.states."Diagnostics 2"]
+type = "Diagnostics"
+on_tests_pass = "Diagnostics 3"
+on_tests_fail = "Soft Failure"
+outdated_threshold_sec = 5
+check_pss_boards = true
+check_main_chute = false # Skip that for now, as it is still powering up
+[state_machine.states."Diagnostics 3"]
+type = "AwaitTimer"
+duration_sec = 2 # Wait for 1 sec startup and 1 sec message delay
+on_timer = "Diagnostics 4"
+[state_machine.states."Diagnostics 4"]
+type = "Diagnostics"
+on_tests_pass = "Normal"
+on_tests_fail = "Soft Failure"
+outdated_threshold_sec = 5
+check_pss_boards = true
+
+# Sets all valves to their normal state before the valve check or the handoff
+[state_machine.states."Normal"]
+type = "SetNormalState"
+on_done = "Normal 2"
+[state_machine.states."Normal 2"]
+type = "Waiting"
+manual_transitions = [
+    { target = "Valve Check" },
+    { target = "Locked" },
+    { target = "Soft Failure", abort = true },
+]
+
+# This state allows full actuators control for system functionality checks
+[state_machine.states."Valve Check"]
+type = "ManualControl"
+allowed_actuators = [
+    "prz_copv_vnt",
+    "prz_fss_dpr",
+    "fss_tnk_vnt",
+    "prz_oss_dpr",
+    "oss_tnk_vnt",
+    "fss_ml_vlv",
+    "oss_ml_vlv",
+]
+manual_transitions = [
+    { target = "Normal" },
+    { target = "Soft Failure", abort = true },
+]
+
+# In this state the rocket is transported to the pad and we wait before continueing further.
+# The steering motors are powered and locked.
+[state_machine.states."Locked"]
+type = "ArmRecovery"
+arming_state = "SteeringMotorsLocked"
+on_state_set = "Locked 2"
+[state_machine.states."Locked 2"]
+type = "Waiting"
+manual_transitions = [
+    { target = "Passive for Filling" },
+    { target = "Zero Motors" },
+    { target = "Soft Failure", abort = true },
+]
+
+# Powers the separation actuators (and all others) for zeroing the motors. Going back to Locked unpowers them again.
+[state_machine.states."Zero Motors"]
+type = "ArmRecovery"
+arming_state = "Armed"
+on_state_set = "Zero Motors 2"
+[state_machine.states."Zero Motors 2"]
+type = "Waiting"
+manual_transitions = [{ target = "Locked" },]
+
+# ======================================= Passive =======================================
+
+
+# A state to reset to from the passive state.
+[state_machine.states."Force Abort"]
+type = "Waiting"
+manual_transitions = [
+    { target = "Locked" },
+    { target = "Override Valves" },
+]
+
+# A state to potentially fix a broken system during an off-nominal scenario.
+[state_machine.states."Override Valves"]
+type = "ManualControl"
+allowed_actuators = [
+    "prz_copv_vnt",
+    "prz_fss_dpr",
+    "fss_tnk_vnt",
+    "prz_oss_dpr",
+    "oss_tnk_vnt",
+    "fss_ml_vlv",
+    "oss_ml_vlv",
+]
+manual_transitions = [{ target = "Force Abort" }, { target = "Vent", abort = true }]
+
+# This will set all valves inactive, essentially venting any pressure.
+# Used as the abort during filling, if connection is lost.
+[state_machine.states."Vent"]
+type = "SetNormalState"
+on_done = "Vent 2"
+[state_machine.states."Vent 2"]
+type = "Waiting"
+manual_transitions = [{ target = "Force Abort" },]
+
+# The state in which the FC is passive while the RFSC coordinates filling the rocket
+[state_machine.states."Passive for Filling"]
+type = "WaitWhileConnected"
+rfs_can_timeout_sec = 900.0
+on_timeout = "Vent"
+manual_transitions = [
+    { target = "Force Abort", abort = true },
+    { target = "Gate" },
+    { target = "Takeover" }, # Skipping Diagnostics
+]
+
+# This state continues only when all boards have sent healthy reports
+[state_machine.states."Gate"]
+type = "Diagnostics"
+on_tests_pass = "Takeover"
+on_tests_fail = "Boards Unhealthy"
+outdated_threshold_sec = 5
+check_pss_boards = true
+check_separation = true
+check_main_chute = true
+
+# This abort state requires the operator to acknowledge that some boards are unhealthy.
+[state_machine.states."Boards Unhealthy"]
+type = "WaitWhileConnected"
+rfs_can_timeout_sec = 900.0
+on_timeout = "Vent"
+manual_transitions = [
+    { target = "Force Abort", abort = true },
+    { target = "Passive for Filling" },
+]
+
+
+# ======================================= Pressurization =======================================
+
+
+# Abort state which just stops any ongoing pressurization, but only vents tanks, not the COPV yet
+[state_machine.states."Stop Pressurization"]
+type = "ArmRecovery"                   # Also propagated to RFS
+arming_state = "SteeringMotorsLocked"
+on_state_set = "Stop Pressurization 3"
+[state_machine.states."Stop Pressurization 3"]
+type = "SetActuators"
+# Close DPR valves & open Vent
+targets = { "prz_fss_dpr" = "DPRDisabled", "prz_oss_dpr" = "DPRDisabled", "fss_tnk_vnt" = "Open", "oss_tnk_vnt" = "Open" }
+on_done = "Stop Pressurization 4"
+[state_machine.states."Stop Pressurization 4"]
+type = "Waiting"
+manual_transitions = [{ target = "Manual Safeing" }, { target = "Depressure", abort = true }]
+
+# Abort state which depressurizes the entire system, including COPV.
+[state_machine.states."Depressure"]
+type = "ArmRecovery"                  # Also propagated to RFS
+arming_state = "SteeringMotorsLocked"
+on_state_set = "Depressure 2"
+[state_machine.states."Depressure 2"]
+type = "SetNormalState"
+on_done = "Depressure 3"
+[state_machine.states."Depressure 3"]
+type = "Waiting"
+manual_transitions = [{ target = "Manual Safeing" },]
+
+# This state marks the transition to the section where the rocket is in its own control again
+[state_machine.states."Takeover"]
+type = "Waiting"
+manual_transitions = [
+    { target = "Ready" },
+    { target = "Passive for Filling" }, # Redo diagnostics
+    { target = "Stop Pressurization", abort = true },
+]
+
+# This state is reached after takeover (tanks pressurized) and is one step away from arming.
+[state_machine.states."Ready"]
+type = "ArmRecovery"
+arming_state = "SteeringMotorsLocked"
+on_state_set = "Ready 2"
+[state_machine.states."Ready 2"]
+type = "MonitoredWaiting"
+on_violation = "Stop Pressurization"
+on_telemetry_loss = "Depressure"
+telemetry_loss_threshold_sec = 600 # 10min
+manual_transitions = [
+    { target = "Armed" },
+    { target = "Stop Pressurization", abort = true },
+]
+[state_machine.states."Ready 2".thresholds.upper_thresholds_barg]
+fuel_tank_pressure = 54
+oxitizer_tank_pressure = 54
+
+# This state will arm the recovery motors and allow the RFS to arm its software such that the ECU will be able to control ignition.
+[state_machine.states."Armed"]
+type = "ArmRecovery"
+arming_state = "Armed"
+on_state_set = "Armed 2"
+[state_machine.states."Armed 2"]
+type = "CameraPowerControl"
+camera_power_state = "On"
+on_state_set = "Armed 3"
+[state_machine.states."Armed 3"]
+type = "MonitoredWaiting"
+on_violation = "Stop Pressurization"
+on_telemetry_loss = "Depressure"
+telemetry_loss_threshold_sec = 600 # 10min
+manual_transitions = [
+    { target = "Ready" },
+    { target = "Ignition Initiation" },
+    "Liftoff Detection",
+    { target = "Stop Pressurization", abort = true },
+]
+[state_machine.states."Armed 3".thresholds.upper_thresholds_barg]
+fuel_tank_pressure = 54
+oxitizer_tank_pressure = 54
+
+# This state exists for acknowledging that the RFS was not armed upon the ignition command
+[state_machine.states."Auto-Disarmed"]
+type = "ArmRecovery"
+arming_state = "SteeringMotorsLocked"
+on_state_set = "Auto-Disarmed 2"
+[state_machine.states."Auto-Disarmed 2"]
+type = "MonitoredWaiting"
+telemetry_loss_threshold_sec = 600 # 10min
+on_violation = "Stop Pressurization"
+on_telemetry_loss = "Depressure"
+manual_transitions = [
+    { target = "Ready" },
+    { target = "Stop Pressurization", abort = true },
+]
+[state_machine.states."Auto-Disarmed 2".thresholds.upper_thresholds_barg]
+fuel_tank_pressure = 54
+oxitizer_tank_pressure = 54
+
+# This state allows full actuators control for system safeing operations
+# This is a terminal state, there is no way out
+[state_machine.states."Manual Safeing"]
+type = "ManualControl"
+allowed_actuators = [
+    "prz_copv_vnt",
+    "prz_fss_dpr",
+    "fss_tnk_vnt",
+    "prz_oss_dpr",
+    "oss_tnk_vnt",
+    "fss_ml_vlv",
+    "oss_ml_vlv",
+]
+manual_transitions = [
+    { target = "Takeover" },
+    { target = "Stop Pressurization" },
+    { target = "Depressure", abort = true },
+]
+
+
+# ======================================= Ignition =======================================
+
+# This state runs if the firing sequence or a manual input aborted
+[state_machine.states."Firing Abort"]
+type = "SetNormalState"
+on_done = "Firing Abort 2"
+[state_machine.states."Firing Abort 2"]
+type = "RunSequence"
+on_completed = "Firing Abort 3"
+sequence = """
+# Igniter off
+h2_ign_vlv.close();
+gox_ign_vlv.close();
+ign_spk_plg.close();
+# Purge on
+gox_prg_vlv.open();
+h2_prg_vlv.open();
+eng_prg_vlv.open();
+"""
+[state_machine.states."Firing Abort 3"]
+type = "Waiting"
+manual_transitions = [{ target = "Manual Safeing" }]
+
+# This instantaneous state ensures that the RFS is armed for ignition
+[state_machine.states."Ignition Initiation"]
+type = "ReadRFSArming"
+on_armed = "Ignition"
+on_not_armed = "Auto-Disarmed"
+
+# The state ignites the engine
+[state_machine.states."Ignition"]
+type = "RunSequence"
+on_completed = "Liftoff Detection"
+sequence = """
+# Pre-Conditions:
+# Vent Valves Closed, Tanks Pressurized to FULL THRUST Setpoint
+# Igniter Purge Open
+
+# Make sure DPRs are set correctly
+prz_fss_dpr.activate(setpoint=50.0);
+prz_oss_dpr.activate(setpoint=25.0);
+
+# Stop Igniter Purge
+h2_prg_vlv.close();
+gox_prg_vlv.close();
+
+# Start Igniter
+ign_spk_plg.open();
+sys.wait(time=1.5s);
+
+# gox_ign_vlv.open();
+sys.wait(time=0.5s);
+
+# Start Igniter and OXD Flow simultaneously
+h2_ign_vlv.open();
+oss_ml_vlv.open();
+
+# Verify Igniter Running
+ign_cc_p.detect(value=4.5, rising=true, abort='Firing Abort', patience=1s);
+
+sys.wait(time=0.15s);
+
+# Initiate Fuel Flow
+fss_ml_vlv.open();
+
+# Post Conditions:
+# Engine Firing Full Thrust
+# OSS and FSS Mains open, Tanks pressurized, DPRs opened
+"""
+
+# waits for liftoff
+[state_machine.states."Liftoff Detection"]
+type = "LiftoffDetection"
+acceleration_limit_ms2 = 20 # m/s^2
+required_duration_s = 0.2 # seconds
+on_liftoff_detected = "Thrusting"
+on_aborted = "Firing Abort"
+manual_transitions = [
+    { target = "Firing Abort", abort = true },
+    { target = "Thrusting" },
+]
+
+# ======================================= Liftoff =======================================
+
+# During this state the engine is running, launching us upwards
+[state_machine.states."Thrusting"]
+type = "Thrust"
+# Apogee is detected if we move more than 5m/s downwards
+abort_downward_velocity_m_s = 5
+on_apogee_reached = "Coasting"
+# The firing is finished once the N2 pressure drops to or below this value
+n2_pressure_limit_barg = -1 # disabled
+on_firing_finished = "Coasting"
+# CATS signalled separation
+on_cats_separation = "Separation"
+# Rocket moved north of the allowed latitude limit
+on_north_limit_reached = "Off Nominal"
+north_limit_deg = 39.59986 # FIXME: Near Villa
+manual_transitions = [
+    { target = "Coasting", abort = true },
+]
+
+# Sets all valves to their normal state (PSS normal), then waits for apogee
+[state_machine.states."Coasting"]
+type = "SetNormalState"
+on_done = "Coasting 2"
+
+# During this state we are still moving upwards but just from momentum
+# This state waits until apogee is detected
+[state_machine.states."Coasting 2"]
+type = "ApogeeTrigger"
+trigger_before_apogee_time_s = 1.5 # apogee gets detected 1.5s before actual reaching apogee.
+on_apogee_reached = "Separation"
+# CATS signalled separation
+on_cats_separation = "Separation"
+# Rocket moved north of the allowed latitude limit
+on_north_limit_reached = "Off Nominal"
+north_limit_deg = 39.59986 # FIXME: Near Villa
+manual_transitions = [
+    { target = "Separation", abort = true },
+]
+
+# ======================================= Recovery =======================================
+
+# Entered if the rocket leaves the allowed area. Attempts to slow down the rocket.
+[state_machine.states."Off Nominal"]
+type = "SetNormalState"
+on_done = "Separation"
+
+# This state separates the drogue and immediately transitions
+[state_machine.states."Separation"]
+type = "Separation"
+on_after_separation = "Drogue Descent"
+
+# This state is active when the rocket is dropped up until the chute is deployed
+[state_machine.states."Drogue Descent"]
+type = "HeightOrTimeTrigger"
+on_time_limit_reached = "Main Chute Deployment"
+on_height_limit_reached = "Main Chute Deployment"
+time_limit_sec = 999 # Config value [drogue], disabled, as not useful
+height_limit_m = -1 # disabled
+manual_transitions = [
+    { target = "Main Chute Deployment" },
+]
+
+# This state deploys the chute and waits for some time before transitioning
+[state_machine.states."Main Chute Deployment"]
+type = "MainChuteDeployment"
+deploy_time_sec = 5                  # Config value [deploy]
+on_after_deployment = "Hook Release"
+
+[state_machine.states."Hook Release"]
+type = "HookRelease"
+# Motor positions are expressed in full revolutions
+motors_pull_value_rev = [0.7, 0.7] # Config value [release]
+motors_ok_threshold_rev = [0.6, 0.6] # Config value [release_thr]
+on_motors_ok_threshhold_reached = "Control Loop"
+manual_transitions = [
+    { target = "Safety Spiral", abort = true },
+]
+
+# This states runs the guided recovery algorithm in a loop until failure or touchdown
+[state_machine.states."Control Loop"]
+type = "ControlLoop"
+loop_frequency_hz = 10.0
+# mappings taken from nicollier.
+revolution_interval_mapping_left = [-3.36, 1.59]
+revolution_interval_mapping_right = [-2.273, 2.677]
+time_limit_sec = 1200 # after at most 20min, power off the motors
+on_touchdown = "Await Recovery"
+on_failure = "Safety Spiral"
+manual_transitions = [
+    { target = "Safety Spiral", abort = true },
+]
+[state_machine.states."Control Loop".gnc_config]
+controller_type = "LimitCycles"
+# from `gnc_configurations::euroc_limit_cycle::official_compat_adapter_config_with_safety_spiral()`, branch `euroc_hil_config`
+ned_origin_lat = 39.39
+ned_origin_lon = -8.289166
+ned_origin_alt = 160.0
+dt_hint = 0.01
+[state_machine.states."Control Loop".gnc_config.inner]
+bounding_polygon = [
+    [-4000.0, 200.0],
+    [-6000.0, 1700.0],
+    [-4000.0, 6500.0],
+    [1500.0, 8000.0],
+    [4000.0, 6000.0],
+    [3800.0, 3600.0],
+    [2000.0, 1200.0],
+    [-200.0, 100.0],
+    [-300.0, 100.0],
+    [-400.0, 100.0],
+    [-4000.0, 200.0],
+]
+safety_spiral_timeout = 5.0
+safety_spiral_deflection_left = 0.6
+safety_spiral_deflection_right = 0.95
+[state_machine.states."Control Loop".gnc_config.inner.inner_config.guidance_config]
+emp = [-769.0, 1265.0]
+ipi = [-305.6, 231.6, 0.0]
+holding_radius = 200.0
+convergence_rate = 0.15
+angular_rate = 0.1
+transition_start_height = 700.0
+transition_end_height = 650.0
+flare_height = 10.0
+glide_ratio = 2.0
+ramp_time = 15.0
+landing_direction_angle = -1.9
+braking_altitude_gain = 3.0
+braking_ramp = 0.2
+glide_ratio_braking = -0.3
+transition_glide_ratio = 1.65
+transition_height_reserve = 50.0
+min_braking = -0.7
+max_braking = 0.9
+[state_machine.states."Control Loop".gnc_config.inner.inner_config.controller_config]
+gain = 0.4
+steady_state_braking = 0.5
+
+[state_machine.states."Safety Spiral"]
+type = "SafetySpiral"
+# Motor positions are expressed in full revolutions
+motors_pull_value_rev = [0.6, -0.788]
+on_motors_pulled = "Safety Spiral 2"
+[state_machine.states."Safety Spiral 2"]
+type = "AwaitTimer"
+# After twenty minutes it will be on the ground and we can conserve power
+duration_sec = 1200
+on_timer = "Await Recovery"
+manual_transitions = [
+    { target = "Await Recovery", abort = true },
+]
+
+# State to conserve power
+[state_machine.states."Await Recovery"] # First unarm, then just idle.
+type = "ArmRecovery"
+arming_state = "Unarmed"
+on_state_set = "Await Recovery 2"
+[state_machine.states."Await Recovery 2"]
+type = "CameraPowerControl"
+camera_power_state = "Off"
+on_state_set = "Await Recovery 3"
+[state_machine.states."Await Recovery 3"]
+type = "Shutdown"
