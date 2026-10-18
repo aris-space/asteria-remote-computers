@@ -534,7 +534,7 @@ sys.wait(time=1s);
 # Initially Fill via N2 Purge
 n2_prg_vlv.open();
 
-fss_tnk_p.detect(value=10, rising=true, abort='Filling', patience=20s);
+fss_tnk_p_flt.detect(value=10, rising=true, abort='Filling', patience=20s);
 
 
 # Then continue filling with N2 fill valve
