@@ -528,22 +528,35 @@ prz_copv_vnt.close();
 # Close fuel vent and open fuel dpr
 fss_tnk_vnt.close();
 prz_fss_dpr.activate(setpoint=50.0);
-sys.wait(time=0.4s);
 
-# Then open N2 fill valve
+sys.wait(time=1s);
+
+# Initially Fill via N2 Purge
+n2_prg_vlv.open();
+
+fss_tnk_p.detect(value=10, rising=true, abort='Filling', patience=20s);
+
+
+# Then continue filling with N2 fill valve
+n2_prg_vlv.close();
+sys.wait(time=1s);
 n2_fll_vlv.open();
 
-# Detect copv pressure increase above 50 barg, meaning fuel tank was filled
-fss_tnk_p_flt.detect(value=50, rising=true, abort='Filling', patience=15s);
+# Detect fuel tank pressure increase above 50 barg, meaning fuel tank is full
+fss_tnk_p_flt.detect(value=50, rising=true, abort='Filling', patience=20s);
 
 # close fss dpr
 prz_fss_dpr.deactivate();
+sys.wait(time=0.2s);
+
+# Start Engine Purge
+eng_prg_vlv.open();
 
 # Then open booster valve
 n2_bst_vlv.open();
 
-# And wait for filling to 320 bar post-booster
-n2_post_bst_p.detect(value=320, rising=true, abort='Filling', patience=3600s);
+# And wait for filling to 305 bar post-booster
+n2_post_bst_p.detect(value=305, rising=true, abort='Filling', patience=3600s);
 
 # Finally close the booster and fill valve again
 n2_bst_vlv.close();
