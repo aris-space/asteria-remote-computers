@@ -384,9 +384,6 @@ n2_pressure_limit_barg = -1 # disabled
 on_firing_finished = "Coasting"
 # CATS signalled separation
 on_cats_separation = "Separation"
-# Rocket moved north of the allowed latitude limit
-on_north_limit_reached = "Off Nominal"
-north_limit_deg = 39.59986 # FIXME: Near Villa
 manual_transitions = [
     { target = "Coasting", abort = true },
 ]
@@ -404,19 +401,11 @@ trigger_before_apogee_time_s = 1.5 # apogee gets detected 1.5s before actual rea
 on_apogee_reached = "Separation"
 # CATS signalled separation
 on_cats_separation = "Separation"
-# Rocket moved north of the allowed latitude limit
-on_north_limit_reached = "Off Nominal"
-north_limit_deg = 39.59986 # FIXME: Near Villa
 manual_transitions = [
     { target = "Separation", abort = true },
 ]
 
 # ======================================= Recovery =======================================
-
-# Entered if the rocket leaves the allowed area. Attempts to slow down the rocket.
-[state_machine.states."Off Nominal"]
-type = "SetNormalState"
-on_done = "Separation"
 
 # This state separates the drogue and immediately transitions
 [state_machine.states."Separation"]
