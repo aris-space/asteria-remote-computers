@@ -484,7 +484,7 @@ safety_spiral_deflection_right = 0.95
 [state_machine.states."Control Loop".gnc_config.inner.inner_config.guidance_config]
 emp = [-306.0, 531.0]
 ipi = [-305.6, 231.6, 0.0]
-holding_radius = 150.0
+holding_radius = 100.0
 convergence_rate = 0.15
 angular_rate = 0.1
 transition_start_height = 100.0
