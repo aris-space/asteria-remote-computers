@@ -527,14 +527,14 @@ prz_copv_vnt.close();
 
 # Close fuel vent and open fuel dpr
 fss_tnk_vnt.close();
-prz_fss_dpr.activate(setpoint=50.0);
+prz_fss_dpr.activate(setpoint=20.0);
 
 sys.wait(time=1s);
 
 # Initially Fill via N2 Purge
 n2_prg_vlv.open();
 
-fss_tnk_p_flt.detect(value=10, rising=true, abort='Filling', patience=20s);
+fss_tnk_p_flt.detect(value=9, rising=true, abort='Filling', patience=20s);
 
 
 # Then continue filling with N2 fill valve
@@ -542,8 +542,8 @@ n2_prg_vlv.close();
 sys.wait(time=1s);
 n2_fll_vlv.open();
 
-# Detect fuel tank pressure increase above 50 barg, meaning fuel tank is full
-fss_tnk_p_flt.detect(value=50, rising=true, abort='Filling', patience=20s);
+# Detect fuel tank pressure increase above 20 barg, meaning fuel tank is full
+fss_tnk_p_flt.detect(value=20, rising=true, abort='Filling', patience=20s);
 
 # close fss dpr
 prz_fss_dpr.deactivate();
