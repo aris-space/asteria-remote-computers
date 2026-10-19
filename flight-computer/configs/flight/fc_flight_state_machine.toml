@@ -423,7 +423,7 @@ type = "HeightOrTimeTrigger"
 on_time_limit_reached = "Main Chute Deployment"
 on_height_limit_reached = "Main Chute Deployment"
 time_limit_sec = 999 # Config value [drogue], disabled, as not useful
-height_limit_m = 1890 # Config value [alt]. 1730m AGL + 160m ground level
+height_limit_m = 1860 # Config value [alt]. 1700m AGL + 160m ground level
 manual_transitions = [
     { target = "Main Chute Deployment" },
 ]
