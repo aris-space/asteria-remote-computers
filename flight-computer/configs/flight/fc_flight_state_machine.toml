@@ -390,6 +390,7 @@ on_firing_finished = "Coasting"
 # CATS signalled separation
 on_cats_separation = "Separation"
 manual_transitions = [
+    "Firing Abort", # in case of VIF and faulty liftoff detection
     { target = "Coasting", abort = true },
 ]
 
@@ -493,8 +494,8 @@ ipi = [-305.6, 231.6, 0.0]
 holding_radius = 100.0
 convergence_rate = 0.15
 angular_rate = 0.1
-transition_start_height = 100.0
-transition_end_height = 50.0
+transition_start_height = 120.0
+transition_end_height = 110.0
 flare_height = 10.0
 glide_ratio = 2.0
 ramp_time = 15.0
