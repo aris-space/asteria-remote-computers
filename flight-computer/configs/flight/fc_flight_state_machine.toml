@@ -322,11 +322,14 @@ type = "RunSequence"
 on_completed = "Liftoff Detection"
 sequence = """
 # Pre-Conditions:
-# Vent Valves Closed, Tanks Pressurized to FULL THRUST Setpoint
+# Vent Valves Closed, Tanks Pressurized to IGN THRUST Setpoint (fuel side)
 # Igniter Purge Open
 
+# Make sure engine purge is closed
+eng_prg_vlv.close();
+
 # Make sure DPRs are set correctly
-prz_fss_dpr.activate(setpoint=50.0);
+prz_fss_dpr.activate(setpoint=20.0);
 prz_oss_dpr.activate(setpoint=25.0);
 
 # Stop Igniter Purge
@@ -337,7 +340,7 @@ gox_prg_vlv.close();
 ign_spk_plg.open();
 sys.wait(time=1.5s);
 
-# gox_ign_vlv.open();
+gox_ign_vlv.open();
 sys.wait(time=0.5s);
 
 # Start Igniter and OXD Flow simultaneously
@@ -351,6 +354,10 @@ sys.wait(time=0.15s);
 
 # Initiate Fuel Flow
 fss_ml_vlv.open();
+
+# Immediate ramp to max
+prz_fss_dpr.activate(setpoint=50.0);
+prz_oss_dpr.activate(setpoint=30.0);
 
 # Post Conditions:
 # Engine Firing Full Thrust
