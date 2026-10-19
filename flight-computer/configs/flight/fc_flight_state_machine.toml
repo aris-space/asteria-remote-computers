@@ -489,7 +489,7 @@ safety_spiral_timeout = 5.0
 safety_spiral_deflection_left = 0.6
 safety_spiral_deflection_right = 0.95
 [state_machine.states."Control Loop".gnc_config.inner.inner_config.guidance_config]
-emp = [-306.0, 531.0]
+emp = [-306.0, -118.4]
 ipi = [-305.6, 231.6, 0.0]
 holding_radius = 100.0
 convergence_rate = 0.15
@@ -503,7 +503,7 @@ landing_direction_angle = -1.9
 braking_altitude_gain = 3.0
 braking_ramp = 0.2
 glide_ratio_braking = -0.3
-transition_glide_ratio = 1.8
+transition_glide_ratio = 1.75
 min_braking = -0.7
 max_braking = 0.6
 [state_machine.states."Control Loop".gnc_config.inner.inner_config.controller_config]
