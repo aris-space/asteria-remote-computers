@@ -203,7 +203,7 @@ sys.wait(time=0.5s);
 h2_ign_vlv.open();
 
 # Detect firing
-ign_cc_p.detect(value=4.5, rising=true, abort='Abort Ign Test', patience=3s);
+ign_cc_p.detect(value=4.5, rising=true, abort='Abort Ign Test', patience=1s);
 
 # Sustain firing, abort if pressure becomes too low
 ign_cc_p.watch(min=4, abort='Abort Ign Test', key=sustain);
