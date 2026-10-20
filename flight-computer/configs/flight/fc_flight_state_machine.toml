@@ -467,35 +467,35 @@ ned_origin_alt = 160.0
 dt_hint = 0.01
 [state_machine.states."Control Loop".gnc_config.inner]
 bounding_polygon = [
-    [225.9, -134.7],
-    [284.8, -543.3],
-    [859.2, -839.9],
-    [690.0, -1787.2],
-    [499.2, -3569.2],
-    [-1172.7, -3629.1],
-    [-3972.9, -1322.2],
-    [-5428.1, 2408.1],
-    [-5095.7, 4087.6],
-    [-4822.1, 5537.7],
-    [-2383.6, 5114.4],
-    [-1087.9, 3908.3],
-    [-49.5, 3663.7],
-    [745.7, 3056.8],
-    [1098.7, 1489.3],
-    [642.0, 99.3],
-    [225.9, -134.7],
+    [225.883047, -134.736251],
+    [284.811126, -543.265542],
+    [859.240712, -839.905296],
+    [690.030759, -1787.242072],
+    [499.169222, -3569.222287],
+    [-1172.683248, -3629.149642],
+    [-3972.941892, -1322.213858],
+    [-5428.051426, 2408.099871],
+    [-5095.708447, 4087.636571],
+    [-4822.134773, 5537.69229],
+    [-2383.569167, 5114.352738],
+    [-1087.879955, 3908.261149],
+    [-49.487336, 3663.715258],
+    [745.705903, 3056.844082],
+    [1098.709785, 1489.305911],
+    [642.018319, 99.349747],
+    [225.883047, -134.736251],
 ]
 safety_spiral_timeout = 5.0
 safety_spiral_deflection_left = 0.6
 safety_spiral_deflection_right = 0.95
 [state_machine.states."Control Loop".gnc_config.inner.inner_config.guidance_config]
-emp = [-306.0, -118.4]
-ipi = [-305.6, 231.6, 0.0]
-holding_radius = 100.0
+emp = [-295.6, 221.6]
+ipi = [-300.6, 226.6, 0.0]
+holding_radius = 130.0
 convergence_rate = 0.15
 angular_rate = 0.1
-transition_start_height = 120.0
-transition_end_height = 110.0
+transition_start_height = 40.0
+transition_end_height = 20.0
 flare_height = 10.0
 glide_ratio = 2.0
 ramp_time = 15.0
@@ -503,7 +503,7 @@ landing_direction_angle = -1.9
 braking_altitude_gain = 3.0
 braking_ramp = 0.2
 glide_ratio_braking = -0.3
-transition_glide_ratio = 1.75
+transition_glide_ratio = 2.0
 min_braking = -0.7
 max_braking = 0.6
 [state_machine.states."Control Loop".gnc_config.inner.inner_config.controller_config]
