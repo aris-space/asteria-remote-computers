@@ -424,7 +424,7 @@ type = "HeightOrTimeTrigger"
 on_time_limit_reached = "Main Chute Deployment"
 on_height_limit_reached = "Main Chute Deployment"
 time_limit_sec = 999 # Config value [drogue], disabled, as not useful
-height_limit_m = 1860 # Config value [alt]. 1700 AGL + 160m ground level
+height_limit_m = 1760 # Config value [alt]. 1600 AGL + 160m ground level
 manual_transitions = [
     { target = "Main Chute Deployment" },
 ]
@@ -489,13 +489,13 @@ safety_spiral_timeout = 5.0
 safety_spiral_deflection_left = 0.6
 safety_spiral_deflection_right = 0.95
 [state_machine.states."Control Loop".gnc_config.inner.inner_config.guidance_config]
-emp = [-295.6, 221.6]
-ipi = [-300.6, 226.6, 0.0]
-holding_radius = 130.0
+emp = [-516.0, 21.4] # 350m southwest from IPI
+ipi = [-305.6, 231.6, 0.0]
+holding_radius = 100.0 # Smaller radius: we start far away and want at least one full turn; also gives better exit points than 150
 convergence_rate = 0.15
 angular_rate = 0.1
-transition_start_height = 40.0
-transition_end_height = 20.0
+transition_start_height = 120.0 # Low on purpose: the energy trigger should fire first, as the turn uses a lot of height
+transition_end_height = 110.0 # Short span, so the turn-back takes the short way round
 flare_height = 10.0
 glide_ratio = 2.0
 ramp_time = 15.0
@@ -503,7 +503,7 @@ landing_direction_angle = -1.9
 braking_altitude_gain = 3.0
 braking_ramp = 0.2
 glide_ratio_braking = -0.3
-transition_glide_ratio = 2.0
+transition_glide_ratio = 1.85
 min_braking = -0.7
 max_braking = 0.6
 [state_machine.states."Control Loop".gnc_config.inner.inner_config.controller_config]
