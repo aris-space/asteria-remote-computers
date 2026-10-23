@@ -185,7 +185,7 @@ targets = { "prz_fss_dpr" = "DPRDisabled", "prz_oss_dpr" = "DPRDisabled", "fss_t
 on_done = "Stop Pressurization 4"
 [state_machine.states."Stop Pressurization 4"]
 type = "Waiting"
-manual_transitions = [{ target = "Manual Safeing" },]
+manual_transitions = [{ target = "Manual Safeing" }, { target = "Depressure", abort = true }]
 
 # Abort state which depressurizes the entire system, including COPV.
 [state_machine.states."Depressure"]
@@ -306,7 +306,6 @@ gox_prg_vlv.open();
 h2_prg_vlv.open();
 eng_prg_vlv.open();
 """
-manual_transitions = [{ target = "Manual Safeing" }]
 [state_machine.states."Firing Abort 3"]
 type = "Waiting"
 manual_transitions = [{ target = "Manual Safeing" }]
@@ -317,19 +316,56 @@ type = "ReadRFSArming"
 on_armed = "Ignition"
 on_not_armed = "Auto-Disarmed"
 
-# The state sends the engine start signal and waits for liftoff
+# The state ignites the engine
 [state_machine.states."Ignition"]
 type = "RunSequence"
-on_completed = "Ignition 2"
-# FIXME: This is a scrub sequence
+on_completed = "Liftoff Detection"
 sequence = """
 # Pre-Conditions:
-# Vent Valves Closed, Tanks Pressurized to IGN Setpoint
+# Vent Valves Closed, Tanks Pressurized to IGN THRUST Setpoint (fuel side)
 # Igniter Purge Open
-# do nothing because we scrub
-sys.wait(time=1s);
+
+# Make sure engine purge is closed
+eng_prg_vlv.close();
+
+# Make sure DPRs are set correctly
+prz_fss_dpr.activate(setpoint=20.0);
+prz_oss_dpr.activate(setpoint=25.0);
+
+# Stop Igniter Purge
+h2_prg_vlv.close();
+gox_prg_vlv.close();
+
+# Start Igniter
+ign_spk_plg.open();
+sys.wait(time=1.5s);
+
+gox_ign_vlv.open();
+sys.wait(time=0.5s);
+
+# Start Igniter and OXD Flow simultaneously
+h2_ign_vlv.open();
+oss_ml_vlv.open();
+
+# Verify Igniter Running
+ign_cc_p.detect(value=4.5, rising=true, abort='Firing Abort', patience=1s);
+
+sys.wait(time=0.15s);
+
+# Initiate Fuel Flow
+fss_ml_vlv.open();
+
+# Immediate ramp to max
+prz_fss_dpr.activate(setpoint=50.0);
+prz_oss_dpr.activate(setpoint=30.0);
+
+# Post Conditions:
+# Engine Firing Full Thrust
+# OSS and FSS Mains open, Tanks pressurized, DPRs opened
 """
-[state_machine.states."Ignition 2"]
+
+# waits for liftoff
+[state_machine.states."Liftoff Detection"]
 type = "LiftoffDetection"
 acceleration_limit_ms2 = 20 # m/s^2
 required_duration_s = 0.2 # seconds
@@ -354,6 +390,7 @@ on_firing_finished = "Coasting"
 # CATS signalled separation
 on_cats_separation = "Separation"
 manual_transitions = [
+    "Firing Abort", # in case of VIF and faulty liftoff detection
     { target = "Coasting", abort = true },
 ]
 
@@ -387,7 +424,7 @@ type = "HeightOrTimeTrigger"
 on_time_limit_reached = "Main Chute Deployment"
 on_height_limit_reached = "Main Chute Deployment"
 time_limit_sec = 999 # Config value [drogue], disabled, as not useful
-height_limit_m = 0 # Config value [alt]. TODO: Define height limit
+height_limit_m = 1760 # Config value [alt]. 1600 AGL + 160m ground level
 manual_transitions = [
     { target = "Main Chute Deployment" },
 ]
@@ -415,15 +452,63 @@ loop_frequency_hz = 10.0
 # mappings taken from nicollier.
 revolution_interval_mapping_left = [-3.36, 1.59]
 revolution_interval_mapping_right = [-2.273, 2.677]
-time_limit_sec = 1800 # after at most this time, go to await recovery
+time_limit_sec = 1200 # after at most 20min, power off the motors
 on_touchdown = "Await Recovery"
 on_failure = "Safety Spiral"
 manual_transitions = [
     { target = "Safety Spiral", abort = true },
 ]
 [state_machine.states."Control Loop".gnc_config]
-controller_type = "Mock"
-# FIXME: to insert the actual control loop configurations
+controller_type = "LimitCycles"
+# from `gnc_configurations::euroc_limit_cycle::official_compat_adapter_config_with_safety_spiral()`, branch `euroc_hil_config`
+ned_origin_lat = 39.39
+ned_origin_lon = -8.289166
+ned_origin_alt = 160.0
+dt_hint = 0.01
+[state_machine.states."Control Loop".gnc_config.inner]
+bounding_polygon = [
+    [225.883047, -134.736251],
+    [284.811126, -543.265542],
+    [859.240712, -839.905296],
+    [690.030759, -1787.242072],
+    [499.169222, -3569.222287],
+    [-1172.683248, -3629.149642],
+    [-3972.941892, -1322.213858],
+    [-5428.051426, 2408.099871],
+    [-5095.708447, 4087.636571],
+    [-4822.134773, 5537.69229],
+    [-2383.569167, 5114.352738],
+    [-1087.879955, 3908.261149],
+    [-49.487336, 3663.715258],
+    [745.705903, 3056.844082],
+    [1098.709785, 1489.305911],
+    [642.018319, 99.349747],
+    [225.883047, -134.736251],
+]
+safety_spiral_timeout = 5.0
+safety_spiral_deflection_left = 0.6
+safety_spiral_deflection_right = 0.95
+[state_machine.states."Control Loop".gnc_config.inner.inner_config.guidance_config]
+emp = [-516.0, 21.4] # 350m southwest from IPI
+ipi = [-305.6, 231.6, 0.0]
+holding_radius = 100.0 # Smaller radius: we start far away and want at least one full turn; also gives better exit points than 150
+convergence_rate = 0.15
+angular_rate = 0.1
+transition_start_height = 120.0 # Low on purpose: the energy trigger should fire first, as the turn uses a lot of height
+transition_end_height = 110.0 # Short span, so the turn-back takes the short way round
+flare_height = 10.0
+glide_ratio = 2.0
+ramp_time = 15.0
+landing_direction_angle = -1.9
+braking_altitude_gain = 3.0
+braking_ramp = 0.2
+glide_ratio_braking = -0.3
+transition_glide_ratio = 1.85
+min_braking = -0.7
+max_braking = 0.6
+[state_machine.states."Control Loop".gnc_config.inner.inner_config.controller_config]
+gain = 0.4
+steady_state_braking = 0.5
 
 [state_machine.states."Safety Spiral"]
 type = "SafetySpiral"
@@ -432,8 +517,8 @@ motors_pull_value_rev = [0.6, -0.788]
 on_motors_pulled = "Safety Spiral 2"
 [state_machine.states."Safety Spiral 2"]
 type = "AwaitTimer"
-# After ten minutes it will be on the ground and we can conserve power
-duration_sec = 1800
+# After twenty minutes it will be on the ground and we can conserve power
+duration_sec = 1200
 on_timer = "Await Recovery"
 manual_transitions = [
     { target = "Await Recovery", abort = true },
