@@ -1,5 +1,7 @@
 # Sequences
 
+This defines the grammar of the sequences in the config files.
+
 ## System Functions
 ### sys.msg
 `sys.msg(text)`
