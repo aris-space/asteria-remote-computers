@@ -1,7 +1,13 @@
-# Remote Filling Station Software
+# Remote Filling Station Computer
 
 This folder contains software for the electronics of the RFS.
 It leans heavily on the `lib_mission` and the design of the flight computer.
+
+## Uremote
+
+An open source library that we extended is used to connect with the uremote coupler ur20 from Weidmüller which drives digital outputs and inputs, as well as thermocouple inputs.
+
+It is polled at a configurable frequency and automatically reconnects the TCP socket upon connection loss.
 
 ## Launch Rail Electronics
 
